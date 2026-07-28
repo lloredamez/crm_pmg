@@ -1,0 +1,94 @@
+'use client';
+
+import React from 'react';
+import { ArrowUpRight, ArrowDownRight, Clock, Users, CheckCircle2, AlertTriangle } from 'lucide-react';
+
+interface KpiCardsProps {
+  totalLeads: number;
+  assignedLeads: number;
+  convertedLeads: number;
+  slaExpiredCount: number;
+}
+
+export const KpiCards: React.FC<KpiCardsProps> = ({
+  totalLeads,
+  assignedLeads,
+  convertedLeads,
+  slaExpiredCount,
+}) => {
+  const cards = [
+    {
+      title: 'Total Leads',
+      value: totalLeads.toString(),
+      badge: '+12%',
+      badgeType: 'mint',
+      subtitle: 'vs. 1.240 mês anterior',
+      icon: Users,
+    },
+    {
+      title: 'Atendimentos Ativos SLA',
+      value: assignedLeads.toString(),
+      badge: '+4',
+      badgeType: 'mint',
+      subtitle: 'primeira resposta < 15 min',
+      icon: Clock,
+    },
+    {
+      title: 'Leads Convertidos',
+      value: convertedLeads.toString(),
+      badge: '+8.4%',
+      badgeType: 'mint',
+      subtitle: 'taxa de conversão 24%',
+      icon: CheckCircle2,
+    },
+    {
+      title: 'Estouro SLA / Realocados',
+      value: slaExpiredCount.toString(),
+      badge: '-8%',
+      badgeType: 'pink',
+      subtitle: 'revertidos por timeout',
+      icon: AlertTriangle,
+    },
+  ];
+
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      {cards.map((card, idx) => {
+        const Icon = card.icon;
+        return (
+          <div
+            key={idx}
+            className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm hover:shadow-md transition-shadow duration-200"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-slate-500 font-medium text-xs tracking-wide uppercase">{card.title}</span>
+              <div className="p-2 rounded-xl bg-slate-50 border border-slate-100 text-slate-600">
+                <Icon className="w-4 h-4 text-brand-600" />
+              </div>
+            </div>
+
+            <div className="flex items-baseline justify-between gap-2">
+              <h3 className="text-2xl font-bold text-slate-900 tracking-tight">{card.value}</h3>
+              <span
+                className={
+                  card.badgeType === 'mint'
+                    ? 'badge-mint'
+                    : 'badge-pink'
+                }
+              >
+                {card.badgeType === 'mint' ? (
+                  <ArrowUpRight className="w-3 h-3 text-emerald-600" />
+                ) : (
+                  <ArrowDownRight className="w-3 h-3 text-rose-600" />
+                )}
+                {card.badge}
+              </span>
+            </div>
+
+            <p className="text-slate-400 text-xs mt-2 font-normal">{card.subtitle}</p>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
