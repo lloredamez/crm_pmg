@@ -24,3 +24,13 @@ export function formatPhone(phone: string): string {
   }
   return phone;
 }
+
+export function formatCpf(cpf?: string | null): string {
+  if (!cpf) return "-";
+  const cleaned = cpf.replace(/\D/g, "");
+  if (cleaned.length === 11) {
+    return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6, 9)}-${cleaned.slice(9)}`;
+  }
+  return cpf;
+}
+
