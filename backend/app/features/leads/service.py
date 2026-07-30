@@ -196,8 +196,6 @@ class LeadService:
                             User.unit_id == current_user.unit_id
                         )
                     )
-                else:
-                    query = query.where(Lead.current_attendant_id == current_user.id)
             elif current_user.role == "attendant":
                 query = query.where(Lead.current_attendant_id == current_user.id)
 
@@ -236,8 +234,6 @@ class LeadService:
                             User.unit_id == current_user.unit_id
                         )
                     )
-                else:
-                    query = query.where(Lead.current_attendant_id == current_user.id)
             elif current_user.role == "attendant":
                 query = query.where(Lead.current_attendant_id == current_user.id)
             # admin has no restrictions
