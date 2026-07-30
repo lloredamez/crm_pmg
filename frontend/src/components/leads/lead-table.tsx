@@ -12,8 +12,9 @@ import {
   SortingState,
 } from '@tanstack/react-table';
 import { Lead, User } from '@/features/leads/types';
-import { formatDate, formatPhone, cn } from '@/lib/utils';
-import { Search, ArrowUpDown, MoreHorizontal, UserCheck, MessageSquare, CheckCircle, Clock } from 'lucide-react';
+import { formatDate, formatPhone, formatCpf, cn } from '@/lib/utils';
+import { useAuth } from '@/features/auth/auth-provider';
+import { Search, ArrowUpDown, UserCheck, MessageSquare, Clock } from 'lucide-react';
 
 interface LeadTableProps {
   leads: Lead[];
@@ -46,6 +47,11 @@ export const LeadTable: React.FC<LeadTableProps> = ({
   onReassignSingle,
   onBulkReassign,
 }) => {
+  const { user } = useAuth();
+  const role = user?.role;
+  const isSupervisorRole = role === 'supervisor';
+  const isManagerOrAdminRole = role === 'manager' || role === 'admin';
+
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const [sorting, setSorting] = useState<SortingState>([]);
   const [selectedBulkAttendant, setSelectedBulkAttendant] = useState<string>('');
@@ -79,80 +85,115 @@ export const LeadTable: React.FC<LeadTableProps> = ({
       ),
     },
     {
-      accessorKey: 'name',
-      header: 'Cliente / Lead',
-      cell: ({ row }) => {
-        const lead = row.original;
-        return (
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-brand-50 border border-brand-200 text-brand-700 font-bold text-sm flex items-center justify-center">
-              {lead.name.substring(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <div className="font-semibold text-slate-900 text-sm hover:text-brand-600 cursor-pointer" onClick={() => onOpenLeadModal(lead)}>
-                {lead.name}
-              </div>
-              <div className="text-xs text-slate-400 font-normal">{formatPhone(lead.phone)}</div>
-            </div>
-          </div>
-        );
-      },
-    },
-    {
-      accessorKey: 'campaign_name',
-      header: 'Origem / Campanha',
-      cell: ({ row }) => (
-        <div>
-          <span className="text-xs font-medium text-slate-700 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
-            {row.original.campaign_name || 'Meta Ads Direct'}
-          </span>
-        </div>
-      ),
-    },
-    {
-      accessorKey: 'assigned_at',
+      accessorKey: 'created_at',
       header: ({ column }) => (
         <button
           className="flex items-center gap-1 text-slate-500 font-medium text-xs hover:text-slate-900"
           onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
         >
-          Atribuído em <ArrowUpDown className="w-3 h-3" />
+          Data Lead <ArrowUpDown className="w-3 h-3" />
         </button>
       ),
       cell: ({ row }) => (
-        <div className="text-xs text-slate-500 flex items-center gap-1.5">
+        <div className="text-xs text-slate-500 flex items-center gap-1.5 font-medium">
           <Clock className="w-3.5 h-3.5 text-slate-400" />
-          {formatDate(row.original.assigned_at || row.original.created_at)}
+          {formatDate(row.original.created_at || row.original.assigned_at)}
         </div>
       ),
     },
     {
-      accessorKey: 'current_attendant',
-      header: 'Atendente Alocado',
+      accessorKey: 'cpf',
+      header: 'CPF',
+      cell: ({ row }) => (
+        <div className="text-xs font-medium text-slate-700">
+          {formatCpf(row.original.cpf)}
+        </div>
+      ),
+    },
+    {
+      accessorKey: 'name',
+      header: 'Nome',
       cell: ({ row }) => {
-        const attendant = row.original.current_attendant;
-        if (!attendant) {
-          return <span className="text-xs text-slate-400 italic">Na Fila</span>;
-        }
+        const lead = row.original;
         return (
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-            <span className="text-xs font-medium text-slate-800">{attendant.name}</span>
+          <div className="flex items-center gap-3">
+            <div
+              className="font-semibold text-slate-900 text-xs hover:text-brand-600 cursor-pointer"
+              onClick={() => onOpenLeadModal(lead)}
+            >
+              {lead.name}
+            </div>
           </div>
         );
       },
     },
     {
+      accessorKey: 'phone',
+      header: 'Telefone',
+      cell: ({ row }) => (
+        <div className="text-xs font-medium text-slate-600">
+          {formatPhone(row.original.phone)}
+        </div>
+      ),
+    },
+    ...(isSupervisorRole || isManagerOrAdminRole
+      ? [
+          {
+            accessorKey: 'current_attendant',
+            header: 'Atendente',
+            cell: ({ row }: { row: any }) => {
+              const lead = row.original;
+              const rawName =
+                lead.current_attendant?.name ||
+                users.find((u) => u.id === lead.current_attendant_id)?.name ||
+                lead.attendant_name;
+
+              if (!rawName) {
+                return <span className="text-xs text-slate-400 italic">Na Fila</span>;
+              }
+
+              const cleanName = rawName.split('(')[0].trim();
+
+              return (
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  <span className="text-xs font-semibold text-slate-800">{cleanName}</span>
+                </div>
+              );
+            },
+          },
+        ]
+      : []),
+    ...(isManagerOrAdminRole
+      ? [
+          {
+            accessorKey: 'unit',
+            header: 'Loja',
+            cell: ({ row }: { row: any }) => {
+              const storeName = row.original.unit?.name || row.original.unit_name || 'Loja Principal';
+              return (
+                <span className="text-xs font-medium text-slate-700 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200">
+                  {storeName}
+                </span>
+              );
+            },
+          },
+        ]
+      : []),
+    {
       accessorKey: 'status',
-      header: 'Status SLA',
+      header: 'Status',
       cell: ({ row }) => {
         const status = row.original.status;
         let badgeStyle = 'badge-slate';
         let statusLabel: string = status;
 
-        if (status === 'assigned') {
+        if (status === 'new') {
           badgeStyle = 'badge-purple';
-          statusLabel = 'Em Atendimento (SLA)';
+          statusLabel = 'Novo / Na Fila';
+        } else if (status === 'assigned') {
+          badgeStyle = 'badge-purple';
+          statusLabel = 'Em Atendimento';
         } else if (status === 'in_progress') {
           badgeStyle = 'badge-mint';
           statusLabel = 'Em Interação';
@@ -182,24 +223,25 @@ export const LeadTable: React.FC<LeadTableProps> = ({
               <MessageSquare className="w-4 h-4" />
             </button>
 
-            {/* Quick Reassign Dropdown */}
-            <select
-              defaultValue=""
-              onChange={(e) => {
-                if (e.target.value) {
-                  onReassignSingle(lead.id, e.target.value);
-                  e.target.value = '';
-                }
-              }}
-              className="text-[11px] bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-600 focus:outline-none"
-            >
-              <option value="" disabled>Reatribuir...</option>
-              {users.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.name} ({u.status})
-                </option>
-              ))}
-            </select>
+            {(isSupervisorRole || isManagerOrAdminRole) && (
+              <select
+                defaultValue=""
+                onChange={(e) => {
+                  if (e.target.value) {
+                    onReassignSingle(lead.id, e.target.value);
+                    e.target.value = '';
+                  }
+                }}
+                className="text-[11px] bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-600 focus:outline-none"
+              >
+                <option value="" disabled>Reatribuir...</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} ({u.status})
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         );
       },
