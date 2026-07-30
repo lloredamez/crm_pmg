@@ -3,12 +3,14 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, text
+from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
 from app.core.database import engine, Base, AsyncSessionLocal
 from app.core.security import get_password_hash
 from app.core.socket_manager import socket_app
 from app.models.user import User
+from app.models.unit import Unit
 from app.features.auth.router import router as auth_router
 from app.features.users.router import router as users_router
 from app.features.leads.router import router as leads_router
@@ -19,22 +21,52 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 async def seed_initial_data():
-    """Cria tabelas, aplica migrações leves e insere contas demonstrativas para cada perfil (Admin, Supervisor, Atendente)."""
+    """Cria tabelas, aplica migrações leves e insere unidades e contas demonstrativas para cada esteira."""
     async with engine.begin() as conn:
-        # Garante a criação de novas tabelas
+        # Garante a criação de novas tabelas (ex: units)
         await conn.run_sync(Base.metadata.create_all)
         # Adiciona colunas que possam faltar em tabelas pré-existentes no volume do Postgres
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS hashed_password VARCHAR(255) DEFAULT '';"))
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS unit_id UUID REFERENCES units(id) ON DELETE SET NULL;"))
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_assigned_at TIMESTAMPTZ;"))
+        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS unit_id UUID REFERENCES units(id) ON DELETE SET NULL;"))
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS user_units (
+                user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+                unit_id UUID REFERENCES units(id) ON DELETE CASCADE,
+                PRIMARY KEY (user_id, unit_id)
+            );
+        """))
 
     async with AsyncSessionLocal() as session:
+        # Seed das Unidades
+        units_res = await session.execute(select(Unit))
+        existing_units = units_res.scalars().all()
+        unit_map = {}
+
+        if not existing_units:
+            logger.info("Nenhuma unidade encontrada. Criando 3 Unidades Padrão...")
+            units = [
+                Unit(name="Unidade 1 - São Paulo", code="U1"),
+                Unit(name="Unidade 2 - Rio de Janeiro", code="U2"),
+                Unit(name="Unidade 3 - Belo Horizonte", code="U3"),
+            ]
+            session.add_all(units)
+            await session.commit()
+            for u in units:
+                await session.refresh(u)
+                unit_map[u.code] = u
+        else:
+            for u in existing_units:
+                unit_map[u.code] = u
+
+        # Seed dos Usuários
         result = await session.execute(select(User))
         existing_users = result.scalars().all()
-        
-        # Se os usuários antigos não possuem hashed_password, atualizar a senha padrão
         default_password = get_password_hash("senha123")
         
         if not existing_users:
-            logger.info("Nenhum usuário encontrado. Criando contas padrão dos 3 perfis (senha: senha123)...")
+            logger.info("Nenhum usuário encontrado. Criando contas por unidade (senha: senha123)...")
             demo_users = [
                 User(
                     name="Administrador do Sistema",
@@ -42,41 +74,95 @@ async def seed_initial_data():
                     hashed_password=default_password,
                     role="admin",
                     status="online",
-                    max_simultaneous_leads=20
+                    max_simultaneous_leads=20,
+                    unit_id=None
                 ),
                 User(
-                    name="Supervisor Comercial",
+                    name="Supervisor Comercial SP",
                     email="supervisor@crmleads.com",
                     hashed_password=default_password,
                     role="supervisor",
                     status="online",
-                    max_simultaneous_leads=15
+                    max_simultaneous_leads=15,
+                    unit_id=unit_map.get("U1").id if unit_map.get("U1") else None
                 ),
                 User(
-                    name="Ana Silva (Atendente)",
+                    name="Ana Silva (Unidade 1 - Consultor 1)",
                     email="ana.silva@crmleads.com",
                     hashed_password=default_password,
                     role="attendant",
                     status="online",
-                    max_simultaneous_leads=10
+                    max_simultaneous_leads=10,
+                    unit_id=unit_map.get("U1").id if unit_map.get("U1") else None
                 ),
                 User(
-                    name="Bruno Costa (Atendente)",
+                    name="Bruno Costa (Unidade 2 - Consultor 1)",
                     email="bruno.costa@crmleads.com",
                     hashed_password=default_password,
                     role="attendant",
                     status="online",
-                    max_simultaneous_leads=8
+                    max_simultaneous_leads=10,
+                    unit_id=unit_map.get("U2").id if unit_map.get("U2") else None
+                ),
+                User(
+                    name="Carlos Oliveira (Unidade 3 - Consultor 1)",
+                    email="carlos.oliveira@crmleads.com",
+                    hashed_password=default_password,
+                    role="attendant",
+                    status="online",
+                    max_simultaneous_leads=10,
+                    unit_id=unit_map.get("U3").id if unit_map.get("U3") else None
+                ),
+                User(
+                    name="Daniela Santos (Unidade 1 - Consultor 2)",
+                    email="daniela.santos@crmleads.com",
+                    hashed_password=default_password,
+                    role="attendant",
+                    status="online",
+                    max_simultaneous_leads=10,
+                    unit_id=unit_map.get("U1").id if unit_map.get("U1") else None
+                ),
+                User(
+                    name="Eduardo Lima (Unidade 2 - Consultor 2)",
+                    email="eduardo.lima@crmleads.com",
+                    hashed_password=default_password,
+                    role="attendant",
+                    status="online",
+                    max_simultaneous_leads=10,
+                    unit_id=unit_map.get("U2").id if unit_map.get("U2") else None
                 ),
             ]
             session.add_all(demo_users)
             await session.commit()
-            logger.info("Usuários padrão (Admin, Supervisor, Atendentes) criados com sucesso!")
+            logger.info("Usuários de demonstração por unidade criados com sucesso!")
         else:
-            # Atualiza senhas vazias caso a coluna tenha sido criada agora via ALTER TABLE
-            for user in existing_users:
+            u_list = list(unit_map.values())
+            for idx, user in enumerate(existing_users):
                 if not user.hashed_password:
                     user.hashed_password = default_password
+                if user.role not in ["admin", "manager"] and not user.unit_id and u_list:
+                    user.unit_id = u_list[idx % len(u_list)].id
+            await session.commit()
+
+        # Garante a existência da conta de Gerente de demonstração com múltiplas unidades
+        manager_check = await session.execute(
+            select(User).options(selectinload(User.managed_units)).where(User.email == "gerente.regional@crmleads.com")
+        )
+        if not manager_check.scalar_one_or_none():
+            u1 = unit_map.get("U1")
+            u2 = unit_map.get("U2")
+            managed = [u for u in [u1, u2] if u is not None]
+            manager_user = User(
+                name="Roberto Gerente (Regional SP & RJ)",
+                email="gerente.regional@crmleads.com",
+                hashed_password=default_password,
+                role="manager",
+                status="online",
+                max_simultaneous_leads=20,
+                unit_id=None,
+                managed_units=managed
+            )
+            session.add(manager_user)
             await session.commit()
 
 @asynccontextmanager
