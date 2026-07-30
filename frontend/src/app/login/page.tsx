@@ -123,12 +123,24 @@ export default function LoginPage() {
 
               <button
                 type="button"
+                onClick={() => handleQuickLogin('gerente.regional@crmleads.com')}
+                className="w-full bg-slate-50 hover:bg-brand-50 border border-slate-200 hover:border-brand-200 rounded-2xl p-2.5 text-xs font-medium text-slate-700 flex items-center justify-between transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <UserCheck className="w-4 h-4 text-blue-600" />
+                  <span>Gerente Regional (SP & RJ)</span>
+                </div>
+                <span className="text-[10px] text-slate-400">gerente.regional@crmleads.com</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => handleQuickLogin('supervisor@crmleads.com')}
                 className="w-full bg-slate-50 hover:bg-brand-50 border border-slate-200 hover:border-brand-200 rounded-2xl p-2.5 text-xs font-medium text-slate-700 flex items-center justify-between transition-colors"
               >
                 <div className="flex items-center gap-2">
                   <UserCheck className="w-4 h-4 text-indigo-600" />
-                  <span>Supervisor Comercial</span>
+                  <span>Supervisor Comercial SP</span>
                 </div>
                 <span className="text-[10px] text-slate-400">supervisor@crmleads.com</span>
               </button>
@@ -143,6 +155,17 @@ export default function LoginPage() {
                   <span>Atendente (Ana Silva)</span>
                 </div>
                 <span className="text-[10px] text-slate-400">ana.silva@crmleads.com</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => handleQuickLogin('bruno.costa@crmleads.com')}
+                className="w-full bg-slate-50 hover:bg-brand-50 border border-slate-200 hover:border-brand-200 rounded-2xl p-2.5 text-xs font-medium text-slate-700 flex items-center justify-between transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <Headset className="w-4 h-4 text-emerald-600" />
+                  <span>Atendente (Bruno Costa)</span>
+                </div>
+                <span className="text-[10px] text-slate-400">bruno.costa@crmleads.com</span>
               </button>
             </div>
           </div>

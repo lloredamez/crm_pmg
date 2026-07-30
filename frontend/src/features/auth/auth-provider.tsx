@@ -8,9 +8,10 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password: str) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   isAdmin: boolean;
+  isManager: boolean;
   isSupervisor: boolean;
   isAttendant: boolean;
 }
@@ -22,6 +23,7 @@ const AuthContext = createContext<AuthContextType>({
   login: async () => {},
   logout: () => {},
   isAdmin: false,
+  isManager: false,
   isSupervisor: false,
   isAttendant: false,
 });
@@ -76,7 +78,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const login = async (email: string, password: str) => {
+  const login = async (email: string, password: string) => {
     setIsLoading(true);
     const apiUrl = getApiUrl();
     try {
@@ -125,7 +127,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const isAdmin = user?.role === 'admin';
-  const isSupervisor = user?.role === 'supervisor' || isAdmin;
+  const isManager = user?.role === 'manager' || isAdmin;
+  const isSupervisor = user?.role === 'supervisor' || isManager;
   const isAttendant = user?.role === 'attendant';
 
   return (
@@ -137,6 +140,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         logout,
         isAdmin,
+        isManager,
         isSupervisor,
         isAttendant,
       }}
