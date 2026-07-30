@@ -4,6 +4,8 @@ from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
+from app.core.deps import get_current_user
+from app.models.user import User
 from app.schemas.lead import (
     LeadCreate,
     LeadResponse,
@@ -28,6 +30,7 @@ async def list_leads(
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     attendant_id: Optional[UUID] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     service = LeadService(db)
@@ -36,7 +39,8 @@ async def list_leads(
         limit=limit,
         status_filter=status,
         search=search,
-        attendant_id=attendant_id
+        attendant_id=attendant_id,
+        current_user=current_user
     )
     pages = math.ceil(total / limit) if total > 0 else 1
     return LeadPaginationResponse(
@@ -48,9 +52,13 @@ async def list_leads(
     )
 
 @router.get("/{lead_id}", response_model=LeadResponse)
-async def get_lead(lead_id: UUID, db: AsyncSession = Depends(get_db)):
+async def get_lead(
+    lead_id: UUID,
+    current_user: Optional[User] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     service = LeadService(db)
-    lead = await service.get_lead_by_id(lead_id)
+    lead = await service.get_lead_by_id(lead_id, current_user=current_user)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead não encontrado")
     return lead
