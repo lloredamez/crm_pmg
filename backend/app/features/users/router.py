@@ -3,7 +3,7 @@ from typing import List
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.schemas.user import UserCreate, UserResponse, UserUpdateStatus
+from app.schemas.user import UserCreate, UserResponse, UserUpdate, UserUpdateStatus
 from app.features.users.service import UserService
 
 router = APIRouter(prefix="/users", tags=["Users"])
@@ -26,6 +26,14 @@ async def get_user(user_id: UUID, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     return user
 
+@router.put("/{user_id}", response_model=UserResponse)
+async def update_user(user_id: UUID, user_in: UserUpdate, db: AsyncSession = Depends(get_db)):
+    service = UserService(db)
+    user = await service.update_user(user_id, user_in)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    return user
+
 @router.patch("/{user_id}/status", response_model=UserResponse)
 async def update_user_status(user_id: UUID, status_in: UserUpdateStatus, db: AsyncSession = Depends(get_db)):
     service = UserService(db)
@@ -33,3 +41,12 @@ async def update_user_status(user_id: UUID, status_in: UserUpdateStatus, db: Asy
     if not user:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     return user
+
+
+@router.get("/units/all")
+async def list_units(db: AsyncSession = Depends(get_db)):
+    from sqlalchemy import select
+    from app.models.unit import Unit
+    result = await db.execute(select(Unit).where(Unit.is_active.is_(True)).order_by(Unit.code))
+    units = result.scalars().all()
+    return [{"id": str(u.id), "name": u.name, "code": u.code} for u in units]
