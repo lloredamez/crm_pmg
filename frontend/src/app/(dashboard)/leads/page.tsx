@@ -51,8 +51,8 @@ export default function LeadsDashboardPage() {
     enabled: !!user,
   });
 
-  // Fetch Leads with Role Filter
-  const attendantFilterId = isAttendant || filterOnlyMyLeads ? user?.id : undefined;
+  // Fetch Leads with Role Filter (attendants only filter by their own ID)
+  const attendantFilterId = isAttendant ? user?.id : undefined;
 
   const { data: leadsData, refetch: refetchLeads } = useQuery({
     queryKey: ['leads', page, statusFilter, searchQuery, attendantFilterId],
@@ -156,17 +156,11 @@ export default function LeadsDashboardPage() {
             />
 
             {/* Role Filter Notice */}
-            {isSupervisor && (
+            {user?.role === 'supervisor' && (
               <div className="flex items-center justify-between bg-white rounded-2xl p-3 border border-slate-100 mb-6 text-xs text-slate-600">
                 <span className="font-semibold">
-                  Exibindo visão de Supervisor: {filterOnlyMyLeads ? 'Meus Leads Atribuídos' : 'Todos os Leads da Equipe'}
+                  Visão de Supervisor: Exibindo todos os leads da sua unidade / loja
                 </span>
-                <button
-                  onClick={() => setFilterOnlyMyLeads(!filterOnlyMyLeads)}
-                  className="text-brand-600 hover:text-brand-700 font-bold hover:underline"
-                >
-                  {filterOnlyMyLeads ? 'Ver Todos da Equipe' : 'Filtrar Somente Meus Leads'}
-                </button>
               </div>
             )}
 
