@@ -4,9 +4,18 @@ from typing import Optional, List
 from pydantic import BaseModel, Field
 from app.schemas.user import UserResponse
 
+class UnitNestedResponse(BaseModel):
+    id: UUID
+    name: str
+    code: str
+
+    class Config:
+        from_attributes = True
+
 class LeadBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=255)
     phone: str = Field(..., min_length=8, max_length=50)
+    cpf: Optional[str] = None
     email: Optional[str] = None
     meta_lead_id: Optional[str] = None
     campaign_name: Optional[str] = None
@@ -27,6 +36,8 @@ class BulkReassignRequest(BaseModel):
 
 class LeadResponse(LeadBase):
     id: UUID
+    unit_id: Optional[UUID] = None
+    unit: Optional[UnitNestedResponse] = None
     current_attendant_id: Optional[UUID] = None
     current_attendant: Optional[UserResponse] = None
     assigned_at: Optional[datetime] = None

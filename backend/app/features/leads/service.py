@@ -175,7 +175,7 @@ class LeadService:
         return selected_user
 
     async def get_lead_by_id(self, lead_id: UUID, current_user: Optional[User] = None) -> Optional[Lead]:
-        query = select(Lead).options(selectinload(Lead.current_attendant)).where(Lead.id == lead_id)
+        query = select(Lead).options(selectinload(Lead.current_attendant), selectinload(Lead.unit)).where(Lead.id == lead_id)
         if current_user:
             if current_user.role == "manager":
                 managed_unit_ids = [u.id for u in current_user.managed_units] if current_user.managed_units else []
@@ -213,7 +213,7 @@ class LeadService:
         attendant_id: Optional[UUID] = None,
         current_user: Optional[User] = None
     ) -> Tuple[List[Lead], int]:
-        query = select(Lead).options(selectinload(Lead.current_attendant))
+        query = select(Lead).options(selectinload(Lead.current_attendant), selectinload(Lead.unit))
 
         # Role-based filtering
         if current_user:

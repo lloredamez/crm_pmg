@@ -11,6 +11,7 @@ class Lead(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
     phone = Column(String(50), nullable=False)
+    cpf = Column(String(14), nullable=True)
     email = Column(String(255), nullable=True)
     meta_lead_id = Column(String(255), nullable=True, index=True)
     campaign_name = Column(String(255), nullable=True)

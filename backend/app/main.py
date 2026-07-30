@@ -30,6 +30,7 @@ async def seed_initial_data():
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS unit_id UUID REFERENCES units(id) ON DELETE SET NULL;"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_assigned_at TIMESTAMPTZ;"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS unit_id UUID REFERENCES units(id) ON DELETE SET NULL;"))
+        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);"))
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS user_units (
                 user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -69,7 +70,7 @@ async def seed_initial_data():
             logger.info("Nenhum usuário encontrado. Criando contas por unidade (senha: senha123)...")
             demo_users = [
                 User(
-                    name="Administrador do Sistema",
+                    name="Carlos Admin",
                     email="admin@crmleads.com",
                     hashed_password=default_password,
                     role="admin",
@@ -78,7 +79,7 @@ async def seed_initial_data():
                     unit_id=None
                 ),
                 User(
-                    name="Supervisor Comercial SP",
+                    name="Marcos Vinícius",
                     email="supervisor@crmleads.com",
                     hashed_password=default_password,
                     role="supervisor",
@@ -87,7 +88,7 @@ async def seed_initial_data():
                     unit_id=unit_map.get("U1").id if unit_map.get("U1") else None
                 ),
                 User(
-                    name="Ana Silva (Unidade 1 - Consultor 1)",
+                    name="Ana Silva",
                     email="ana.silva@crmleads.com",
                     hashed_password=default_password,
                     role="attendant",
@@ -96,7 +97,7 @@ async def seed_initial_data():
                     unit_id=unit_map.get("U1").id if unit_map.get("U1") else None
                 ),
                 User(
-                    name="Bruno Costa (Unidade 2 - Consultor 1)",
+                    name="Bruno Costa",
                     email="bruno.costa@crmleads.com",
                     hashed_password=default_password,
                     role="attendant",
@@ -105,7 +106,7 @@ async def seed_initial_data():
                     unit_id=unit_map.get("U2").id if unit_map.get("U2") else None
                 ),
                 User(
-                    name="Carlos Oliveira (Unidade 3 - Consultor 1)",
+                    name="Carlos Oliveira",
                     email="carlos.oliveira@crmleads.com",
                     hashed_password=default_password,
                     role="attendant",
@@ -114,7 +115,7 @@ async def seed_initial_data():
                     unit_id=unit_map.get("U3").id if unit_map.get("U3") else None
                 ),
                 User(
-                    name="Daniela Santos (Unidade 1 - Consultor 2)",
+                    name="Daniela Santos",
                     email="daniela.santos@crmleads.com",
                     hashed_password=default_password,
                     role="attendant",
@@ -123,7 +124,7 @@ async def seed_initial_data():
                     unit_id=unit_map.get("U1").id if unit_map.get("U1") else None
                 ),
                 User(
-                    name="Eduardo Lima (Unidade 2 - Consultor 2)",
+                    name="Eduardo Lima",
                     email="eduardo.lima@crmleads.com",
                     hashed_password=default_password,
                     role="attendant",
@@ -137,7 +138,19 @@ async def seed_initial_data():
             logger.info("Usuários de demonstração por unidade criados com sucesso!")
         else:
             u_list = list(unit_map.values())
+            clean_names = {
+                "admin@crmleads.com": "Carlos Admin",
+                "supervisor@crmleads.com": "Marcos Vinícius",
+                "ana.silva@crmleads.com": "Ana Silva",
+                "bruno.costa@crmleads.com": "Bruno Costa",
+                "carlos.oliveira@crmleads.com": "Carlos Oliveira",
+                "daniela.santos@crmleads.com": "Daniela Santos",
+                "eduardo.lima@crmleads.com": "Eduardo Lima",
+                "gerente.regional@crmleads.com": "Roberto Mendes",
+            }
             for idx, user in enumerate(existing_users):
+                if user.email in clean_names:
+                    user.name = clean_names[user.email]
                 if not user.hashed_password:
                     user.hashed_password = default_password
                 if user.role not in ["admin", "manager"] and not user.unit_id and u_list:
@@ -153,7 +166,7 @@ async def seed_initial_data():
             u2 = unit_map.get("U2")
             managed = [u for u in [u1, u2] if u is not None]
             manager_user = User(
-                name="Roberto Gerente (Regional SP & RJ)",
+                name="Roberto Mendes",
                 email="gerente.regional@crmleads.com",
                 hashed_password=default_password,
                 role="manager",
