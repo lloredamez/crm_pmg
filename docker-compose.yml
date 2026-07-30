@@ -51,6 +51,8 @@ services:
       - META_VERIFY_TOKEN=${META_VERIFY_TOKEN:-lead_crm_meta_token_secret}
     ports:
       - "${BACKEND_PORT:-5052}:5052"
+    volumes:
+      - ./backend:/app
     depends_on:
       postgres:
         condition: service_healthy
@@ -77,6 +79,8 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - SECRET_KEY=${SECRET_KEY:-default_secret_key_development}
+    volumes:
+      - ./backend:/app
     depends_on:
       postgres:
         condition: service_healthy
