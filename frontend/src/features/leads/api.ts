@@ -10,6 +10,16 @@ const getApiUrl = () => {
   return 'http://localhost:5052';
 };
 
+const getAuthHeaders = (): Record<string, string> => {
+  if (typeof window !== 'undefined') {
+    const token = localStorage.getItem('access_token');
+    if (token) {
+      return { Authorization: `Bearer ${token}` };
+    }
+  }
+  return {};
+};
+
 async function handleResponse<T>(res: Response): Promise<T> {
   if (!res.ok) {
     let errorMsg = `Erro ${res.status}`;
@@ -39,13 +49,21 @@ export async function fetchLeads(params: {
   if (params.search) query.append('search', params.search);
   if (params.attendant_id) query.append('attendant_id', params.attendant_id);
 
-  const res = await fetch(`${API_URL}/api/v1/leads?${query.toString()}`);
+  const res = await fetch(`${API_URL}/api/v1/leads?${query.toString()}`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
   return handleResponse<LeadPaginationResponse>(res);
 }
 
 export async function fetchUsers(): Promise<User[]> {
   const API_URL = getApiUrl();
-  const res = await fetch(`${API_URL}/api/v1/users`);
+  const res = await fetch(`${API_URL}/api/v1/users`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
   return handleResponse<User[]>(res);
 }
 
@@ -53,7 +71,10 @@ export async function updateUserStatus(userId: string, status: string): Promise<
   const API_URL = getApiUrl();
   const res = await fetch(`${API_URL}/api/v1/users/${userId}/status`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
     body: JSON.stringify({ status })
   });
   return handleResponse<User>(res);
@@ -63,7 +84,10 @@ export async function updateLeadStatus(leadId: string, status: string): Promise<
   const API_URL = getApiUrl();
   const res = await fetch(`${API_URL}/api/v1/leads/${leadId}/status`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
     body: JSON.stringify({ status })
   });
   return handleResponse<Lead>(res);
@@ -73,7 +97,10 @@ export async function reassignLead(leadId: string, attendantId: string): Promise
   const API_URL = getApiUrl();
   const res = await fetch(`${API_URL}/api/v1/leads/${leadId}/reassign`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
     body: JSON.stringify({ attendant_id: attendantId })
   });
   return handleResponse<Lead>(res);
@@ -83,7 +110,10 @@ export async function bulkReassignLeads(leadIds: string[], attendantId: string):
   const API_URL = getApiUrl();
   const res = await fetch(`${API_URL}/api/v1/leads/bulk-reassign`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
     body: JSON.stringify({ lead_ids: leadIds, attendant_id: attendantId })
   });
   await handleResponse<any>(res);
@@ -91,7 +121,11 @@ export async function bulkReassignLeads(leadIds: string[], attendantId: string):
 
 export async function fetchMessages(leadId: string): Promise<Message[]> {
   const API_URL = getApiUrl();
-  const res = await fetch(`${API_URL}/api/v1/messages/lead/${leadId}`);
+  const res = await fetch(`${API_URL}/api/v1/messages/lead/${leadId}`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
   return handleResponse<Message[]>(res);
 }
 
@@ -99,7 +133,10 @@ export async function sendMessage(leadId: string, content: string, direction: 'i
   const API_URL = getApiUrl();
   const res = await fetch(`${API_URL}/api/v1/messages`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
     body: JSON.stringify({ lead_id: leadId, content, direction })
   });
   return handleResponse<Message>(res);
@@ -109,7 +146,10 @@ export async function createMockLead(data: { name: string; phone: string; campai
   const API_URL = getApiUrl();
   const res = await fetch(`${API_URL}/api/v1/webhooks/meta`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
     body: JSON.stringify({
       name: data.name,
       phone: data.phone,

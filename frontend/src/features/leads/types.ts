@@ -1,4 +1,4 @@
-export type UserRole = 'admin' | 'supervisor' | 'attendant';
+export type UserRole = 'admin' | 'manager' | 'supervisor' | 'attendant';
 export type UserStatus = 'online' | 'offline' | 'busy';
 
 export interface User {
@@ -8,6 +8,8 @@ export interface User {
   role: UserRole;
   status: UserStatus;
   max_simultaneous_leads: number;
+  unit_id?: string | null;
+  managed_unit_ids?: string[];
   created_at: string;
 }
 
