@@ -1,7 +1,9 @@
 from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from app.models.user import User
+from app.models.unit import Unit
 from app.core.security import verify_password, get_password_hash, create_access_token
 from app.schemas.auth import LoginRequest, Token, UserCreateWithPassword
 from app.schemas.user import UserResponse
@@ -11,7 +13,9 @@ class AuthService:
         self.db = db
 
     async def authenticate(self, login_in: LoginRequest) -> Optional[Token]:
-        result = await self.db.execute(select(User).where(User.email == login_in.email))
+        result = await self.db.execute(
+            select(User).options(selectinload(User.managed_units)).where(User.email == login_in.email)
+        )
         user = result.scalar_one_or_none()
         if not user:
             return None
@@ -33,8 +37,13 @@ class AuthService:
             hashed_password=hashed_password,
             role=user_in.role,
             status=user_in.status,
-            max_simultaneous_leads=user_in.max_simultaneous_leads
+            max_simultaneous_leads=user_in.max_simultaneous_leads,
+            unit_id=user_in.unit_id
         )
+        if user_in.managed_unit_ids:
+            units_res = await self.db.execute(select(Unit).where(Unit.id.in_(user_in.managed_unit_ids)))
+            user.managed_units = list(units_res.scalars().all())
+
         self.db.add(user)
         await self.db.commit()
         await self.db.refresh(user)
