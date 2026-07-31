@@ -88,13 +88,33 @@ export async function updateDisposition(
 
 export async function toggleDispositionStatus(id: string): Promise<Disposition> {
   const API_URL = getApiUrl();
+  const res = await fetch(`${API_URL}/api/v1/dispositions/${id}/toggle`, {
+    method: 'PATCH',
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  return handleResponse<Disposition>(res);
+}
+
+export async function deleteDisposition(id: string): Promise<void> {
+  const API_URL = getApiUrl();
   const res = await fetch(`${API_URL}/api/v1/dispositions/${id}`, {
     method: 'DELETE',
     headers: {
       ...getAuthHeaders(),
     },
   });
-  return handleResponse<Disposition>(res);
+  if (!res.ok) {
+    let errorMsg = `Erro ${res.status}`;
+    try {
+      const errData = await res.json();
+      errorMsg = errData.detail || errorMsg;
+    } catch (_) {
+      errorMsg = await res.text();
+    }
+    throw new Error(errorMsg || 'Erro ao excluir tabulação');
+  }
 }
 
 export async function tabulateLead(
