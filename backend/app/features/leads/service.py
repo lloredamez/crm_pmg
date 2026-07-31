@@ -57,14 +57,16 @@ class LeadService:
 
         return lead
 
-    async def _find_eligible_attendant_for_unit(self, unit_id: UUID) -> Optional[User]:
-        result = await self.db.execute(
-            select(User).where(
-                User.status == "online",
-                User.unit_id == unit_id,
-                User.role.in_(["attendant"])
-            )
+    async def _find_eligible_attendant_for_unit(self, unit_id: UUID, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
+        query = select(User).where(
+            User.status == "online",
+            User.unit_id == unit_id,
+            User.role.in_(["attendant"])
         )
+        if exclude_user_id:
+            query = query.where(User.id != exclude_user_id)
+
+        result = await self.db.execute(query)
         online_users = list(result.scalars().all())
         if not online_users:
             return None
@@ -89,7 +91,7 @@ class LeadService:
         user_load.sort(key=lambda x: (x[0], x[1]))
         return user_load[0][2]
 
-    async def distribute_lead(self, lead: Lead) -> Optional[User]:
+    async def distribute_lead(self, lead: Lead, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
         from app.models.unit import Unit
         from sqlalchemy import nullsfirst
 
@@ -104,11 +106,10 @@ class LeadService:
                 .where(Unit.id == lead.unit_id, Unit.is_active.is_(True)))
             target_unit = unit_res.scalar_one_or_none()
             if target_unit:
-                selected_user = await self._find_eligible_attendant_for_unit(target_unit.id)
+                selected_user = await self._find_eligible_attendant_for_unit(target_unit.id, exclude_user_id=exclude_user_id)
 
         # Cenário 2: Esteira Geral (ou Transbordo se a unidade de origem não tiver consultores online)
         if not selected_user:
-            # Busca todas as unidades ativas ordenadas pela última atribuição (Round-Robin entre Unidades)
             units_res = await self.db.execute(
                 select(Unit)
                 .where(Unit.is_active.is_(True))
@@ -116,9 +117,8 @@ class LeadService:
             )
             units = list(units_res.scalars().all())
 
-            # Itera sequencialmente nas unidades para encontrar a primeira com consultor disponível (Transbordo)
             for unit in units:
-                user = await self._find_eligible_attendant_for_unit(unit.id)
+                user = await self._find_eligible_attendant_for_unit(unit.id, exclude_user_id=exclude_user_id)
                 if user:
                     selected_user = user
                     target_unit = unit
