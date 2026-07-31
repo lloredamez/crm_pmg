@@ -7,8 +7,9 @@ import {
   createDisposition,
   updateDisposition,
   toggleDispositionStatus,
+  deleteDisposition,
 } from '@/features/dispositions/api';
-import { Plus, Edit2, Clock, Check, X, Tag, Power, AlertCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Tag, Power, X, Clock, AlertCircle } from 'lucide-react';
 
 export const DispositionManagement: React.FC = () => {
   const [dispositions, setDispositions] = useState<Disposition[]>([]);
@@ -71,6 +72,16 @@ export const DispositionManagement: React.FC = () => {
     }
   };
 
+  const handleDelete = async (disp: Disposition) => {
+    if (!confirm(`Deseja realmente excluir a tabulação "${disp.name}"?`)) return;
+    try {
+      await deleteDisposition(disp.id);
+      loadDispositions();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao excluir tabulação');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
@@ -81,7 +92,7 @@ export const DispositionManagement: React.FC = () => {
     setSubmitting(true);
     setErrorMsg('');
 
-    const minutes = hasTimeout ? Math.round(parseFloat(timeoutHours) * 60) : null;
+    const minutes = hasTimeout ? parseFloat((parseFloat(timeoutHours) * 60).toFixed(2)) : null;
 
     try {
       if (editingDisp) {
@@ -113,8 +124,15 @@ export const DispositionManagement: React.FC = () => {
     if (!disp.has_timeout || !disp.timeout_minutes) {
       return <span className="text-slate-400 italic">Sem estouro</span>;
     }
+    if (disp.timeout_minutes < 1) {
+      const sec = Math.round(disp.timeout_minutes * 60);
+      return `${sec} Segundos`;
+    }
+    if (disp.timeout_minutes < 60) {
+      return `${disp.timeout_minutes} min`;
+    }
     const hours = disp.timeout_minutes / 60;
-    if (hours >= 1 && Number.isInteger(hours)) {
+    if (Number.isInteger(hours)) {
       return `${hours}h (${disp.timeout_minutes} min)`;
     }
     return `${disp.timeout_minutes} min`;
@@ -136,7 +154,7 @@ export const DispositionManagement: React.FC = () => {
 
         <button
           onClick={handleOpenCreate}
-          className="bg-brand-600 hover:bg-brand-700 text-black font-semibold text-xs px-4 py-2.5 rounded-2xl shadow-sm shadow-brand-500/20 flex items-center gap-1.5 self-start sm:self-auto transition-all"
+          className="bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs px-4 py-2.5 rounded-2xl shadow-sm shadow-brand-500/20 flex items-center gap-1.5 self-start sm:self-auto transition-all"
         >
           <Plus className="w-4 h-4" /> Nova Tabulação
         </button>
@@ -199,13 +217,22 @@ export const DispositionManagement: React.FC = () => {
                     </td>
 
                     <td className="py-3.5 px-4 text-right">
-                      <button
-                        onClick={() => handleOpenEdit(disp)}
-                        className="p-1.5 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-                        title="Editar Tabulação"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => handleOpenEdit(disp)}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                          title="Editar Tabulação"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(disp)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          title="Excluir Tabulação"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -290,8 +317,12 @@ export const DispositionManagement: React.FC = () => {
                     <select
                       value={timeoutHours}
                       onChange={(e) => setTimeoutHours(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none"
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none font-medium"
                     >
+                      <option value="0.0083333">⚡ 30 Segundos (para testes)</option>
+                      <option value="0.0166667">⚡ 1 Minuto (para testes)</option>
+                      <option value="0.0833333">5 Minutos</option>
+                      <option value="0.25">15 Minutos</option>
                       <option value="0.5">30 Minutos (0.5h)</option>
                       <option value="1">1 Hora</option>
                       <option value="2">2 Horas</option>

@@ -3,7 +3,8 @@
 import React, { useState } from 'react';
 import { DispositionManagement } from '@/components/settings/disposition-management';
 import { UnitManagement } from '@/components/settings/unit-management';
-import { Settings, Tag, Store, ShieldAlert } from 'lucide-react';
+import { ChannelManagement } from '@/components/settings/channel-management';
+import { Settings, Tag, Store, Share2, ShieldAlert } from 'lucide-react';
 import { useAuth } from '@/features/auth/auth-provider';
 
 export const SettingsPage: React.FC = () => {
@@ -27,6 +28,7 @@ export const SettingsPage: React.FC = () => {
   const subTabs = [
     { id: 'dispositions', label: 'Tabulações & Estouro', icon: Tag },
     { id: 'units', label: 'Lojas & Unidades', icon: Store },
+    { id: 'channels', label: 'Canais de Leads', icon: Share2 },
   ];
 
   return (
@@ -56,6 +58,7 @@ export const SettingsPage: React.FC = () => {
       {/* Sub-Tab Content Rendering */}
       {activeSubTab === 'dispositions' && <DispositionManagement />}
       {activeSubTab === 'units' && <UnitManagement />}
+      {activeSubTab === 'channels' && <ChannelManagement />}
     </div>
   );
 };
