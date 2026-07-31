@@ -7,8 +7,9 @@ import {
   createUnit,
   updateUnit,
   toggleUnitStatus,
+  deleteUnit,
 } from '@/features/units/api';
-import { Plus, Edit2, Store, Power, X, AlertCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Store, Power, X, AlertCircle } from 'lucide-react';
 
 export const UnitManagement: React.FC = () => {
   const [units, setUnits] = useState<Unit[]>([]);
@@ -63,6 +64,16 @@ export const UnitManagement: React.FC = () => {
     }
   };
 
+  const handleDelete = async (unit: Unit) => {
+    if (!confirm(`Deseja realmente excluir a loja "${unit.name}"?`)) return;
+    try {
+      await deleteUnit(unit.id);
+      loadUnits();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao excluir loja');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) {
@@ -111,7 +122,7 @@ export const UnitManagement: React.FC = () => {
 
         <button
           onClick={handleOpenCreate}
-          className="bg-brand-600 hover:bg-brand-700 text-black font-semibold text-xs px-4 py-2.5 rounded-2xl shadow-sm shadow-brand-500/20 flex items-center gap-1.5 self-start sm:self-auto transition-all"
+          className="bg-brand-600 hover:bg-brand-700 text-white font-semibold text-xs px-4 py-2.5 rounded-2xl shadow-sm shadow-brand-500/20 flex items-center gap-1.5 self-start sm:self-auto transition-all"
         >
           <Plus className="w-4 h-4" /> Nova Loja
         </button>
@@ -167,13 +178,22 @@ export const UnitManagement: React.FC = () => {
                     </td>
 
                     <td className="py-3.5 px-4 text-right">
-                      <button
-                        onClick={() => handleOpenEdit(unit)}
-                        className="p-1.5 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-                        title="Editar Loja"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => handleOpenEdit(unit)}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+                          title="Editar Loja"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(unit)}
+                          className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                          title="Excluir Loja"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -246,7 +266,7 @@ export const UnitManagement: React.FC = () => {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-black text-xs font-semibold shadow-sm shadow-brand-500/20"
+                  className="px-4 py-2 rounded-xl bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-5 text-xs font-semibold shadow-sm shadow-brand-500/20"
                 >
                   {submitting ? 'Salvando...' : 'Salvar Loja'}
                 </button>

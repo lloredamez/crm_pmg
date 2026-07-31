@@ -84,11 +84,31 @@ export async function updateUnit(
 
 export async function toggleUnitStatus(id: string): Promise<Unit> {
   const API_URL = getApiUrl();
+  const res = await fetch(`${API_URL}/api/v1/units/${id}/toggle`, {
+    method: 'PATCH',
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  return handleResponse<Unit>(res);
+}
+
+export async function deleteUnit(id: string): Promise<void> {
+  const API_URL = getApiUrl();
   const res = await fetch(`${API_URL}/api/v1/units/${id}`, {
     method: 'DELETE',
     headers: {
       ...getAuthHeaders(),
     },
   });
-  return handleResponse<Unit>(res);
+  if (!res.ok) {
+    let errorMsg = `Erro ${res.status}`;
+    try {
+      const errData = await res.json();
+      errorMsg = errData.detail || errorMsg;
+    } catch (_) {
+      errorMsg = await res.text();
+    }
+    throw new Error(errorMsg || 'Erro ao excluir loja');
+  }
 }
