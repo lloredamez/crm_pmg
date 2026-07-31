@@ -20,6 +20,16 @@ export interface Unit {
   is_active?: boolean;
 }
 
+export interface Disposition {
+  id: string;
+  name: string;
+  category: string;
+  has_timeout: boolean;
+  timeout_minutes?: number | null;
+  is_active: boolean;
+  created_at: string;
+}
+
 export type LeadStatus = 'new' | 'assigned' | 'in_progress' | 'converted' | 'lost' | 'expired';
 
 export interface Lead {
@@ -27,6 +37,9 @@ export interface Lead {
   name: string;
   phone: string;
   cpf?: string | null;
+  verified_cpf?: string | null;
+  proposal_number?: string | null;
+  notes?: string | null;
   email?: string | null;
   meta_lead_id?: string | null;
   campaign_name?: string | null;
@@ -36,6 +49,10 @@ export interface Lead {
   unit_id?: string | null;
   unit?: Unit | null;
   unit_name?: string | null;
+  disposition_id?: string | null;
+  disposition?: Disposition | null;
+  dispositioned_at?: string | null;
+  disposition_timeout_at?: string | null;
   assigned_at?: string | null;
   last_interaction_at?: string | null;
   created_at: string;

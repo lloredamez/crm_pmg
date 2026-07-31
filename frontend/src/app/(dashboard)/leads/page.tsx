@@ -9,8 +9,11 @@ import { KpiCards } from '@/components/dashboard/kpi-cards';
 import { AnalyticsChart } from '@/components/dashboard/analytics-chart';
 import { LeadTable } from '@/components/leads/lead-table';
 import { LeadModal } from '@/components/leads/lead-modal';
+import { LeadDetailsModal } from '@/components/leads/lead-details-modal';
+import { TabulateLeadModal } from '@/components/leads/tabulate-lead-modal';
 import { SimulateLeadModal } from '@/components/leads/simulate-lead-modal';
 import { UserManagement } from '@/components/users/user-management';
+import { SettingsPage } from '@/components/settings/settings-page';
 import { fetchLeads, fetchUsers, updateUserStatus, reassignLead, bulkReassignLeads } from '@/features/leads/api';
 import { Lead, User } from '@/features/leads/types';
 import { useSocket } from '@/features/socket/socket-provider';
@@ -27,6 +30,8 @@ export default function LeadsDashboardPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [selectedDetailsLead, setSelectedDetailsLead] = useState<Lead | null>(null);
+  const [selectedTabulateLead, setSelectedTabulateLead] = useState<Lead | null>(null);
   const [isSimulateModalOpen, setIsSimulateModalOpen] = useState(false);
   const [filterOnlyMyLeads, setFilterOnlyMyLeads] = useState(false);
 
@@ -142,8 +147,10 @@ export default function LeadsDashboardPage() {
 
       {/* Main Body */}
       <main className="max-w-7xl mx-auto px-6 py-8">
-        {/* Render User Management if activeTab is 'users' and user is Admin */}
-        {activeTab === 'users' && isAdmin ? (
+        {/* Render Settings Page if activeTab is 'settings' and user is Admin */}
+        {activeTab === 'settings' && isAdmin ? (
+          <SettingsPage />
+        ) : activeTab === 'users' && (isAdmin || isSupervisor) ? (
           <UserManagement users={users} onRefresh={refetchUsers} />
         ) : (
           <>
@@ -188,6 +195,8 @@ export default function LeadsDashboardPage() {
                 setPage(1);
               }}
               onOpenLeadModal={(lead) => setSelectedLead(lead)}
+              onOpenDetailsModal={(lead) => setSelectedDetailsLead(lead)}
+              onOpenTabulateModal={(lead) => setSelectedTabulateLead(lead)}
               onReassignSingle={handleReassignSingle}
               onBulkReassign={handleBulkReassign}
             />
@@ -200,6 +209,20 @@ export default function LeadsDashboardPage() {
         lead={selectedLead}
         onClose={() => setSelectedLead(null)}
         onRefresh={refetchLeads}
+      />
+
+      <LeadDetailsModal
+        lead={selectedDetailsLead}
+        isOpen={!!selectedDetailsLead}
+        onClose={() => setSelectedDetailsLead(null)}
+        onRefresh={refetchLeads}
+      />
+
+      <TabulateLeadModal
+        lead={selectedTabulateLead}
+        isOpen={!!selectedTabulateLead}
+        onClose={() => setSelectedTabulateLead(null)}
+        onSuccess={refetchLeads}
       />
 
       <SimulateLeadModal

@@ -93,6 +93,22 @@ export async function updateLeadStatus(leadId: string, status: string): Promise<
   return handleResponse<Lead>(res);
 }
 
+export async function updateLeadDetails(
+  leadId: string,
+  details: { notes?: string; verified_cpf?: string; proposal_number?: string }
+): Promise<Lead> {
+  const API_URL = getApiUrl();
+  const res = await fetch(`${API_URL}/api/v1/leads/${leadId}/details`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(details)
+  });
+  return handleResponse<Lead>(res);
+}
+
 export async function reassignLead(leadId: string, attendantId: string): Promise<Lead> {
   const API_URL = getApiUrl();
   const res = await fetch(`${API_URL}/api/v1/leads/${leadId}/reassign`, {
