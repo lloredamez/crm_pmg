@@ -14,7 +14,7 @@ import {
 import { Lead, User } from '@/features/leads/types';
 import { formatDate, formatPhone, formatCpf, cn } from '@/lib/utils';
 import { useAuth } from '@/features/auth/auth-provider';
-import { Search, ArrowUpDown, UserCheck, Clock, FileText, Tag } from 'lucide-react';
+import { Search, ArrowUpDown, UserCheck, Clock, FileText, Tag, Eye, EyeOff } from 'lucide-react';
 
 interface LeadTableProps {
   leads: Lead[];
@@ -30,6 +30,7 @@ interface LeadTableProps {
   onOpenLeadModal?: (lead: Lead) => void;
   onOpenDetailsModal?: (lead: Lead) => void;
   onOpenTabulateModal?: (lead: Lead) => void;
+  onRevealLead?: (lead: Lead) => void;
   onReassignSingle: (leadId: string, attendantId: string) => void;
   onBulkReassign: (leadIds: string[], attendantId: string) => void;
 }
@@ -48,6 +49,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
   onOpenLeadModal,
   onOpenDetailsModal,
   onOpenTabulateModal,
+  onRevealLead,
   onReassignSingle,
   onBulkReassign,
 }) => {
@@ -108,11 +110,19 @@ export const LeadTable: React.FC<LeadTableProps> = ({
     {
       accessorKey: 'cpf',
       header: 'CPF',
-      cell: ({ row }) => (
-        <div className="text-xs font-medium text-slate-700">
-          {formatCpf(row.original.cpf)}
-        </div>
-      ),
+      cell: ({ row }) => {
+        const lead = row.original;
+        const isRevealed = lead.is_revealed;
+        return (
+          <div className="text-xs font-medium">
+            {isRevealed ? (
+              <span className="text-slate-800 font-semibold">{formatCpf(lead.cpf)}</span>
+            ) : (
+              <span className="text-slate-400 font-mono tracking-widest select-none">***.***.***-**</span>
+            )}
+          </div>
+        );
+      },
     },
     {
       accessorKey: 'name',
@@ -134,11 +144,19 @@ export const LeadTable: React.FC<LeadTableProps> = ({
     {
       accessorKey: 'phone',
       header: 'Telefone',
-      cell: ({ row }) => (
-        <div className="text-xs font-medium text-slate-600">
-          {formatPhone(row.original.phone)}
-        </div>
-      ),
+      cell: ({ row }) => {
+        const lead = row.original;
+        const isRevealed = lead.is_revealed;
+        return (
+          <div className="text-xs font-medium">
+            {isRevealed ? (
+              <span className="text-slate-800 font-semibold">{formatPhone(lead.phone)}</span>
+            ) : (
+              <span className="text-slate-400 font-mono tracking-wider select-none">(***) *****-****</span>
+            )}
+          </div>
+        );
+      },
     },
     ...(isSupervisorRole || isManagerOrAdminRole
       ? [
@@ -185,41 +203,40 @@ export const LeadTable: React.FC<LeadTableProps> = ({
         ]
       : []),
     {
-      accessorKey: 'status',
-      header: 'Status',
+      accessorKey: 'disposition',
+      header: 'Tabulação',
       cell: ({ row }) => {
-        const status = row.original.status;
-        let badgeStyle = 'badge-slate';
-        let statusLabel: string = status;
+        const lead = row.original;
+        const dispName = lead.disposition?.name;
+        const dispCategory = lead.disposition?.category?.toLowerCase() || '';
 
-        if (status === 'new') {
-          badgeStyle = 'badge-purple';
-          statusLabel = 'Novo / Na Fila';
-        } else if (status === 'assigned') {
-          badgeStyle = 'badge-purple';
-          statusLabel = 'Em Atendimento';
-        } else if (status === 'in_progress') {
-          badgeStyle = 'badge-mint';
-          statusLabel = 'Em Interação';
-        } else if (status === 'converted') {
-          badgeStyle = 'badge-mint';
-          statusLabel = 'Convertido';
-        } else if (status === 'expired') {
-          badgeStyle = 'badge-pink';
-          statusLabel = 'Timeout SLA';
+        if (dispName) {
+          let badgeClass = 'bg-brand-50 text-brand-700 border-brand-200';
+          if (dispCategory.includes('venda') || lead.status === 'converted') {
+            badgeClass = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+          } else if (dispCategory.includes('perda') || lead.status === 'lost') {
+            badgeClass = 'bg-rose-50 text-rose-700 border-rose-200';
+          }
+
+          return (
+            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border inline-flex items-center gap-1 ${badgeClass}`}>
+              {dispName}
+            </span>
+          );
         }
 
-        const dispName = row.original.disposition?.name;
+        if (lead.status === 'expired') {
+          return (
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200">
+              Timeout SLA
+            </span>
+          );
+        }
 
         return (
-          <div className="flex flex-col gap-1 items-start">
-            <span className={badgeStyle}>{statusLabel}</span>
-            {dispName && (
-              <span className="text-[10px] bg-brand-50 text-brand-700 font-semibold px-2 py-0.5 rounded-full border border-brand-200">
-                🏷️ {dispName}
-              </span>
-            )}
-          </div>
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full border bg-slate-100 text-slate-500 border-slate-200 italic">
+            Sem Tabulação
+          </span>
         );
       },
     },
@@ -228,8 +245,26 @@ export const LeadTable: React.FC<LeadTableProps> = ({
       header: 'Ações',
       cell: ({ row }) => {
         const lead = row.original;
+        const isRevealed = lead.is_revealed;
         return (
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => onRevealLead?.(lead)}
+              disabled={isRevealed}
+              className={`p-1.5 rounded-lg transition-colors ${
+                isRevealed
+                  ? 'text-emerald-600 bg-emerald-50 cursor-default'
+                  : 'text-slate-500 hover:text-brand-600 hover:bg-brand-50'
+              }`}
+              title={
+                isRevealed
+                  ? 'Dados revelados (Em Contato)'
+                  : 'Ver Telefone & CPF (Tabular como Em Contato)'
+              }
+            >
+              <Eye className={`w-4 h-4 ${isRevealed ? 'text-emerald-600' : 'text-slate-500 hover:text-brand-600'}`} />
+            </button>
+
             <button
               onClick={() => onOpenTabulateModal?.(lead)}
               className="p-1.5 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"

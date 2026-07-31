@@ -44,6 +44,8 @@ export interface Lead {
   meta_lead_id?: string | null;
   campaign_name?: string | null;
   status: LeadStatus;
+  is_revealed?: boolean;
+  revealed_at?: string | null;
   current_attendant_id?: string | null;
   current_attendant?: User | null;
   unit_id?: string | null;

@@ -14,7 +14,7 @@ import { TabulateLeadModal } from '@/components/leads/tabulate-lead-modal';
 import { SimulateLeadModal } from '@/components/leads/simulate-lead-modal';
 import { UserManagement } from '@/components/users/user-management';
 import { SettingsPage } from '@/components/settings/settings-page';
-import { fetchLeads, fetchUsers, updateUserStatus, reassignLead, bulkReassignLeads } from '@/features/leads/api';
+import { fetchLeads, fetchUsers, updateUserStatus, reassignLead, bulkReassignLeads, revealLead } from '@/features/leads/api';
 import { Lead, User } from '@/features/leads/types';
 import { useSocket } from '@/features/socket/socket-provider';
 
@@ -134,8 +134,18 @@ export default function LeadsDashboardPage() {
   const convertedLeadsCount = leads.filter((l) => l.status === 'converted').length;
   const expiredSlaCount = leads.filter((l) => l.status === 'expired').length;
 
+  const handleRevealLead = async (lead: Lead) => {
+    if (lead.is_revealed) return;
+    try {
+      await revealLead(lead.id);
+      refetchLeads();
+    } catch (err) {
+      console.error('Erro ao revelar lead:', err);
+    }
+  };
+
   return (
-    <div className="min-h-screen bg-slate-50/50">
+    <div className="min-h-screen bg-slate-50/50 pb-12">
       {/* Header */}
       <Header
         activeTab={activeTab}
@@ -197,6 +207,7 @@ export default function LeadsDashboardPage() {
               onOpenLeadModal={(lead) => setSelectedLead(lead)}
               onOpenDetailsModal={(lead) => setSelectedDetailsLead(lead)}
               onOpenTabulateModal={(lead) => setSelectedTabulateLead(lead)}
+              onRevealLead={handleRevealLead}
               onReassignSingle={handleReassignSingle}
               onBulkReassign={handleBulkReassign}
             />
