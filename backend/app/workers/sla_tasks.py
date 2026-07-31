@@ -118,7 +118,7 @@ async def _async_check_disposition_timeouts():
 
             lead.current_attendant_id = None
             lead.disposition_timeout_at = None
-            new_attendant = await service.distribute_lead(lead)
+            new_attendant = await service.distribute_lead(lead, exclude_user_id=old_attendant_id)
             if not new_attendant:
                 lead.status = "expired"
 
