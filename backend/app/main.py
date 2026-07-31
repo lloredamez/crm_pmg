@@ -11,9 +11,11 @@ from app.core.security import get_password_hash
 from app.core.socket_manager import socket_app
 from app.models.user import User
 from app.models.unit import Unit
+from app.models.disposition import Disposition
 from app.features.auth.router import router as auth_router
 from app.features.users.router import router as users_router
 from app.features.leads.router import router as leads_router
+from app.features.dispositions.router import router as dispositions_router
 from app.features.webhooks.router import router as webhooks_router
 from app.features.messages.router import router as messages_router
 
@@ -23,14 +25,19 @@ logger = logging.getLogger(__name__)
 async def seed_initial_data():
     """Cria tabelas, aplica migrações leves e insere unidades e contas demonstrativas para cada esteira."""
     async with engine.begin() as conn:
-        # Garante a criação de novas tabelas (ex: units)
+        # Garante a criação de novas tabelas (ex: units, dispositions)
         await conn.run_sync(Base.metadata.create_all)
         # Adiciona colunas que possam faltar em tabelas pré-existentes no volume do Postgres
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS hashed_password VARCHAR(255) DEFAULT '';"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS unit_id UUID REFERENCES units(id) ON DELETE SET NULL;"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_assigned_at TIMESTAMPTZ;"))
-        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS unit_id UUID REFERENCES units(id) ON DELETE SET NULL;"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);"))
+        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS verified_cpf VARCHAR(14);"))
+        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS proposal_number VARCHAR(100);"))
+        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS notes TEXT;"))
+        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS disposition_id UUID REFERENCES dispositions(id) ON DELETE SET NULL;"))
+        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS dispositioned_at TIMESTAMPTZ;"))
+        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS disposition_timeout_at TIMESTAMPTZ;"))
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS user_units (
                 user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -178,6 +185,21 @@ async def seed_initial_data():
             session.add(manager_user)
             await session.commit()
 
+        # Seed de Tabulações Padrão
+        disp_res = await session.execute(select(Disposition))
+        existing_dispositions = disp_res.scalars().all()
+        if not existing_dispositions:
+            logger.info("Nenhuma tabulação encontrada. Criando tabulações padrão...")
+            default_dispositions = [
+                Disposition(name="Vendido", category="Venda", has_timeout=False, timeout_minutes=None),
+                Disposition(name="Em Contato", category="Negociação", has_timeout=True, timeout_minutes=120),
+                Disposition(name="Formalização", category="Negociação", has_timeout=True, timeout_minutes=240),
+                Disposition(name="Reapresentação", category="Negociação", has_timeout=True, timeout_minutes=1440),
+            ]
+            session.add_all(default_dispositions)
+            await session.commit()
+            logger.info("Tabulações padrão criadas com sucesso!")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Iniciando aplicação FastAPI e executando seed de dados...")
@@ -204,6 +226,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(users_router, prefix=settings.API_V1_STR)
 app.include_router(leads_router, prefix=settings.API_V1_STR)
+app.include_router(dispositions_router, prefix=settings.API_V1_STR)
 app.include_router(webhooks_router, prefix=settings.API_V1_STR)
 app.include_router(messages_router, prefix=settings.API_V1_STR)
 
