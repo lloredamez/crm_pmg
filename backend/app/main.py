@@ -16,6 +16,7 @@ from app.features.auth.router import router as auth_router
 from app.features.users.router import router as users_router
 from app.features.leads.router import router as leads_router
 from app.features.dispositions.router import router as dispositions_router
+from app.features.units.router import router as units_router
 from app.features.webhooks.router import router as webhooks_router
 from app.features.messages.router import router as messages_router
 
@@ -38,6 +39,8 @@ async def seed_initial_data():
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS disposition_id UUID REFERENCES dispositions(id) ON DELETE SET NULL;"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS dispositioned_at TIMESTAMPTZ;"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS disposition_timeout_at TIMESTAMPTZ;"))
+        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS is_revealed BOOLEAN DEFAULT FALSE;"))
+        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS revealed_at TIMESTAMPTZ;"))
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS user_units (
                 user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -227,6 +230,7 @@ app.include_router(auth_router, prefix=settings.API_V1_STR)
 app.include_router(users_router, prefix=settings.API_V1_STR)
 app.include_router(leads_router, prefix=settings.API_V1_STR)
 app.include_router(dispositions_router, prefix=settings.API_V1_STR)
+app.include_router(units_router, prefix=settings.API_V1_STR)
 app.include_router(webhooks_router, prefix=settings.API_V1_STR)
 app.include_router(messages_router, prefix=settings.API_V1_STR)
 
