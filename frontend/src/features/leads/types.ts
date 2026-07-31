@@ -20,6 +20,15 @@ export interface Unit {
   is_active?: boolean;
 }
 
+export interface Channel {
+  id: string;
+  name: string;
+  code: string;
+  is_active: boolean;
+  units?: Unit[];
+  created_at: string;
+}
+
 export interface Disposition {
   id: string;
   name: string;
