@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import { DispositionManagement } from '@/components/settings/disposition-management';
-import { Settings, Tag, ShieldAlert } from 'lucide-react';
+import { UnitManagement } from '@/components/settings/unit-management';
+import { Settings, Tag, Store, ShieldAlert } from 'lucide-react';
 import { useAuth } from '@/features/auth/auth-provider';
 
 export const SettingsPage: React.FC = () => {
@@ -25,6 +26,7 @@ export const SettingsPage: React.FC = () => {
 
   const subTabs = [
     { id: 'dispositions', label: 'Tabulações & Estouro', icon: Tag },
+    { id: 'units', label: 'Lojas & Unidades', icon: Store },
   ];
 
   return (
@@ -53,6 +55,7 @@ export const SettingsPage: React.FC = () => {
 
       {/* Sub-Tab Content Rendering */}
       {activeSubTab === 'dispositions' && <DispositionManagement />}
+      {activeSubTab === 'units' && <UnitManagement />}
     </div>
   );
 };
