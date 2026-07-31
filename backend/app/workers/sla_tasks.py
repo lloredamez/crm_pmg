@@ -85,3 +85,69 @@ def check_lead_sla_timeout(lead_id: str):
         asyncio.ensure_future(_async_check_lead_sla(lead_id))
     else:
         loop.run_until_complete(_async_check_lead_sla(lead_id))
+
+async def _async_check_disposition_timeouts():
+    now = datetime.now(timezone.utc)
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(
+            select(Lead).where(
+                Lead.disposition_timeout_at.is_not(None),
+                Lead.disposition_timeout_at <= now,
+                Lead.status.not_in(["converted", "lost"])
+            )
+        )
+        expired_leads = list(result.scalars().all())
+        if not expired_leads:
+            return
+
+        logger.warning(f"Disposition Timeout: Found {len(expired_leads)} leads with expired disposition SLA.")
+        service = LeadService(session)
+
+        for lead in expired_leads:
+            old_attendant_id = lead.current_attendant_id
+            if old_attendant_id:
+                await session.execute(
+                    update(LeadAssignment)
+                    .where(
+                        LeadAssignment.lead_id == lead.id,
+                        LeadAssignment.attendant_id == old_attendant_id,
+                        LeadAssignment.status == "active"
+                    )
+                    .values(status="disposition_timeout", unassigned_at=now)
+                )
+
+            lead.current_attendant_id = None
+            lead.disposition_timeout_at = None
+            new_attendant = await service.distribute_lead(lead)
+            if not new_attendant:
+                lead.status = "expired"
+
+            await session.commit()
+            await session.refresh(lead)
+
+            try:
+                from app.core.socket_manager import emit_lead_reassigned
+                lead_dict = {
+                    "id": str(lead.id),
+                    "name": lead.name,
+                    "phone": lead.phone,
+                    "status": lead.status,
+                    "assigned_at": lead.assigned_at.isoformat() if lead.assigned_at else None,
+                    "attendant_name": new_attendant.name if new_attendant else ""
+                }
+                await emit_lead_reassigned(
+                    str(old_attendant_id) if old_attendant_id else "",
+                    str(new_attendant.id) if new_attendant else "",
+                    lead_dict
+                )
+            except Exception:
+                pass
+
+@celery_app.task(name="check_disposition_timeouts")
+def check_disposition_timeouts():
+    logger.info("Executing Celery task to check disposition timeouts.")
+    loop = asyncio.get_event_loop()
+    if loop.is_running():
+        asyncio.ensure_future(_async_check_disposition_timeouts())
+    else:
+        loop.run_until_complete(_async_check_disposition_timeouts())
