@@ -14,7 +14,7 @@ import {
 import { Lead, User } from '@/features/leads/types';
 import { formatDate, formatPhone, formatCpf, cn } from '@/lib/utils';
 import { useAuth } from '@/features/auth/auth-provider';
-import { Search, ArrowUpDown, UserCheck, MessageSquare, Clock } from 'lucide-react';
+import { Search, ArrowUpDown, UserCheck, Clock, FileText, Tag } from 'lucide-react';
 
 interface LeadTableProps {
   leads: Lead[];
@@ -27,7 +27,9 @@ interface LeadTableProps {
   onStatusFilterChange: (status: string) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  onOpenLeadModal: (lead: Lead) => void;
+  onOpenLeadModal?: (lead: Lead) => void;
+  onOpenDetailsModal?: (lead: Lead) => void;
+  onOpenTabulateModal?: (lead: Lead) => void;
   onReassignSingle: (leadId: string, attendantId: string) => void;
   onBulkReassign: (leadIds: string[], attendantId: string) => void;
 }
@@ -44,6 +46,8 @@ export const LeadTable: React.FC<LeadTableProps> = ({
   searchQuery,
   onSearchChange,
   onOpenLeadModal,
+  onOpenDetailsModal,
+  onOpenTabulateModal,
   onReassignSingle,
   onBulkReassign,
 }) => {
@@ -119,7 +123,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
           <div className="flex items-center gap-3">
             <div
               className="font-semibold text-slate-900 text-xs hover:text-brand-600 cursor-pointer"
-              onClick={() => onOpenLeadModal(lead)}
+              onClick={() => onOpenDetailsModal?.(lead)}
             >
               {lead.name}
             </div>
@@ -205,7 +209,18 @@ export const LeadTable: React.FC<LeadTableProps> = ({
           statusLabel = 'Timeout SLA';
         }
 
-        return <span className={badgeStyle}>{statusLabel}</span>;
+        const dispName = row.original.disposition?.name;
+
+        return (
+          <div className="flex flex-col gap-1 items-start">
+            <span className={badgeStyle}>{statusLabel}</span>
+            {dispName && (
+              <span className="text-[10px] bg-brand-50 text-brand-700 font-semibold px-2 py-0.5 rounded-full border border-brand-200">
+                🏷️ {dispName}
+              </span>
+            )}
+          </div>
+        );
       },
     },
     {
@@ -216,11 +231,19 @@ export const LeadTable: React.FC<LeadTableProps> = ({
         return (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => onOpenLeadModal(lead)}
+              onClick={() => onOpenTabulateModal?.(lead)}
               className="p-1.5 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-              title="Abrir Chat & Detalhes"
+              title="Tabular Lead"
             >
-              <MessageSquare className="w-4 h-4" />
+              <Tag className="w-4 h-4" />
+            </button>
+
+            <button
+              onClick={() => onOpenDetailsModal?.(lead)}
+              className="p-1.5 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
+              title="Ver Dados & Editar Proposta / Observações"
+            >
+              <FileText className="w-4 h-4" />
             </button>
 
             {(isSupervisorRole || isManagerOrAdminRole) && (
