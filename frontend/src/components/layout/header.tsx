@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSocket } from '@/features/socket/socket-provider';
 import { useAuth } from '@/features/auth/auth-provider';
-import { Zap, Users, Radio, UserCog, LogOut, Check, ChevronDown } from 'lucide-react';
+import { Zap, Users, UserCog, LogOut, Check, Settings } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface HeaderProps {
@@ -43,6 +43,10 @@ export const Header: React.FC<HeaderProps> = ({
 
   if (isAdmin || isManager) {
     navItems.push({ id: 'users', label: 'Gestão de Usuários', icon: UserCog });
+  }
+
+  if (isAdmin) {
+    navItems.push({ id: 'settings', label: 'Configurações', icon: Settings });
   }
 
   const getRoleBadge = (role?: string) => {
