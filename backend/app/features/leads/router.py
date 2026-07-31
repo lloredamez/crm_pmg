@@ -11,6 +11,7 @@ from app.schemas.lead import (
     LeadResponse,
     LeadPaginationResponse,
     LeadUpdateStatus,
+    LeadUpdateDetails,
     LeadReassign,
     BulkReassignRequest
 )
@@ -71,6 +72,18 @@ async def update_lead_status(
 ):
     service = LeadService(db)
     lead = await service.update_status(lead_id, status_in.status)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead não encontrado")
+    return lead
+
+@router.patch("/{lead_id}/details", response_model=LeadResponse)
+async def update_lead_details(
+    lead_id: UUID,
+    details_in: LeadUpdateDetails,
+    db: AsyncSession = Depends(get_db)
+):
+    service = LeadService(db)
+    lead = await service.update_details(lead_id, details_in)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead não encontrado")
     return lead

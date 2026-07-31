@@ -327,6 +327,23 @@ class LeadService:
 
         return lead
 
+    async def update_details(self, lead_id: UUID, details) -> Optional[Lead]:
+        lead = await self.get_lead_by_id(lead_id)
+        if not lead:
+            return None
+
+        if details.notes is not None:
+            lead.notes = details.notes
+        if details.verified_cpf is not None:
+            lead.verified_cpf = details.verified_cpf
+        if details.proposal_number is not None:
+            lead.proposal_number = details.proposal_number
+
+        lead.last_interaction_at = datetime.now(timezone.utc)
+        await self.db.commit()
+        await self.db.refresh(lead)
+        return lead
+
     async def reassign_lead(self, lead_id: UUID, new_attendant_id: UUID, reason: str = "manually_reassigned") -> Optional[Lead]:
         lead = await self.get_lead_by_id(lead_id)
         if not lead:
