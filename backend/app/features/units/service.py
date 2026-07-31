@@ -62,3 +62,11 @@ class UnitService:
         await self.db.commit()
         await self.db.refresh(unit)
         return unit
+
+    async def delete_unit(self, unit_id: UUID) -> bool:
+        unit = await self.get_unit_by_id(unit_id)
+        if not unit:
+            return False
+        await self.db.delete(unit)
+        await self.db.commit()
+        return True

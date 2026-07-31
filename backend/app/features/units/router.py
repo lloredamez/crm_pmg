@@ -44,7 +44,7 @@ async def update_unit(
         raise HTTPException(status_code=404, detail="Loja não encontrada")
     return unit
 
-@router.delete("/{unit_id}", response_model=UnitResponse)
+@router.patch("/{unit_id}/toggle", response_model=UnitResponse)
 async def toggle_unit_active(
     unit_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -57,3 +57,17 @@ async def toggle_unit_active(
     if not unit:
         raise HTTPException(status_code=404, detail="Loja não encontrada")
     return unit
+
+@router.delete("/{unit_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_unit(
+    unit_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem excluir lojas")
+    service = UnitService(db)
+    success = await service.delete_unit(unit_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Loja não encontrada")
+    return None
