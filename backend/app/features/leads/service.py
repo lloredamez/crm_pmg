@@ -175,7 +175,7 @@ class LeadService:
         return selected_user
 
     async def get_lead_by_id(self, lead_id: UUID, current_user: Optional[User] = None) -> Optional[Lead]:
-        query = select(Lead).options(selectinload(Lead.current_attendant), selectinload(Lead.unit)).where(Lead.id == lead_id)
+        query = select(Lead).options(selectinload(Lead.current_attendant), selectinload(Lead.unit), selectinload(Lead.disposition)).where(Lead.id == lead_id)
         if current_user:
             if current_user.role == "manager":
                 managed_unit_ids = [u.id for u in current_user.managed_units] if current_user.managed_units else []
@@ -211,7 +211,7 @@ class LeadService:
         attendant_id: Optional[UUID] = None,
         current_user: Optional[User] = None
     ) -> Tuple[List[Lead], int]:
-        query = select(Lead).options(selectinload(Lead.current_attendant), selectinload(Lead.unit))
+        query = select(Lead).options(selectinload(Lead.current_attendant), selectinload(Lead.unit), selectinload(Lead.disposition))
 
         # Role-based filtering
         if current_user:
@@ -342,6 +342,76 @@ class LeadService:
         lead.last_interaction_at = datetime.now(timezone.utc)
         await self.db.commit()
         await self.db.refresh(lead)
+        return lead
+
+    async def reveal_lead(self, lead_id: UUID) -> Optional[Lead]:
+        from app.models.disposition import Disposition
+        from datetime import timedelta
+
+        query = select(Lead).options(
+            selectinload(Lead.current_attendant),
+            selectinload(Lead.unit),
+            selectinload(Lead.disposition)
+        ).where(Lead.id == lead_id)
+        result = await self.db.execute(query)
+        lead = result.scalar_one_or_none()
+
+        if not lead:
+            return None
+
+        now = datetime.now(timezone.utc)
+        lead.is_revealed = True
+        lead.revealed_at = now
+
+        # Tabulate as "Em Contato" if not dispositioned or if in initial state
+        if not lead.disposition_id:
+            disp_res = await self.db.execute(
+                select(Disposition).where(
+                    Disposition.is_active.is_(True),
+                    or_(
+                        Disposition.name.ilike("%Em Contato%"),
+                        Disposition.name.ilike("%Contato%")
+                    )
+                )
+            )
+            disp = disp_res.scalars().first()
+            if not disp:
+                disp_res_any = await self.db.execute(select(Disposition).where(Disposition.is_active.is_(True)))
+                disp = disp_res_any.scalars().first()
+
+            if disp:
+                lead.disposition_id = disp.id
+                lead.dispositioned_at = now
+                if disp.has_timeout and disp.timeout_minutes and disp.timeout_minutes > 0:
+                    lead.disposition_timeout_at = now + timedelta(minutes=disp.timeout_minutes)
+
+        if lead.status == "new":
+            lead.status = "assigned"
+
+        lead.last_interaction_at = now
+        await self.db.commit()
+        await self.db.refresh(lead)
+
+        try:
+            from app.core.socket_manager import emit_lead_reassigned
+            lead_dict = {
+                "id": str(lead.id),
+                "name": lead.name,
+                "phone": lead.phone,
+                "status": lead.status,
+                "is_revealed": lead.is_revealed,
+                "disposition_name": lead.disposition.name if lead.disposition else "",
+                "assigned_at": lead.assigned_at.isoformat() if lead.assigned_at else None,
+                "attendant_name": lead.current_attendant.name if lead.current_attendant else ""
+            }
+            await emit_lead_reassigned(
+                str(lead.current_attendant_id) if lead.current_attendant_id else "",
+                str(lead.current_attendant_id) if lead.current_attendant_id else "",
+                lead_dict
+            )
+        except Exception:
+            pass
+
         return lead
 
     async def reassign_lead(self, lead_id: UUID, new_attendant_id: UUID, reason: str = "manually_reassigned") -> Optional[Lead]:

@@ -88,6 +88,17 @@ async def update_lead_details(
         raise HTTPException(status_code=404, detail="Lead não encontrado")
     return lead
 
+@router.post("/{lead_id}/reveal", response_model=LeadResponse)
+async def reveal_lead(
+    lead_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    service = LeadService(db)
+    lead = await service.reveal_lead(lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead não encontrado")
+    return lead
+
 @router.post("/{lead_id}/reassign", response_model=LeadResponse)
 async def reassign_lead(
     lead_id: UUID,

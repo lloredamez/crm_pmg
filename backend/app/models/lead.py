@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -19,6 +19,8 @@ class Lead(Base):
     meta_lead_id = Column(String(255), nullable=True, index=True)
     campaign_name = Column(String(255), nullable=True)
     status = Column(String(50), default="new", nullable=False) # 'new', 'assigned', 'in_progress', 'converted', 'lost', 'expired'
+    is_revealed = Column(Boolean, default=False, nullable=False)
+    revealed_at = Column(DateTime(timezone=True), nullable=True)
     current_attendant_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     unit_id = Column(UUID(as_uuid=True), ForeignKey("units.id", ondelete="SET NULL"), nullable=True)
     disposition_id = Column(UUID(as_uuid=True), ForeignKey("dispositions.id", ondelete="SET NULL"), nullable=True)

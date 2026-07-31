@@ -54,6 +54,8 @@ class LeadResponse(LeadBase):
     disposition: Optional[DispositionResponse] = None
     dispositioned_at: Optional[datetime] = None
     disposition_timeout_at: Optional[datetime] = None
+    is_revealed: bool = False
+    revealed_at: Optional[datetime] = None
     assigned_at: Optional[datetime] = None
     last_interaction_at: Optional[datetime] = None
     created_at: datetime
