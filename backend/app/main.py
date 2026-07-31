@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
@@ -12,11 +13,13 @@ from app.core.socket_manager import socket_app
 from app.models.user import User
 from app.models.unit import Unit
 from app.models.disposition import Disposition
+from app.models.channel import Channel
 from app.features.auth.router import router as auth_router
 from app.features.users.router import router as users_router
 from app.features.leads.router import router as leads_router
 from app.features.dispositions.router import router as dispositions_router
 from app.features.units.router import router as units_router
+from app.features.channels.router import router as channels_router
 from app.features.webhooks.router import router as webhooks_router
 from app.features.messages.router import router as messages_router
 
@@ -41,6 +44,7 @@ async def seed_initial_data():
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS disposition_timeout_at TIMESTAMPTZ;"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS is_revealed BOOLEAN DEFAULT FALSE;"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS revealed_at TIMESTAMPTZ;"))
+        await conn.execute(text("ALTER TABLE dispositions ALTER COLUMN timeout_minutes TYPE FLOAT USING timeout_minutes::double precision;"))
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS user_units (
                 user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -203,11 +207,41 @@ async def seed_initial_data():
             await session.commit()
             logger.info("Tabulações padrão criadas com sucesso!")
 
+        # Seed de Canais Padrão
+        chan_res = await session.execute(select(Channel))
+        existing_channels = chan_res.scalars().all()
+        if not existing_channels:
+            logger.info("Nenhum canal encontrado. Criando canais padrão...")
+            all_units_res = await session.execute(select(Unit))
+            all_units = list(all_units_res.scalars().all())
+            default_channels = [
+                Channel(name="Meta Ads (Facebook / Instagram)", code="META_ADS", units=all_units),
+                Channel(name="Google Ads (Pesquisa)", code="GOOGLE_ADS", units=all_units),
+                Channel(name="WhatsApp Direct", code="WHATSAPP_DIRECT", units=all_units),
+                Channel(name="Site / Landing Page", code="WEBSITE", units=all_units),
+            ]
+            session.add_all(default_channels)
+            await session.commit()
+            logger.info("Canais padrão criados com sucesso!")
+
+async def _periodic_disposition_checker():
+    from app.workers.sla_tasks import _async_check_disposition_timeouts
+    while True:
+        try:
+            await asyncio.sleep(30)
+            await _async_check_disposition_timeouts()
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error(f"Error in periodic disposition SLA checker: {e}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Iniciando aplicação FastAPI e executando seed de dados...")
     await seed_initial_data()
+    checker_task = asyncio.create_task(_periodic_disposition_checker())
     yield
+    checker_task.cancel()
     logger.info("Encerrando aplicação FastAPI...")
 
 app = FastAPI(
@@ -231,6 +265,7 @@ app.include_router(users_router, prefix=settings.API_V1_STR)
 app.include_router(leads_router, prefix=settings.API_V1_STR)
 app.include_router(dispositions_router, prefix=settings.API_V1_STR)
 app.include_router(units_router, prefix=settings.API_V1_STR)
+app.include_router(channels_router, prefix=settings.API_V1_STR)
 app.include_router(webhooks_router, prefix=settings.API_V1_STR)
 app.include_router(messages_router, prefix=settings.API_V1_STR)
 
