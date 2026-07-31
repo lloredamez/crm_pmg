@@ -67,6 +67,14 @@ class DispositionService:
         await self.db.refresh(disposition)
         return disposition
 
+    async def delete_disposition(self, disposition_id: UUID) -> bool:
+        disposition = await self.get_disposition_by_id(disposition_id)
+        if not disposition:
+            return False
+        await self.db.delete(disposition)
+        await self.db.commit()
+        return True
+
     async def tabulate_lead(self, lead_id: UUID, tabulate_in: LeadTabulateRequest) -> Optional[Lead]:
         disposition = await self.get_disposition_by_id(tabulate_in.disposition_id)
         if not disposition:

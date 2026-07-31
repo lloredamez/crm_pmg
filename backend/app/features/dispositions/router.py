@@ -50,7 +50,7 @@ async def update_disposition(
         raise HTTPException(status_code=404, detail="Tabulação não encontrada")
     return disposition
 
-@router.delete("/{disposition_id}", response_model=DispositionResponse)
+@router.patch("/{disposition_id}/toggle", response_model=DispositionResponse)
 async def toggle_disposition_active(
     disposition_id: UUID,
     current_user: User = Depends(get_current_user),
@@ -63,6 +63,20 @@ async def toggle_disposition_active(
     if not disposition:
         raise HTTPException(status_code=404, detail="Tabulação não encontrada")
     return disposition
+
+@router.delete("/{disposition_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_disposition(
+    disposition_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem excluir tabulações")
+    service = DispositionService(db)
+    success = await service.delete_disposition(disposition_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Tabulação não encontrada")
+    return None
 
 @router.post("/tabulate/{lead_id}", response_model=LeadResponse)
 async def tabulate_lead(
