@@ -7,7 +7,9 @@ from sqlalchemy.orm import selectinload
 from app.models.lead import Lead
 from app.models.user import User
 from app.models.lead_assignment import LeadAssignment
+from app.models.sla_breach import SlaBreach
 from app.schemas.lead import LeadCreate, LeadUpdateStatus
+
 from app.core.socket_manager import emit_lead_assigned, emit_lead_reassigned
 
 class LeadService:
@@ -498,3 +500,34 @@ class LeadService:
         await emit_lead_reassigned(str(old_attendant_id) if old_attendant_id else "", str(new_attendant_id), lead_dict)
 
         return lead
+
+    async def list_sla_breaches(
+        self,
+        page: int = 1,
+        limit: int = 10,
+        attendant_id: Optional[UUID] = None,
+        unit_id: Optional[UUID] = None,
+        breach_type: Optional[str] = None
+    ) -> Tuple[List[SlaBreach], int]:
+        query = select(SlaBreach).options(
+            selectinload(SlaBreach.attendant),
+            selectinload(SlaBreach.unit)
+        )
+
+        if attendant_id:
+            query = query.where(SlaBreach.attendant_id == attendant_id)
+        if unit_id:
+            query = query.where(SlaBreach.unit_id == unit_id)
+        if breach_type:
+            query = query.where(SlaBreach.breach_type == breach_type)
+
+        count_query = select(func.count()).select_from(query.subquery())
+        total_res = await self.db.execute(count_query)
+        total = total_res.scalar() or 0
+
+        query = query.order_by(SlaBreach.breached_at.desc()).offset((page - 1) * limit).limit(limit)
+        result = await self.db.execute(query)
+        items = list(result.scalars().all())
+
+        return items, total
+

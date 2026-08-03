@@ -36,3 +36,5 @@ class Lead(Base):
     current_attendant = relationship("User", back_populates="assigned_leads", foreign_keys=[current_attendant_id])
     assignments = relationship("LeadAssignment", back_populates="lead", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="lead", cascade="all, delete-orphan")
+    sla_breaches = relationship("SlaBreach", back_populates="lead", cascade="all, delete-orphan")
+

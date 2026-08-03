@@ -15,14 +15,42 @@ from app.schemas.lead import (
     LeadReassign,
     BulkReassignRequest
 )
+from app.schemas.sla_breach import SlaBreachResponse, SlaBreachPaginationResponse
 from app.features.leads.service import LeadService
 
 router = APIRouter(prefix="/leads", tags=["Leads"])
+
+@router.get("/sla-breaches", response_model=SlaBreachPaginationResponse)
+async def list_sla_breaches(
+    page: int = Query(1, ge=1),
+    limit: int = Query(10, ge=1, le=100),
+    attendant_id: Optional[UUID] = Query(None),
+    unit_id: Optional[UUID] = Query(None),
+    breach_type: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
+    service = LeadService(db)
+    items, total = await service.list_sla_breaches(
+        page=page,
+        limit=limit,
+        attendant_id=attendant_id,
+        unit_id=unit_id,
+        breach_type=breach_type
+    )
+    pages = math.ceil(total / limit) if total > 0 else 1
+    return SlaBreachPaginationResponse(
+        items=items,
+        total=total,
+        page=page,
+        limit=limit,
+        pages=pages
+    )
 
 @router.post("", response_model=LeadResponse, status_code=status.HTTP_201_CREATED)
 async def create_lead(lead_in: LeadCreate, db: AsyncSession = Depends(get_db)):
     service = LeadService(db)
     return await service.create_and_assign_lead(lead_in)
+
 
 @router.get("", response_model=LeadPaginationResponse)
 async def list_leads(
