@@ -22,6 +22,7 @@ class LeadBase(BaseModel):
     email: Optional[str] = None
     meta_lead_id: Optional[str] = None
     campaign_name: Optional[str] = None
+    channel_code: Optional[str] = None
     status: str = Field(default="new", pattern="^(new|assigned|in_progress|converted|lost|expired)$")
 
 class LeadCreate(LeadBase):

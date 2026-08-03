@@ -21,6 +21,7 @@ class LeadService:
             email=lead_in.email,
             meta_lead_id=lead_in.meta_lead_id,
             campaign_name=lead_in.campaign_name,
+            channel_code=lead_in.channel_code,
             status="new"
         )
         self.db.add(lead)
@@ -50,7 +51,7 @@ class LeadService:
                 from app.workers.sla_tasks import check_lead_sla_timeout
                 check_lead_sla_timeout.apply_async(
                     args=[str(lead.id)],
-                    countdown=15 * 60 # 15 min timeout
+                    countdown=1 * 60 # 1 min timeout
                 )
             except Exception as e:
                 pass
@@ -87,12 +88,13 @@ class LeadService:
         if not user_load:
             return None
 
-        # Ordena por menor carga e, em caso de empate, quem recebeu lead há mais tempo (Round-Robin)
-        user_load.sort(key=lambda x: (x[0], x[1]))
+        # Ordena estritamente por quem recebeu lead há mais tempo (Round-Robin puro)
+        user_load.sort(key=lambda x: (x[1], x[0]))
         return user_load[0][2]
 
     async def distribute_lead(self, lead: Lead, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
         from app.models.unit import Unit
+        from app.models.channel import Channel
         from sqlalchemy import nullsfirst
 
         now = datetime.now(timezone.utc)
@@ -108,7 +110,25 @@ class LeadService:
             if target_unit:
                 selected_user = await self._find_eligible_attendant_for_unit(target_unit.id, exclude_user_id=exclude_user_id)
 
-        # Cenário 2: Esteira Geral (ou Transbordo se a unidade de origem não tiver consultores online)
+        # Cenário 1.5: Lead especifica um canal (ex: GOOGLE_ADS) - direciona apenas às unidades vinculadas a esse canal
+        if not selected_user and lead.channel_code:
+            chan_res = await self.db.execute(
+                select(Channel)
+                .options(selectinload(Channel.units))
+                .where(Channel.code == lead.channel_code.upper().strip(), Channel.is_active.is_(True))
+            )
+            channel = chan_res.scalar_one_or_none()
+            if channel and channel.units:
+                eligible_units = [u for u in channel.units if u.is_active]
+                eligible_units.sort(key=lambda u: (u.last_assigned_at or datetime.min.replace(tzinfo=timezone.utc), u.code))
+                for unit in eligible_units:
+                    user = await self._find_eligible_attendant_for_unit(unit.id, exclude_user_id=exclude_user_id)
+                    if user:
+                        selected_user = user
+                        target_unit = unit
+                        break
+
+        # Cenário 2: Esteira Geral (ou Transbordo se a unidade de origem/canal não tiver consultores online)
         if not selected_user:
             units_res = await self.db.execute(
                 select(Unit)
@@ -126,13 +146,15 @@ class LeadService:
 
         # Cenário 3: Atendentes Globais (sem unidade vinculada) como reserva de contingência
         if not selected_user:
-            global_users_res = await self.db.execute(
-                select(User).where(
-                    User.status == "online",
-                    User.unit_id.is_(None),
-                    User.role.in_(["attendant"])
-                )
+            query_global = select(User).where(
+                User.status == "online",
+                User.unit_id.is_(None),
+                User.role.in_(["attendant"])
             )
+            if exclude_user_id:
+                query_global = query_global.where(User.id != exclude_user_id)
+
+            global_users_res = await self.db.execute(query_global)
             global_users = list(global_users_res.scalars().all())
             user_load = []
             for u in global_users:
@@ -147,7 +169,7 @@ class LeadService:
                     last_assigned = u.last_assigned_at or datetime.min.replace(tzinfo=timezone.utc)
                     user_load.append((cnt, last_assigned, u))
             if user_load:
-                user_load.sort(key=lambda x: (x[0], x[1]))
+                user_load.sort(key=lambda x: (x[1], x[0]))
                 selected_user = user_load[0][2]
 
         if not selected_user:
@@ -172,6 +194,17 @@ class LeadService:
             assigned_at=now
         )
         self.db.add(assignment)
+
+        # Enqueue SLA Timeout Worker Task for the newly assigned attendant
+        try:
+            from app.workers.sla_tasks import check_lead_sla_timeout
+            check_lead_sla_timeout.apply_async(
+                args=[str(lead.id)],
+                countdown=1 * 60 # 1 min timeout
+            )
+        except Exception:
+            pass
+
         return selected_user
 
     async def get_lead_by_id(self, lead_id: UUID, current_user: Optional[User] = None) -> Optional[Lead]:

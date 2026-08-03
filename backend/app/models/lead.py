@@ -18,6 +18,7 @@ class Lead(Base):
     email = Column(String(255), nullable=True)
     meta_lead_id = Column(String(255), nullable=True, index=True)
     campaign_name = Column(String(255), nullable=True)
+    channel_code = Column(String(50), nullable=True, index=True)
     status = Column(String(50), default="new", nullable=False) # 'new', 'assigned', 'in_progress', 'converted', 'lost', 'expired'
     is_revealed = Column(Boolean, default=False, nullable=False)
     revealed_at = Column(DateTime(timezone=True), nullable=True)
