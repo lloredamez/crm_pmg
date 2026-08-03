@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import app.models
 from app.workers.celery_app import celery_app
 from app.core.database import AsyncSessionLocal
 from app.features.leads.service import LeadService

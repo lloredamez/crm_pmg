@@ -3,6 +3,7 @@ import logging
 from uuid import UUID
 from datetime import datetime, timezone
 from sqlalchemy import select, update
+import app.models
 from app.workers.celery_app import celery_app
 from app.core.database import AsyncSessionLocal
 from app.models.lead import Lead
@@ -49,8 +50,9 @@ async def _async_check_lead_sla(lead_id_str: str):
 
         # Clear current assignment and re-distribute
         lead.current_attendant_id = None
+        await session.flush()
         service = LeadService(session)
-        new_attendant = await service.distribute_lead(lead)
+        new_attendant = await service.distribute_lead(lead, exclude_user_id=old_attendant_id)
         
         if not new_attendant:
             lead.status = "expired"
@@ -118,6 +120,7 @@ async def _async_check_disposition_timeouts():
 
             lead.current_attendant_id = None
             lead.disposition_timeout_at = None
+            await session.flush()
             new_attendant = await service.distribute_lead(lead, exclude_user_id=old_attendant_id)
             if not new_attendant:
                 lead.status = "expired"

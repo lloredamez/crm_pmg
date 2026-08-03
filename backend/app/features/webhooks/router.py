@@ -33,6 +33,7 @@ async def receive_meta_lead(payload: Dict[str, Any], db: AsyncSession = Depends(
     email = payload.get("email")
     campaign_name = payload.get("campaign_name") or payload.get("form_name") or "Meta Ads Campaign"
     meta_lead_id = payload.get("meta_lead_id") or payload.get("id")
+    channel_code = payload.get("channel_code") or payload.get("channel")
 
     lead_in = LeadCreate(
         name=lead_name,
@@ -40,6 +41,7 @@ async def receive_meta_lead(payload: Dict[str, Any], db: AsyncSession = Depends(
         email=email,
         meta_lead_id=meta_lead_id,
         campaign_name=campaign_name,
+        channel_code=channel_code,
         status="new"
     )
 
