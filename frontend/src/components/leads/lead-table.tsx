@@ -65,9 +65,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
   const filterTabs = [
     { id: 'all', label: 'Todos' },
     { id: 'assigned', label: 'Em Atendimento' },
-    { id: 'in_progress', label: 'Em Progresso' },
-    { id: 'converted', label: 'Convertidos' },
-    { id: 'expired', label: 'Estouro SLA (Timeout)' },
+    { id: 'converted', label: 'Convertidos' }
   ];
 
   const columns: ColumnDef<Lead>[] = [
