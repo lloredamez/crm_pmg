@@ -88,23 +88,64 @@ services:
         condition: service_healthy
     command: celery -A app.workers.celery_app.celery_app worker --loglevel=info
 
-  frontend:
+
+  flower:
     build:
-      context: ./frontend
+      context: ./backend
       dockerfile: Dockerfile
       network: host
     dns:
       - 8.8.8.8
       - 1.1.1.1
-    container_name: crm_frontend
+    container_name: crm_flower
     restart: always
     environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:5052
-      - NEXT_PUBLIC_SOCKET_URL=http://localhost:5052
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-crm_leads}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SECRET_KEY=${SECRET_KEY:-default_secret_key_development}
     ports:
-      - "5051:3000"
+      - "5555:5555"
+    volumes:
+      - ./backend:/app
     depends_on:
-      - backend
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.workers.celery_app.celery_app flower --port=5555
+
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+      network: host
+    dns:
+      - 8.8.8.8
+      - 1.1.1.1
+    container_name: crm_beat
+    restart: always
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-postgres}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
+      - POSTGRES_DB=${POSTGRES_DB:-crm_leads}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - SECRET_KEY=${SECRET_KEY:-default_secret_key_development}
+    volumes:
+      - ./backend:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.workers.celery_app.celery_app beat --loglevel=info
 
 volumes:
   postgres_data:
