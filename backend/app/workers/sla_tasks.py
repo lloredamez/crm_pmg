@@ -8,6 +8,7 @@ from app.workers.celery_app import celery_app
 from app.core.database import AsyncSessionLocal
 from app.models.lead import Lead
 from app.models.lead_assignment import LeadAssignment
+from app.models.sla_breach import SlaBreach
 from app.features.leads.service import LeadService
 
 logger = logging.getLogger(__name__)
@@ -54,8 +55,21 @@ async def _async_check_lead_sla(lead_id_str: str):
         service = LeadService(session)
         new_attendant = await service.distribute_lead(lead, exclude_user_id=old_attendant_id)
         
+        action_taken = "reallocated" if new_attendant else "marked_expired"
         if not new_attendant:
             lead.status = "expired"
+
+        # Registrar o evento de estouro de SLA
+        sla_breach = SlaBreach(
+            lead_id=lead.id,
+            attendant_id=old_attendant_id,
+            unit_id=lead.unit_id,
+            breach_type="first_contact_timeout",
+            target_sla_minutes=1.0,
+            action_taken=action_taken,
+            breached_at=now
+        )
+        session.add(sla_breach)
 
         await session.commit()
         await session.refresh(lead)
@@ -122,11 +136,25 @@ async def _async_check_disposition_timeouts():
             lead.disposition_timeout_at = None
             await session.flush()
             new_attendant = await service.distribute_lead(lead, exclude_user_id=old_attendant_id)
+            action_taken = "reallocated" if new_attendant else "marked_expired"
             if not new_attendant:
                 lead.status = "expired"
 
+            # Registrar o evento de estouro de SLA de tabulacao
+            sla_breach = SlaBreach(
+                lead_id=lead.id,
+                attendant_id=old_attendant_id,
+                unit_id=lead.unit_id,
+                breach_type="disposition_timeout",
+                target_sla_minutes=None,
+                action_taken=action_taken,
+                breached_at=now
+            )
+            session.add(sla_breach)
+
             await session.commit()
             await session.refresh(lead)
+
 
             try:
                 from app.core.socket_manager import emit_lead_reassigned

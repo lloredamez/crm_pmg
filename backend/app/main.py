@@ -14,6 +14,8 @@ from app.models.user import User
 from app.models.unit import Unit
 from app.models.disposition import Disposition
 from app.models.channel import Channel
+from app.models.sla_breach import SlaBreach
+
 from app.features.auth.router import router as auth_router
 from app.features.users.router import router as users_router
 from app.features.leads.router import router as leads_router

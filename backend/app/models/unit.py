@@ -19,3 +19,5 @@ class Unit(Base):
     managers = relationship("User", secondary="user_units", back_populates="managed_units")
     leads = relationship("Lead", back_populates="unit")
     channels = relationship("Channel", secondary="unit_channels", back_populates="units")
+    sla_breaches = relationship("SlaBreach", back_populates="unit")
+

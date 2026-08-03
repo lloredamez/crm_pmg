@@ -31,6 +31,8 @@ class User(Base):
     assigned_leads = relationship("Lead", back_populates="current_attendant", foreign_keys="[Lead.current_attendant_id]")
     assignments = relationship("LeadAssignment", back_populates="attendant")
     messages = relationship("Message", back_populates="attendant")
+    sla_breaches = relationship("SlaBreach", back_populates="attendant")
+
 
     @property
     def managed_unit_ids(self):
