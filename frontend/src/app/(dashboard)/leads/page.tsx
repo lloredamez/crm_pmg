@@ -70,22 +70,37 @@ export default function LeadsDashboardPage() {
         attendant_id: attendantFilterId,
       }),
     enabled: !!user,
+    refetchInterval: 5000, // Automatic real-time polling fallback
   });
 
-  // Listen to Socket real-time updates to invalidate queries automatically
+  // Listen to Socket real-time updates to invalidate queries and refetch automatically
   useEffect(() => {
     if (!socket) return;
 
-    const handleLeadsUpdated = () => {
+    if (user?.id) {
+      socket.emit('join_attendant', { user_id: user.id });
+    }
+
+    const handleRefreshData = () => {
       queryClient.invalidateQueries({ queryKey: ['leads'] });
+      queryClient.refetchQueries({ queryKey: ['leads'] });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      refetchLeads();
+      refetchUsers();
     };
 
-    socket.on('leads:updated', handleLeadsUpdated);
+    socket.on('leads:updated', handleRefreshData);
+    socket.on('lead:assigned', handleRefreshData);
+    socket.on('lead:timeout_removed', handleRefreshData);
+    socket.on('lead:reassigned', handleRefreshData);
 
     return () => {
-      socket.off('leads:updated', handleLeadsUpdated);
+      socket.off('leads:updated', handleRefreshData);
+      socket.off('lead:assigned', handleRefreshData);
+      socket.off('lead:timeout_removed', handleRefreshData);
+      socket.off('lead:reassigned', handleRefreshData);
     };
-  }, [socket, queryClient]);
+  }, [socket, user?.id, queryClient, refetchLeads, refetchUsers]);
 
   const handleStatusChange = async (newStatus: string) => {
     setCurrentUserStatus(newStatus);

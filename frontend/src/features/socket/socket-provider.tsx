@@ -55,6 +55,17 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     socketInstance.on('connect', () => {
       setIsConnected(true);
+      if (typeof window !== 'undefined') {
+        const storedUser = localStorage.getItem('user');
+        if (storedUser) {
+          try {
+            const parsed = JSON.parse(storedUser);
+            if (parsed?.id) {
+              socketInstance.emit('join_attendant', { user_id: parsed.id });
+            }
+          } catch (_) {}
+        }
+      }
     });
 
     socketInstance.on('disconnect', () => {
@@ -65,7 +76,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       addToast({
         type: 'assigned',
         title: '🎯 Novo Lead Atribuído (SLA Ativo)',
-        message: `Lead ${data.name || 'Novo Lead'} (${data.campaign_name || 'Campanha'}) atribuído a você!`
+        message: `Lead ${data.name || 'Novo Lead'} atribuído a você!`
       });
     });
 
@@ -73,7 +84,15 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       addToast({
         type: 'sla_warning',
         title: '⚠️ Lead Realocado por Estouro de SLA',
-        message: `Lead ${data.lead_id} foi redirecionado por tempo limite sem interação.`
+        message: `Um lead foi redirecionado para outro atendente por tempo limite.`
+      });
+    });
+
+    socketInstance.on('lead:reassigned', (data: any) => {
+      addToast({
+        type: 'reassigned',
+        title: '🔄 Lead Reatribuído',
+        message: `Lead ${data.name || ''} foi transferido.`
       });
     });
 
