@@ -15,6 +15,12 @@ from app.models.unit import Unit
 from app.models.disposition import Disposition
 from app.models.channel import Channel
 from app.models.sla_breach import SlaBreach
+from app.models.channel_disposition_sla import ChannelDispositionSla
+from app.models.lead_tabulation import LeadTabulation
+
+
+
+from app.models.category import Category
 
 from app.features.auth.router import router as auth_router
 from app.features.users.router import router as users_router
@@ -22,6 +28,7 @@ from app.features.leads.router import router as leads_router
 from app.features.dispositions.router import router as dispositions_router
 from app.features.units.router import router as units_router
 from app.features.channels.router import router as channels_router
+from app.features.categories.router import router as categories_router
 from app.features.webhooks.router import router as webhooks_router
 from app.features.messages.router import router as messages_router
 
@@ -45,7 +52,9 @@ async def seed_initial_data():
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS email VARCHAR(255);"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS meta_lead_id VARCHAR(255);"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS campaign_name VARCHAR(255);"))
+        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS product_name VARCHAR(255);"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS disposition_id UUID REFERENCES dispositions(id) ON DELETE SET NULL;"))
+
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS dispositioned_at TIMESTAMPTZ;"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS disposition_timeout_at TIMESTAMPTZ;"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS is_revealed BOOLEAN DEFAULT FALSE;"))
@@ -234,6 +243,21 @@ async def seed_initial_data():
             await session.commit()
             logger.info("Canais padrão criados com sucesso!")
 
+        # Seed de Categorias Padrão
+        cat_res = await session.execute(select(Category))
+        existing_categories = cat_res.scalars().all()
+        if not existing_categories:
+            logger.info("Nenhuma categoria encontrada. Criando categorias padrão...")
+            default_categories = [
+                Category(name="Negociação", description="Leads em fase de contato, proposta ou tratativa comercial", color="amber"),
+                Category(name="Venda", description="Leads que fecharam negócio ou converteram em venda", color="emerald"),
+                Category(name="Perda", description="Leads desqualificados, sem interesse ou desistentes", color="rose"),
+                Category(name="Atendimento", description="Atendimentos gerais e suporte inicial", color="blue"),
+            ]
+            session.add_all(default_categories)
+            await session.commit()
+            logger.info("Categorias padrão criadas com sucesso!")
+
 async def _periodic_disposition_checker():
     from app.workers.sla_tasks import _async_check_disposition_timeouts
     while True:
@@ -276,6 +300,7 @@ app.include_router(leads_router, prefix=settings.API_V1_STR)
 app.include_router(dispositions_router, prefix=settings.API_V1_STR)
 app.include_router(units_router, prefix=settings.API_V1_STR)
 app.include_router(channels_router, prefix=settings.API_V1_STR)
+app.include_router(categories_router, prefix=settings.API_V1_STR)
 app.include_router(webhooks_router, prefix=settings.API_V1_STR)
 app.include_router(messages_router, prefix=settings.API_V1_STR)
 
