@@ -1,6 +1,6 @@
 import logging
 from typing import Dict, Any, Optional
-from fastapi import APIRouter, Depends, Query, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Query, HTTPException, Response, status, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.config import settings
@@ -24,7 +24,38 @@ async def verify_meta_webhook(
     raise HTTPException(status_code=403, detail="Verification token mismatch")
 
 @router.post("/meta", status_code=status.HTTP_200_OK)
-async def receive_meta_lead(payload: Dict[str, Any], db: AsyncSession = Depends(get_db)):
+async def receive_meta_lead(
+    payload: Dict[str, Any] = Body(
+        ...,
+        openapi_examples={
+            "direct": {
+                "summary": "Formato Direto / Padrão",
+                "description": "Payload no formato direto com os nomes de campos primários.",
+                "value": {
+                    "name": "João Silva",
+                    "phone": "+5511999998888",
+                    "email": "joao.silva@example.com",
+                    "campaign_name": "Campanha Meta Ads",
+                    "meta_lead_id": "1234567890",
+                    "channel_code": "meta_ads"
+                }
+            },
+            "meta_graph": {
+                "summary": "Formato Alternativo / Meta Graph API",
+                "description": "Payload contendo chaves alternativas aceitas (full_name, phone_number, form_name, id, channel).",
+                "value": {
+                    "full_name": "Maria Santos",
+                    "phone_number": "+5521988887777",
+                    "email": "maria.santos@example.com",
+                    "form_name": "Formulário de Leads",
+                    "id": "9876543210",
+                    "channel": "facebook_ads"
+                }
+            }
+        }
+    ),
+    db: AsyncSession = Depends(get_db)
+):
     logger.info(f"Received Meta Ads Lead Webhook: {payload}")
     
     # Process Lead Data Payload (Direct format or Meta Graph API webhook structure)
@@ -53,3 +84,4 @@ async def receive_meta_lead(payload: Dict[str, Any], db: AsyncSession = Depends(
         "lead_id": str(lead.id),
         "assigned_to": str(lead.current_attendant_id) if lead.current_attendant_id else None
     }
+
