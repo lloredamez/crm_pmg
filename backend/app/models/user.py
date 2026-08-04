@@ -32,6 +32,8 @@ class User(Base):
     assignments = relationship("LeadAssignment", back_populates="attendant")
     messages = relationship("Message", back_populates="attendant")
     sla_breaches = relationship("SlaBreach", back_populates="attendant")
+    tabulations = relationship("LeadTabulation", back_populates="attendant")
+
 
 
     @property
