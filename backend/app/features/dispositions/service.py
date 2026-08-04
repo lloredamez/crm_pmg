@@ -6,7 +6,9 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import selectinload
 from app.models.disposition import Disposition
 from app.models.lead import Lead
+from app.models.lead_assignment import LeadAssignment
 from app.schemas.disposition import DispositionCreate, DispositionUpdate, LeadTabulateRequest
+
 
 class DispositionService:
     def __init__(self, db: AsyncSession):
@@ -116,9 +118,25 @@ class DispositionService:
             new_note_entry = f"[{timestamp_str} - Tabulação: {disposition.name}]\n{tabulate_in.notes}"
             lead.notes = f"{existing_notes}\n\n{new_note_entry}".strip()
 
+        # Registrar tabulação e notas no histórico de atribuição ativo
+        if lead.current_attendant_id:
+            await self.db.execute(
+                update(LeadAssignment)
+                .where(
+                    LeadAssignment.lead_id == lead.id,
+                    LeadAssignment.attendant_id == lead.current_attendant_id,
+                    LeadAssignment.status == "active"
+                )
+                .values(
+                    disposition_name=disposition.name,
+                    disposition_notes=tabulate_in.notes
+                )
+            )
+
         lead.last_interaction_at = now
         await self.db.commit()
         await self.db.refresh(lead)
+
 
         # Trigger WebSocket update event
         try:

@@ -531,3 +531,38 @@ class LeadService:
 
         return items, total
 
+    async def get_lead_history(self, lead_id: UUID) -> List[dict]:
+        query = (
+            select(LeadAssignment)
+            .options(selectinload(LeadAssignment.attendant))
+            .where(LeadAssignment.lead_id == lead_id)
+            .order_by(LeadAssignment.assigned_at.asc())
+        )
+        result = await self.db.execute(query)
+        assignments = result.scalars().all()
+
+        history = []
+        now = datetime.now(timezone.utc)
+        for assign in assignments:
+            end_time = assign.unassigned_at or (now if assign.status == "active" else None)
+            duration = None
+            if assign.assigned_at and end_time:
+                duration = int((end_time - assign.assigned_at).total_seconds())
+
+            history.append({
+                "id": assign.id,
+                "lead_id": assign.lead_id,
+                "attendant_id": assign.attendant_id,
+                "attendant_name": assign.attendant.name if assign.attendant else "Desconhecido",
+                "attendant_email": assign.attendant.email if assign.attendant else "",
+                "status": assign.status,
+                "assigned_at": assign.assigned_at,
+                "unassigned_at": assign.unassigned_at,
+                "duration_seconds": duration,
+                "disposition_name": assign.disposition_name,
+                "disposition_notes": assign.disposition_notes,
+            })
+        return history
+
+
+

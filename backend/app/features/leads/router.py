@@ -16,7 +16,9 @@ from app.schemas.lead import (
     BulkReassignRequest
 )
 from app.schemas.sla_breach import SlaBreachResponse, SlaBreachPaginationResponse
+from app.schemas.lead_history import LeadHistoryItem
 from app.features.leads.service import LeadService
+
 
 router = APIRouter(prefix="/leads", tags=["Leads"])
 
@@ -151,3 +153,15 @@ async def bulk_reassign_leads(
         if lead:
             reassigned_count += 1
     return {"message": f"{reassigned_count} leads reatribuídos com sucesso"}
+
+@router.get("/{lead_id}/history", response_model=List[LeadHistoryItem])
+async def get_lead_history(
+    lead_id: UUID,
+    db: AsyncSession = Depends(get_db)
+):
+    service = LeadService(db)
+    lead = await service.get_lead_by_id(lead_id)
+    if not lead:
+        raise HTTPException(status_code=404, detail="Lead não encontrado")
+    return await service.get_lead_history(lead_id)
+
