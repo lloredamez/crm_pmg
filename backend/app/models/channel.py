@@ -22,3 +22,5 @@ class Channel(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     units = relationship("Unit", secondary=unit_channels, back_populates="channels")
+    disposition_slas = relationship("ChannelDispositionSla", back_populates="channel", cascade="all, delete-orphan")
+
