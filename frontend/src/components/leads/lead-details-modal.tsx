@@ -37,16 +37,15 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
       setProposalNumber(lead.proposal_number || '');
       setNotes(lead.notes || '');
       setSavedSuccess(false);
-      setActiveTab('details');
-      setHistoryItems([]);
     }
-  }, [lead]);
+  }, [lead?.id]);
 
   useEffect(() => {
     if (isOpen && lead && activeTab === 'history') {
       loadHistory();
     }
-  }, [isOpen, lead, activeTab]);
+  }, [isOpen, lead?.id, lead?.current_attendant_id, activeTab]);
+
 
   const loadHistory = async () => {
     if (!lead) return;
@@ -112,10 +111,13 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
         return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">Reatribuído</span>;
       case 'completed':
         return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">Concluído</span>;
+      case 'tabulated':
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200">Tabulado</span>;
       default:
         return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">{status}</span>;
     }
   };
+
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
@@ -337,72 +339,92 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                 </div>
               ) : (
                 <div className="relative border-l-2 border-slate-100 ml-4 space-y-6 py-2">
-                  {historyItems.map((item, idx) => (
-                    <div key={item.id || idx} className="relative pl-6">
-                      {/* Timeline Dot */}
-                      <div className={`absolute -left-2.25 top-1.5 w-4 h-4 rounded-full border-2 bg-white flex items-center justify-center ${
-
-                        item.status === 'active'
-                          ? 'border-emerald-500 bg-emerald-50'
-                          : item.status.includes('timeout')
-                          ? 'border-rose-500 bg-rose-50'
-                          : 'border-slate-300'
-                      }`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${
-                          item.status === 'active' ? 'bg-emerald-500' : item.status.includes('timeout') ? 'bg-rose-500' : 'bg-slate-400'
-                        }`} />
-                      </div>
-
-                      {/* Card Event Content */}
-                      <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-100 text-xs space-y-2 hover:bg-slate-50 transition-colors">
-                        <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="flex items-center gap-2">
-                            <User className="w-4 h-4 text-slate-400" />
-                            <span className="font-bold text-slate-900">{item.attendant_name}</span>
-                            <span className="text-slate-400 font-normal">({item.attendant_email})</span>
-                          </div>
-                          <div>{renderStatusBadge(item.status)}</div>
+                  {historyItems.map((item, idx) => {
+                    const isTabulation = item.event_type === 'tabulation';
+                    return (
+                      <div key={item.id || idx} className="relative pl-6">
+                        {/* Timeline Dot */}
+                        <div className={`absolute -left-2.25 top-1.5 w-4 h-4 rounded-full border-2 bg-white flex items-center justify-center ${
+                          isTabulation
+                            ? 'border-indigo-500 bg-indigo-50'
+                            : item.status === 'active'
+                            ? 'border-emerald-500 bg-emerald-50'
+                            : item.status.includes('timeout')
+                            ? 'border-rose-500 bg-rose-50'
+                            : 'border-slate-300'
+                        }`}>
+                          <div className={`w-1.5 h-1.5 rounded-full ${
+                            isTabulation ? 'bg-indigo-500' : item.status === 'active' ? 'bg-emerald-500' : item.status.includes('timeout') ? 'bg-rose-500' : 'bg-slate-400'
+                          }`} />
                         </div>
 
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-500 pt-1 border-t border-slate-200/60">
-                          <div className="flex items-center gap-1.5">
-                            <Clock className="w-3.5 h-3.5 text-slate-400" />
-                            <span>Início: <strong className="text-slate-700">{formatDate(item.assigned_at)}</strong></span>
+                        {/* Card Event Content */}
+                        <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-100 text-xs space-y-2 hover:bg-slate-50 transition-colors">
+                          <div className="flex items-center justify-between gap-2 flex-wrap">
+                            <div className="flex items-center gap-2">
+                              <User className="w-4 h-4 text-slate-400" />
+                              <span className="font-bold text-slate-900">{item.attendant_name}</span>
+                              {item.attendant_email && (
+                                <span className="text-slate-400 font-normal">({item.attendant_email})</span>
+                              )}
+                            </div>
+                            <div>{renderStatusBadge(isTabulation ? 'tabulated' : item.status)}</div>
                           </div>
-                          <div className="flex items-center gap-1.5">
-                            <Clock className="w-3.5 h-3.5 text-slate-400" />
-                            <span>Fim: <strong className="text-slate-700">{item.unassigned_at ? formatDate(item.unassigned_at) : 'Em andamento'}</strong></span>
-                          </div>
-                        </div>
 
-                        {item.duration_seconds !== undefined && item.duration_seconds !== null && (
-                          <div className="text-slate-400 text-[11px] font-medium pt-0.5">
-                            Duração no atendimento: <span className="text-slate-700 font-semibold">{formatDuration(item.duration_seconds)}</span>
-                          </div>
-                        )}
-
-                        {(item.disposition_name || item.disposition_notes) && (
-                          <div className="mt-2 pt-2 border-t border-slate-200/80 bg-white/70 rounded-xl p-2.5 space-y-1.5 border">
-                            {item.disposition_name && (
-                              <div className="flex items-center gap-1.5 text-slate-700 font-semibold text-xs">
-                                <Tag className="w-3.5 h-3.5 text-brand-600 shrink-0" />
-                                <span>Tabulação: <span className="text-brand-700 bg-brand-50 px-2 py-0.5 rounded-md border border-brand-100">{item.disposition_name}</span></span>
-                              </div>
-                            )}
-                            {item.disposition_notes && (
-                              <div className="flex items-start gap-1.5 text-slate-600 text-xs">
-                                <MessageSquare className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
-                                <div>
-                                  <span className="font-semibold text-slate-700 block">Observação da Tabulação:</span>
-                                  <p className="text-slate-600 whitespace-pre-wrap mt-0.5 font-normal">{item.disposition_notes}</p>
+                          {isTabulation ? (
+                            /* Tabulation Event Body */
+                            <div className="space-y-2 pt-1 border-t border-slate-200/60">
+                              <div className="flex items-center justify-between text-slate-500 text-[11px]">
+                                <div className="flex items-center gap-1.5">
+                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>Data da Tabulação: <strong className="text-slate-700">{formatDate(item.assigned_at)}</strong></span>
                                 </div>
                               </div>
-                            )}
-                          </div>
-                        )}
+
+                              <div className="bg-white/90 rounded-xl p-2.5 space-y-1.5 border border-slate-200/80">
+                                {item.disposition_name && (
+                                  <div className="flex items-center gap-1.5 text-slate-700 font-semibold text-xs">
+                                    <Tag className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                    <span>Tabulação: <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">{item.disposition_name}</span></span>
+                                  </div>
+                                )}
+                                {item.disposition_notes && (
+                                  <div className="flex items-start gap-1.5 text-slate-600 text-xs pt-0.5">
+                                    <MessageSquare className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                                    <div>
+                                      <span className="font-semibold text-slate-700 block">Observação:</span>
+                                      <p className="text-slate-600 whitespace-pre-wrap mt-0.5 font-normal">{item.disposition_notes}</p>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          ) : (
+                            /* Assignment Event Body */
+                            <>
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-500 pt-1 border-t border-slate-200/60">
+                                <div className="flex items-center gap-1.5">
+                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>Início: <strong className="text-slate-700">{formatDate(item.assigned_at)}</strong></span>
+                                </div>
+                                <div className="flex items-center gap-1.5">
+                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
+                                  <span>Fim: <strong className="text-slate-700">{item.unassigned_at ? formatDate(item.unassigned_at) : 'Em andamento'}</strong></span>
+                                </div>
+                              </div>
+
+                              {item.duration_seconds !== undefined && item.duration_seconds !== null && (
+                                <div className="text-slate-400 text-[11px] font-medium pt-0.5">
+                                  Duração no atendimento: <span className="text-slate-700 font-semibold">{formatDuration(item.duration_seconds)}</span>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
+
                 </div>
               )}
             </div>

@@ -14,7 +14,8 @@ import {
 import { Lead, User } from '@/features/leads/types';
 import { formatDate, formatPhone, formatCpf, cn } from '@/lib/utils';
 import { useAuth } from '@/features/auth/auth-provider';
-import { Search, ArrowUpDown, UserCheck, Clock, FileText, Tag, Eye, EyeOff } from 'lucide-react';
+import { Search, ArrowUpDown, UserCheck, Clock, FileText, Tag, Eye, EyeOff, Package } from 'lucide-react';
+
 
 interface LeadTableProps {
   leads: Lead[];
@@ -156,6 +157,21 @@ export const LeadTable: React.FC<LeadTableProps> = ({
         );
       },
     },
+    {
+      accessorKey: 'product_name',
+      header: 'Produto',
+      cell: ({ row }) => {
+        const lead = row.original;
+        const productName = lead.product_name || lead.product || lead.campaign_name || '-';
+        return (
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800">
+            <Package className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+            <span>{productName}</span>
+          </div>
+        );
+      },
+    },
+
     ...(isSupervisorRole || isManagerOrAdminRole
       ? [
           {
@@ -201,8 +217,31 @@ export const LeadTable: React.FC<LeadTableProps> = ({
         ]
       : []),
     {
+      accessorKey: 'current_disposition_name',
+      header: 'Tabulação Atual',
+      cell: ({ row }) => {
+        const lead = row.original;
+        const currentDisp = lead.current_disposition_name;
+
+        if (currentDisp) {
+          return (
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-brand-50 text-brand-700 border-brand-200 inline-flex items-center gap-1">
+              <Tag className="w-3 h-3 shrink-0" />
+              {currentDisp}
+            </span>
+          );
+        }
+
+        return (
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full border bg-slate-100 text-slate-500 border-slate-200 italic">
+            Sem Tabulação
+          </span>
+        );
+      },
+    },
+    {
       accessorKey: 'disposition',
-      header: 'Tabulação',
+      header: 'Última Tabulação',
       cell: ({ row }) => {
         const lead = row.original;
         const dispName = lead.disposition?.name;
@@ -217,15 +256,19 @@ export const LeadTable: React.FC<LeadTableProps> = ({
           }
 
           return (
-            <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border inline-flex items-center gap-1 ${badgeClass}`}>
-              {dispName}
-            </span>
+            <div className="flex flex-col gap-0.5 items-start">
+              <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border inline-flex items-center gap-1.5 ${badgeClass}`}>
+                <Tag className="w-3 h-3 shrink-0" />
+                {dispName}
+              </span>
+            </div>
           );
         }
 
         if (lead.status === 'expired') {
           return (
-            <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200">
+            <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-50 text-rose-700 border-rose-200 inline-flex items-center gap-1">
+              <Clock className="w-3 h-3" />
               Timeout SLA
             </span>
           );
@@ -238,12 +281,24 @@ export const LeadTable: React.FC<LeadTableProps> = ({
         );
       },
     },
+
+
     {
       id: 'actions',
       header: 'Ações',
       cell: ({ row }) => {
         const lead = row.original;
         const isRevealed = lead.is_revealed;
+        const dispCategory = lead.disposition?.category?.toLowerCase() || '';
+        const isTerminal =
+          lead.status === 'converted' ||
+          lead.status === 'lost' ||
+          dispCategory.includes('venda') ||
+          dispCategory.includes('perda') ||
+          dispCategory.includes('sucesso') ||
+          dispCategory.includes('fechado') ||
+          dispCategory.includes('sem interesse');
+
         return (
           <div className="flex items-center gap-2">
             <button
@@ -264,9 +319,18 @@ export const LeadTable: React.FC<LeadTableProps> = ({
             </button>
 
             <button
-              onClick={() => onOpenTabulateModal?.(lead)}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-              title="Tabular Lead"
+              onClick={() => !isTerminal && onOpenTabulateModal?.(lead)}
+              disabled={isTerminal}
+              className={`p-1.5 rounded-lg transition-colors ${
+                isTerminal
+                  ? 'text-slate-300 bg-slate-50 cursor-not-allowed opacity-50'
+                  : 'text-slate-500 hover:text-brand-600 hover:bg-brand-50'
+              }`}
+              title={
+                isTerminal
+                  ? 'Lead no final do fluxo (Venda/Perda) - Tabulação desabilitada'
+                  : 'Tabular Lead'
+              }
             >
               <Tag className="w-4 h-4" />
             </button>
