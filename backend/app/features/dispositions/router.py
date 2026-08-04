@@ -9,8 +9,11 @@ from app.schemas.disposition import (
     DispositionCreate,
     DispositionUpdate,
     DispositionResponse,
-    LeadTabulateRequest
+    LeadTabulateRequest,
+    ChannelDispositionSlaCreate,
+    ChannelDispositionSlaResponse
 )
+
 from app.schemas.lead import LeadResponse
 from app.features.dispositions.service import DispositionService
 
@@ -90,3 +93,37 @@ async def tabulate_lead(
     if not lead:
         raise HTTPException(status_code=404, detail="Lead ou tabulação não encontrada")
     return lead
+
+@router.get("/channel-slas", response_model=List[ChannelDispositionSlaResponse])
+async def list_channel_slas(
+    channel_id: Optional[UUID] = Query(None),
+    db: AsyncSession = Depends(get_db)
+):
+    service = DispositionService(db)
+    return await service.list_channel_slas(channel_id=channel_id)
+
+@router.post("/channel-slas", response_model=ChannelDispositionSlaResponse, status_code=status.HTTP_201_CREATED)
+async def upsert_channel_sla(
+    sla_in: ChannelDispositionSlaCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem configurar sobrecargas de SLA por canal")
+    service = DispositionService(db)
+    return await service.upsert_channel_sla(sla_in)
+
+@router.delete("/channel-slas/{sla_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_channel_sla(
+    sla_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Apenas administradores podem remover sobrecargas de SLA por canal")
+    service = DispositionService(db)
+    success = await service.delete_channel_sla(sla_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Configuração de SLA por canal não encontrada")
+    return None
+

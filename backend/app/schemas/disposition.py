@@ -30,3 +30,19 @@ class DispositionResponse(DispositionBase):
 class LeadTabulateRequest(BaseModel):
     disposition_id: UUID
     notes: Optional[str] = None
+
+class ChannelDispositionSlaCreate(BaseModel):
+    channel_id: UUID
+    disposition_id: UUID
+    timeout_minutes: float = Field(..., gt=0)
+
+class ChannelDispositionSlaResponse(BaseModel):
+    id: UUID
+    channel_id: UUID
+    disposition_id: UUID
+    timeout_minutes: float
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+

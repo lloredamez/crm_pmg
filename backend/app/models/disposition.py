@@ -17,3 +17,7 @@ class Disposition(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     leads = relationship("Lead", back_populates="disposition")
+    channel_slas = relationship("ChannelDispositionSla", back_populates="disposition", cascade="all, delete-orphan")
+    tabulations = relationship("LeadTabulation", back_populates="disposition")
+
+
