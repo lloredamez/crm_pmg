@@ -22,7 +22,10 @@ class LeadBase(BaseModel):
     email: Optional[str] = None
     meta_lead_id: Optional[str] = None
     campaign_name: Optional[str] = None
+    product_name: Optional[str] = None
+    product: Optional[str] = None
     channel_code: Optional[str] = None
+
     status: str = Field(default="new", pattern="^(new|assigned|in_progress|converted|lost|expired)$")
 
 class LeadCreate(LeadBase):
@@ -53,7 +56,9 @@ class LeadResponse(LeadBase):
     current_attendant: Optional[UserResponse] = None
     disposition_id: Optional[UUID] = None
     disposition: Optional[DispositionResponse] = None
+    current_disposition_name: Optional[str] = None
     dispositioned_at: Optional[datetime] = None
+
     disposition_timeout_at: Optional[datetime] = None
     is_revealed: bool = False
     revealed_at: Optional[datetime] = None

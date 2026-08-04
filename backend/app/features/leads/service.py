@@ -8,7 +8,9 @@ from app.models.lead import Lead
 from app.models.user import User
 from app.models.lead_assignment import LeadAssignment
 from app.models.sla_breach import SlaBreach
+from app.models.lead_tabulation import LeadTabulation
 from app.schemas.lead import LeadCreate, LeadUpdateStatus
+
 
 from app.core.socket_manager import emit_lead_assigned, emit_lead_reassigned
 
@@ -246,7 +248,13 @@ class LeadService:
         attendant_id: Optional[UUID] = None,
         current_user: Optional[User] = None
     ) -> Tuple[List[Lead], int]:
-        query = select(Lead).options(selectinload(Lead.current_attendant), selectinload(Lead.unit), selectinload(Lead.disposition))
+        query = select(Lead).options(
+            selectinload(Lead.current_attendant),
+            selectinload(Lead.unit),
+            selectinload(Lead.disposition),
+            selectinload(Lead.assignments)
+        )
+
 
         # Role-based filtering
         if current_user:
@@ -532,26 +540,46 @@ class LeadService:
         return items, total
 
     async def get_lead_history(self, lead_id: UUID) -> List[dict]:
-        query = (
+        # 1. Fetch assignments
+        assign_query = (
             select(LeadAssignment)
             .options(selectinload(LeadAssignment.attendant))
             .where(LeadAssignment.lead_id == lead_id)
             .order_by(LeadAssignment.assigned_at.asc())
         )
-        result = await self.db.execute(query)
-        assignments = result.scalars().all()
+        assign_res = await self.db.execute(assign_query)
+        assignments = assign_res.scalars().all()
 
-        history = []
+        # 2. Fetch tabulations
+        tab_query = (
+            select(LeadTabulation)
+            .options(selectinload(LeadTabulation.attendant))
+            .where(LeadTabulation.lead_id == lead_id)
+            .order_by(LeadTabulation.created_at.asc())
+        )
+        tab_res = await self.db.execute(tab_query)
+        tabulations = tab_res.scalars().all()
+
+        events = []
         now = datetime.now(timezone.utc)
+
+        # Set of attendant IDs who have performed at least one tabulation for this lead
+        tabulated_attendant_ids = {t.attendant_id for t in tabulations if t.attendant_id}
+
         for assign in assignments:
+            # Se a atribuição for a ativa e o atendente já realizou tabulações, omitir o card redundante de 'Em Atendimento/Em andamento'
+            if assign.status == "active" and assign.attendant_id in tabulated_attendant_ids:
+                continue
+
             end_time = assign.unassigned_at or (now if assign.status == "active" else None)
             duration = None
             if assign.assigned_at and end_time:
                 duration = int((end_time - assign.assigned_at).total_seconds())
 
-            history.append({
+            events.append({
                 "id": assign.id,
                 "lead_id": assign.lead_id,
+                "event_type": "assignment",
                 "attendant_id": assign.attendant_id,
                 "attendant_name": assign.attendant.name if assign.attendant else "Desconhecido",
                 "attendant_email": assign.attendant.email if assign.attendant else "",
@@ -559,10 +587,35 @@ class LeadService:
                 "assigned_at": assign.assigned_at,
                 "unassigned_at": assign.unassigned_at,
                 "duration_seconds": duration,
-                "disposition_name": assign.disposition_name,
-                "disposition_notes": assign.disposition_notes,
+                "disposition_name": None,
+                "disposition_notes": None,
+                "_timestamp": assign.assigned_at or now
             })
-        return history
+
+        for tab in tabulations:
+            events.append({
+                "id": tab.id,
+                "lead_id": tab.lead_id,
+                "event_type": "tabulation",
+                "attendant_id": tab.attendant_id,
+                "attendant_name": tab.attendant.name if tab.attendant else "Desconhecido",
+                "attendant_email": tab.attendant.email if tab.attendant else "",
+                "status": "tabulated",
+                "assigned_at": tab.created_at,
+                "unassigned_at": None,
+                "duration_seconds": None,
+                "disposition_name": tab.disposition_name,
+                "disposition_notes": tab.disposition_notes,
+                "_timestamp": tab.created_at or now
+            })
+
+        events.sort(key=lambda x: x["_timestamp"])
+        for e in events:
+            e.pop("_timestamp", None)
+
+        return events
+
+
 
 
 

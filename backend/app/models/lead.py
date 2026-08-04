@@ -1,6 +1,8 @@
 import uuid
+from typing import Optional
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Boolean
+
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -18,7 +20,9 @@ class Lead(Base):
     email = Column(String(255), nullable=True)
     meta_lead_id = Column(String(255), nullable=True, index=True)
     campaign_name = Column(String(255), nullable=True)
+    product_name = Column(String(255), nullable=True)
     channel_code = Column(String(50), nullable=True, index=True)
+
     status = Column(String(50), default="new", nullable=False) # 'new', 'assigned', 'in_progress', 'converted', 'lost', 'expired'
     is_revealed = Column(Boolean, default=False, nullable=False)
     revealed_at = Column(DateTime(timezone=True), nullable=True)
@@ -37,4 +41,18 @@ class Lead(Base):
     assignments = relationship("LeadAssignment", back_populates="lead", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="lead", cascade="all, delete-orphan")
     sla_breaches = relationship("SlaBreach", back_populates="lead", cascade="all, delete-orphan")
+    tabulations = relationship("LeadTabulation", back_populates="lead", cascade="all, delete-orphan")
+
+    @property
+    def current_disposition_name(self) -> Optional[str]:
+        try:
+            if self.assignments:
+                for a in self.assignments:
+                    if a.status == "active":
+                        return a.disposition_name
+        except Exception:
+            pass
+        return None
+
+
 
