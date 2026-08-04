@@ -87,3 +87,19 @@ export interface Message {
   external_id?: string | null;
   created_at: string;
 }
+
+export interface LeadHistoryItem {
+  id: string;
+  lead_id: string;
+  attendant_id: string;
+  attendant_name: string;
+  attendant_email: string;
+  status: string;
+  assigned_at: string;
+  unassigned_at?: string | null;
+  duration_seconds?: number | null;
+  disposition_name?: string | null;
+  disposition_notes?: string | null;
+}
+
+

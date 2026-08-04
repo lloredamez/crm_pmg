@@ -1,4 +1,4 @@
-import { Lead, LeadPaginationResponse, User, Message } from './types';
+import { Lead, LeadPaginationResponse, User, Message, LeadHistoryItem } from './types';
 
 const getApiUrl = () => {
   if (process.env.NEXT_PUBLIC_API_URL) {
@@ -185,3 +185,14 @@ export async function createMockLead(data: { name: string; phone: string; campai
   });
   await handleResponse<any>(res);
 }
+
+export async function fetchLeadHistory(leadId: string): Promise<LeadHistoryItem[]> {
+  const API_URL = getApiUrl();
+  const res = await fetch(`${API_URL}/api/v1/leads/${leadId}/history`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  return handleResponse<LeadHistoryItem[]>(res);
+}
+
