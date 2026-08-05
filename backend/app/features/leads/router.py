@@ -61,6 +61,8 @@ async def list_leads(
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     attendant_id: Optional[UUID] = Query(None),
+    banco: Optional[str] = Query(None),
+    tabela: Optional[str] = Query(None),
     current_user: Optional[User] = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -71,6 +73,8 @@ async def list_leads(
         status_filter=status,
         search=search,
         attendant_id=attendant_id,
+        banco_filter=banco,
+        tabela_filter=tabela,
         current_user=current_user
     )
     pages = math.ceil(total / limit) if total > 0 else 1

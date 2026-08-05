@@ -256,6 +256,8 @@ class LeadService:
         status_filter: Optional[str] = None,
         search: Optional[str] = None,
         attendant_id: Optional[UUID] = None,
+        banco_filter: Optional[str] = None,
+        tabela_filter: Optional[str] = None,
         current_user: Optional[User] = None
     ) -> Tuple[List[Lead], int]:
         query = select(Lead).options(
@@ -296,6 +298,12 @@ class LeadService:
 
         if attendant_id:
             query = query.where(Lead.current_attendant_id == attendant_id)
+
+        if banco_filter and banco_filter.lower() != "all":
+            query = query.where(Lead.banco.ilike(f"%{banco_filter}%"))
+
+        if tabela_filter and tabela_filter.lower() != "all":
+            query = query.where(Lead.tabela.ilike(f"%{tabela_filter}%"))
 
         if search:
             search_pattern = f"%{search}%"
