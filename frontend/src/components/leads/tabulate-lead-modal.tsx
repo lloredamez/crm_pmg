@@ -31,7 +31,7 @@ export const TabulateLeadModal: React.FC<TabulateLeadModalProps> = ({
       setNotes('');
       setErrorMsg('');
     }
-  }, [isOpen, lead]);
+  }, [isOpen, lead?.id]);
 
   const loadActiveDispositions = async () => {
     setLoading(true);
@@ -52,10 +52,24 @@ export const TabulateLeadModal: React.FC<TabulateLeadModalProps> = ({
 
   if (!isOpen || !lead) return null;
 
+  const dispCategory = lead.disposition?.category?.toLowerCase() || '';
+  const isTerminal =
+    lead.status === 'converted' ||
+    lead.status === 'lost' ||
+    dispCategory.includes('venda') ||
+    dispCategory.includes('perda') ||
+    dispCategory.includes('sucesso') ||
+    dispCategory.includes('fechado') ||
+    dispCategory.includes('sem interesse');
+
   const selectedDisp = dispositions.find((d) => d.id === selectedDispId);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isTerminal) {
+      setErrorMsg('Este lead atingiu o final do fluxo e não pode mais ser tabulado.');
+      return;
+    }
     if (!selectedDispId) {
       setErrorMsg('Selecione uma tabulação para o atendimento');
       return;
@@ -98,6 +112,13 @@ export const TabulateLeadModal: React.FC<TabulateLeadModalProps> = ({
             <X className="w-5 h-5" />
           </button>
         </div>
+
+        {isTerminal && (
+          <div className="mb-4 bg-amber-50 border border-amber-200 text-amber-800 text-xs p-3 rounded-2xl flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 text-amber-600" />
+            <span>Este lead atingiu o final do fluxo (Venda/Perda) e não pode receber novas tabulações.</span>
+          </div>
+        )}
 
         {errorMsg && (
           <div className="mb-4 bg-rose-50 border border-rose-200 text-rose-700 text-xs p-3 rounded-2xl flex items-center gap-2">
@@ -186,8 +207,8 @@ export const TabulateLeadModal: React.FC<TabulateLeadModalProps> = ({
 
               <button
                 type="submit"
-                disabled={submitting}
-                className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs font-semibold shadow-sm shadow-brand-500/20 flex items-center gap-1.5"
+                disabled={submitting || isTerminal}
+                className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-semibold shadow-sm shadow-brand-500/20 flex items-center gap-1.5"
               >
                 <Save className="w-4 h-4" /> {submitting ? 'Salvando...' : 'Confirmar Tabulação'}
               </button>

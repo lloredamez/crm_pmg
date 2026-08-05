@@ -29,6 +29,15 @@ export interface Channel {
   created_at: string;
 }
 
+export interface Category {
+  id: string;
+  name: string;
+  description?: string | null;
+  color: string;
+  is_active: boolean;
+  created_at: string;
+}
+
 export interface Disposition {
   id: string;
   name: string;
@@ -52,7 +61,15 @@ export interface Lead {
   email?: string | null;
   meta_lead_id?: string | null;
   campaign_name?: string | null;
+  product_name?: string | null;
+  product?: string | null;
+  prazo?: number | null;
+  margem?: number | null;
+  valor_liberado?: number | null;
+  banco?: string | null;
+  tabela?: string | null;
   status: LeadStatus;
+
   is_revealed?: boolean;
   revealed_at?: string | null;
   current_attendant_id?: string | null;
@@ -62,7 +79,9 @@ export interface Lead {
   unit_name?: string | null;
   disposition_id?: string | null;
   disposition?: Disposition | null;
+  current_disposition_name?: string | null;
   dispositioned_at?: string | null;
+
   disposition_timeout_at?: string | null;
   assigned_at?: string | null;
   last_interaction_at?: string | null;
@@ -91,7 +110,8 @@ export interface Message {
 export interface LeadHistoryItem {
   id: string;
   lead_id: string;
-  attendant_id: string;
+  event_type?: 'assignment' | 'tabulation';
+  attendant_id?: string | null;
   attendant_name: string;
   attendant_email: string;
   status: string;
@@ -101,5 +121,15 @@ export interface LeadHistoryItem {
   disposition_name?: string | null;
   disposition_notes?: string | null;
 }
+
+
+export interface ChannelDispositionSla {
+  id: string;
+  channel_id: string;
+  disposition_id: string;
+  timeout_minutes: number;
+  created_at: string;
+}
+
 
 
