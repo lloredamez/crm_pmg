@@ -12,9 +12,9 @@ import {
   SortingState,
 } from '@tanstack/react-table';
 import { Lead, User } from '@/features/leads/types';
-import { formatDate, formatPhone, formatCpf, cn } from '@/lib/utils';
+import { formatDate, formatPhone, formatCpf, formatCurrency, cn } from '@/lib/utils';
 import { useAuth } from '@/features/auth/auth-provider';
-import { Search, ArrowUpDown, UserCheck, Clock, FileText, Tag, Eye, EyeOff, Package } from 'lucide-react';
+import { Search, ArrowUpDown, UserCheck, Clock, FileText, Tag, Eye, EyeOff, Package, Landmark, Table, DollarSign, Calculator, Filter, RotateCcw, X } from 'lucide-react';
 
 
 interface LeadTableProps {
@@ -26,6 +26,12 @@ interface LeadTableProps {
   onPageChange: (newPage: number) => void;
   statusFilter: string;
   onStatusFilterChange: (status: string) => void;
+  bancoFilter?: string;
+  onBancoFilterChange?: (banco: string) => void;
+  tabelaFilter?: string;
+  onTabelaFilterChange?: (tabela: string) => void;
+  attendantFilter?: string;
+  onAttendantFilterChange?: (attendantId: string) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onOpenLeadModal?: (lead: Lead) => void;
@@ -45,6 +51,12 @@ export const LeadTable: React.FC<LeadTableProps> = ({
   onPageChange,
   statusFilter,
   onStatusFilterChange,
+  bancoFilter = 'all',
+  onBancoFilterChange,
+  tabelaFilter = 'all',
+  onTabelaFilterChange,
+  attendantFilter = 'all',
+  onAttendantFilterChange,
   searchQuery,
   onSearchChange,
   onOpenLeadModal,
@@ -66,7 +78,8 @@ export const LeadTable: React.FC<LeadTableProps> = ({
   const filterTabs = [
     { id: 'all', label: 'Todos' },
     { id: 'assigned', label: 'Em Atendimento' },
-    { id: 'converted', label: 'Convertidos' }
+    { id: 'converted', label: 'Vendas' },
+    { id: 'lost', label: 'Perdas' },
   ];
 
   const columns: ColumnDef<Lead>[] = [
@@ -128,11 +141,21 @@ export const LeadTable: React.FC<LeadTableProps> = ({
       header: 'Nome',
       cell: ({ row }) => {
         const lead = row.original;
+        const isRevealed = lead.is_revealed;
         return (
           <div className="flex items-center gap-3">
             <div
-              className="font-semibold text-slate-900 text-xs hover:text-brand-600 cursor-pointer"
-              onClick={() => onOpenDetailsModal?.(lead)}
+              className={`font-semibold text-xs ${
+                isRevealed
+                  ? 'text-slate-900 hover:text-brand-600 cursor-pointer'
+                  : 'text-slate-500 cursor-not-allowed opacity-60'
+              }`}
+              onClick={() => isRevealed && onOpenDetailsModal?.(lead)}
+              title={
+                isRevealed
+                  ? 'Ver dados do lead'
+                  : 'Clique no olho para revelar os dados do lead primeiro'
+              }
             >
               {lead.name}
             </div>
@@ -299,6 +322,8 @@ export const LeadTable: React.FC<LeadTableProps> = ({
           dispCategory.includes('fechado') ||
           dispCategory.includes('sem interesse');
 
+        const isTabulateDisabled = !isRevealed || isTerminal;
+
         return (
           <div className="flex items-center gap-2">
             <button
@@ -319,15 +344,17 @@ export const LeadTable: React.FC<LeadTableProps> = ({
             </button>
 
             <button
-              onClick={() => !isTerminal && onOpenTabulateModal?.(lead)}
-              disabled={isTerminal}
+              onClick={() => !isTabulateDisabled && onOpenTabulateModal?.(lead)}
+              disabled={isTabulateDisabled}
               className={`p-1.5 rounded-lg transition-colors ${
-                isTerminal
+                isTabulateDisabled
                   ? 'text-slate-300 bg-slate-50 cursor-not-allowed opacity-50'
                   : 'text-slate-500 hover:text-brand-600 hover:bg-brand-50'
               }`}
               title={
-                isTerminal
+                !isRevealed
+                  ? 'Clique no olho para revelar os dados do lead primeiro'
+                  : isTerminal
                   ? 'Lead no final do fluxo (Venda/Perda) - Tabulação desabilitada'
                   : 'Tabular Lead'
               }
@@ -336,9 +363,18 @@ export const LeadTable: React.FC<LeadTableProps> = ({
             </button>
 
             <button
-              onClick={() => onOpenDetailsModal?.(lead)}
-              className="p-1.5 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
-              title="Ver Dados & Editar Proposta / Observações"
+              onClick={() => isRevealed && onOpenDetailsModal?.(lead)}
+              disabled={!isRevealed}
+              className={`p-1.5 rounded-lg transition-colors ${
+                isRevealed
+                  ? 'text-slate-500 hover:text-brand-600 hover:bg-brand-50'
+                  : 'text-slate-300 bg-slate-50 cursor-not-allowed opacity-50'
+              }`}
+              title={
+                isRevealed
+                  ? 'Ver Dados & Editar Proposta / Observações'
+                  : 'Clique no olho para revelar os dados do lead primeiro'
+              }
             >
               <FileText className="w-4 h-4" />
             </button>
@@ -394,39 +430,131 @@ export const LeadTable: React.FC<LeadTableProps> = ({
     }
   };
 
+  const availableBancos = Array.from(
+    new Set(leads.map((l) => l.banco).filter((b): b is string => !!b && b.trim() !== ''))
+  );
+  const availableTabelas = Array.from(
+    new Set(leads.map((l) => l.tabela).filter((t): t is string => !!t && t.trim() !== ''))
+  );
+
+  const hasActiveFilters =
+    statusFilter !== 'all' ||
+    bancoFilter !== 'all' ||
+    tabelaFilter !== 'all' ||
+    attendantFilter !== 'all' ||
+    !!searchQuery;
+
+  const handleResetFilters = () => {
+    onStatusFilterChange('all');
+    onBancoFilterChange?.('all');
+    onTabelaFilterChange?.('all');
+    onAttendantFilterChange?.('all');
+    onSearchChange('');
+  };
+
   return (
     <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
-      {/* Control Bar: Pill Filters + Search Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-        {/* Filter Pill Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-2 md:pb-0 scrollbar-none">
-          {filterTabs.map((tab) => {
-            const isActive = statusFilter === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => onStatusFilterChange(tab.id)}
-                className={cn(
-                  'pill-tab text-xs',
-                  isActive ? 'pill-tab-active' : 'pill-tab-inactive'
-                )}
-              >
-                {tab.label}
-              </button>
-            );
-          })}
+      {/* Header Controls: Status Tabs + Filters + Search */}
+      <div className="flex flex-col gap-4 mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+          {/* Status Pill Tabs */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-2 lg:pb-0 scrollbar-none">
+            {filterTabs.map((tab) => {
+              const isActive = statusFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => onStatusFilterChange(tab.id)}
+                  className={cn(
+                    'pill-tab text-xs',
+                    isActive ? 'pill-tab-active' : 'pill-tab-inactive'
+                  )}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Search Bar */}
+          <div className="relative min-w-64">
+            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Buscar por cliente, fone, campanha..."
+              value={searchQuery}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="w-full bg-slate-50 border border-slate-200/80 rounded-full pl-9 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+            />
+          </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative min-w-60">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            placeholder="Buscar por cliente, fone, campanha..."
-            value={searchQuery}
-            onChange={(e) => onSearchChange(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200/80 rounded-full pl-9 pr-4 py-2 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
-          />
+        {/* Dropdown Header Filters Bar */}
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100/80">
+          <div className="flex items-center gap-1 text-xs font-semibold text-slate-500 mr-2">
+            <Filter className="w-3.5 h-3.5 text-brand-600" />
+            <span>Filtros do Cabeçalho:</span>
+          </div>
+
+          {/* Banco Filter Dropdown */}
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 text-xs">
+            <Landmark className="w-3.5 h-3.5 text-slate-400" />
+            <select
+              value={bancoFilter}
+              onChange={(e) => onBancoFilterChange?.(e.target.value)}
+              className="bg-transparent font-medium text-slate-700 focus:outline-none cursor-pointer"
+            >
+              <option value="all">Todos os Bancos</option>
+              {availableBancos.map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Tabela Filter Dropdown */}
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 text-xs">
+            <Table className="w-3.5 h-3.5 text-slate-400" />
+            <select
+              value={tabelaFilter}
+              onChange={(e) => onTabelaFilterChange?.(e.target.value)}
+              className="bg-transparent font-medium text-slate-700 focus:outline-none cursor-pointer"
+            >
+              <option value="all">Todas as Tabelas</option>
+              {availableTabelas.map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Atendente Filter Dropdown (Supervisor / Manager / Admin) */}
+          {(isSupervisorRole || isManagerOrAdminRole) && (
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 text-xs">
+              <UserCheck className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={attendantFilter}
+                onChange={(e) => onAttendantFilterChange?.(e.target.value)}
+                className="bg-transparent font-medium text-slate-700 focus:outline-none cursor-pointer"
+              >
+                <option value="all">Todos os Atendentes</option>
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} ({u.status})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Clear Filters Button */}
+          {hasActiveFilters && (
+            <button
+              onClick={handleResetFilters}
+              className="flex items-center gap-1 text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100/70 border border-rose-200/60 rounded-xl px-3 py-1.5 transition-all ml-auto"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Limpar Filtros</span>
+            </button>
+          )}
         </div>
       </div>
 

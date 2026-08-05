@@ -1,4 +1,5 @@
-import { Disposition, Lead } from '@/features/leads/types';
+import { Disposition, Lead, ChannelDispositionSla } from '@/features/leads/types';
+
 
 const getApiUrl = () => {
   if (process.env.NEXT_PUBLIC_API_URL) {
@@ -132,3 +133,45 @@ export async function tabulateLead(
   });
   return handleResponse<Lead>(res);
 }
+
+export async function fetchChannelSlas(channelId?: string): Promise<ChannelDispositionSla[]> {
+  const API_URL = getApiUrl();
+  const query = channelId ? `?channel_id=${channelId}` : '';
+  const res = await fetch(`${API_URL}/api/v1/dispositions/channel-slas${query}`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  return handleResponse<ChannelDispositionSla[]>(res);
+}
+
+export async function upsertChannelSla(data: {
+  channel_id: string;
+  disposition_id: string;
+  timeout_minutes: number;
+}): Promise<ChannelDispositionSla> {
+  const API_URL = getApiUrl();
+  const res = await fetch(`${API_URL}/api/v1/dispositions/channel-slas`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...getAuthHeaders(),
+    },
+    body: JSON.stringify(data),
+  });
+  return handleResponse<ChannelDispositionSla>(res);
+}
+
+export async function deleteChannelSla(slaId: string): Promise<void> {
+  const API_URL = getApiUrl();
+  const res = await fetch(`${API_URL}/api/v1/dispositions/channel-slas/${slaId}`, {
+    method: 'DELETE',
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  if (!res.ok) {
+    throw new Error('Erro ao excluir regra de SLA por canal');
+  }
+}
+

@@ -28,6 +28,9 @@ export default function LeadsDashboardPage() {
   const [currentUserStatus, setCurrentUserStatus] = useState('online');
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [bancoFilter, setBancoFilter] = useState('all');
+  const [tabelaFilter, setTabelaFilter] = useState('all');
+  const [selectedAttendantFilter, setSelectedAttendantFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [selectedDetailsLead, setSelectedDetailsLead] = useState<Lead | null>(null);
@@ -56,18 +59,24 @@ export default function LeadsDashboardPage() {
     enabled: !!user,
   });
 
-  // Fetch Leads with Role Filter (attendants only filter by their own ID)
-  const attendantFilterId = isAttendant ? user?.id : undefined;
+  // Fetch Leads with Role & Custom Header Filters
+  const activeAttendantId = isAttendant
+    ? user?.id
+    : selectedAttendantFilter !== 'all'
+    ? selectedAttendantFilter
+    : undefined;
 
   const { data: leadsData, refetch: refetchLeads } = useQuery({
-    queryKey: ['leads', page, statusFilter, searchQuery, attendantFilterId],
+    queryKey: ['leads', page, statusFilter, searchQuery, activeAttendantId, bancoFilter, tabelaFilter],
     queryFn: () =>
       fetchLeads({
         page,
         limit: 10,
         status: statusFilter,
         search: searchQuery,
-        attendant_id: attendantFilterId,
+        attendant_id: activeAttendantId,
+        banco: bancoFilter,
+        tabela: tabelaFilter,
       }),
     enabled: !!user,
     refetchInterval: 5000, // Automatic real-time polling fallback
@@ -101,6 +110,22 @@ export default function LeadsDashboardPage() {
       socket.off('lead:reassigned', handleRefreshData);
     };
   }, [socket, user?.id, queryClient, refetchLeads, refetchUsers]);
+
+  // Keep open modal lead details synced with latest WebSocket / Query updates
+  useEffect(() => {
+    if (leadsData?.items) {
+      if (selectedDetailsLead) {
+        const updated = leadsData.items.find((l: Lead) => l.id === selectedDetailsLead.id);
+        if (updated) setSelectedDetailsLead(updated);
+      }
+      if (selectedTabulateLead) {
+        const updated = leadsData.items.find((l: Lead) => l.id === selectedTabulateLead.id);
+        if (updated) setSelectedTabulateLead(updated);
+      }
+    }
+  }, [leadsData]);
+
+
 
   const handleStatusChange = async (newStatus: string) => {
     setCurrentUserStatus(newStatus);
@@ -145,9 +170,15 @@ export default function LeadsDashboardPage() {
   const pages = leadsData?.pages || 1;
 
   // Compute KPI metrics dynamically
-  const assignedLeadsCount = leads.filter((l) => l.status === 'assigned' || l.status === 'in_progress').length;
-  const convertedLeadsCount = leads.filter((l) => l.status === 'converted').length;
+  const activeLeads = leads.filter((l) => l.status === 'assigned' || l.status === 'in_progress');
+  const convertedLeadsList = leads.filter((l) => l.status === 'converted');
+  const assignedLeadsCount = activeLeads.length;
+  const convertedLeadsCount = convertedLeadsList.length;
   const expiredSlaCount = leads.filter((l) => l.status === 'expired').length;
+
+  const totalValorLiberado = leads.reduce((sum, l) => sum + (l.valor_liberado || 0), 0);
+  const valorLiberadoAtivos = activeLeads.reduce((sum, l) => sum + (l.valor_liberado || 0), 0);
+  const valorLiberadoConvertidos = convertedLeadsList.reduce((sum, l) => sum + (l.valor_liberado || 0), 0);
 
   const handleRevealLead = async (lead: Lead) => {
     if (lead.is_revealed) return;
@@ -185,6 +216,9 @@ export default function LeadsDashboardPage() {
               assignedLeads={assignedLeadsCount}
               convertedLeads={convertedLeadsCount}
               slaExpiredCount={expiredSlaCount}
+              totalValorLiberado={totalValorLiberado}
+              valorLiberadoAtivos={valorLiberadoAtivos}
+              valorLiberadoConvertidos={valorLiberadoConvertidos}
             />
 
             {/* Role Filter Notice */}
@@ -212,6 +246,21 @@ export default function LeadsDashboardPage() {
               statusFilter={statusFilter}
               onStatusFilterChange={(st) => {
                 setStatusFilter(st);
+                setPage(1);
+              }}
+              bancoFilter={bancoFilter}
+              onBancoFilterChange={(b) => {
+                setBancoFilter(b);
+                setPage(1);
+              }}
+              tabelaFilter={tabelaFilter}
+              onTabelaFilterChange={(t) => {
+                setTabelaFilter(t);
+                setPage(1);
+              }}
+              attendantFilter={selectedAttendantFilter}
+              onAttendantFilterChange={(attId) => {
+                setSelectedAttendantFilter(attId);
                 setPage(1);
               }}
               searchQuery={searchQuery}

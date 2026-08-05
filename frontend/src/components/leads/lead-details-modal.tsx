@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { Lead, LeadHistoryItem } from '@/features/leads/types';
 import { updateLeadDetails, fetchLeadHistory } from '@/features/leads/api';
-import { formatDate, formatPhone, formatCpf } from '@/lib/utils';
-import { X, Lock, Edit3, Save, FileText, CheckCircle, History, Clock, User, AlertCircle, RefreshCw, Tag, MessageSquare } from 'lucide-react';
+import { formatDate, formatPhone, formatCpf, formatCurrency } from '@/lib/utils';
+import { X, Lock, Edit3, Save, FileText, CheckCircle, History, Clock, User, AlertCircle, RefreshCw, Tag, MessageSquare, Landmark, Table, DollarSign, Calculator } from 'lucide-react';
 
 interface LeadDetailsModalProps {
   lead: Lead | null;
@@ -23,6 +23,11 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
   const [verifiedCpf, setVerifiedCpf] = useState('');
   const [proposalNumber, setProposalNumber] = useState('');
   const [notes, setNotes] = useState('');
+  const [banco, setBanco] = useState('');
+  const [tabela, setTabela] = useState('');
+  const [prazo, setPrazo] = useState('');
+  const [margem, setMargem] = useState('');
+  const [valorLiberado, setValorLiberado] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
@@ -36,6 +41,11 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
       setVerifiedCpf(lead.verified_cpf || '');
       setProposalNumber(lead.proposal_number || '');
       setNotes(lead.notes || '');
+      setBanco(lead.banco || '');
+      setTabela(lead.tabela || '');
+      setPrazo(lead.prazo !== undefined && lead.prazo !== null ? String(lead.prazo) : '');
+      setMargem(lead.margem !== undefined && lead.margem !== null ? String(lead.margem) : '');
+      setValorLiberado(lead.valor_liberado !== undefined && lead.valor_liberado !== null ? String(lead.valor_liberado) : '');
       setSavedSuccess(false);
     }
   }, [lead?.id]);
@@ -69,10 +79,19 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
     setIsSaving(true);
     setSavedSuccess(false);
     try {
+      const parsedPrazo = prazo.trim() !== '' ? parseInt(prazo, 10) : null;
+      const parsedMargem = margem.trim() !== '' ? parseFloat(margem.replace(',', '.')) : null;
+      const parsedValorLiberado = valorLiberado.trim() !== '' ? parseFloat(valorLiberado.replace(',', '.')) : null;
+
       await updateLeadDetails(lead.id, {
         verified_cpf: verifiedCpf,
         proposal_number: proposalNumber,
         notes: notes,
+        banco: banco.trim() || null,
+        tabela: tabela.trim() || null,
+        prazo: isNaN(parsedPrazo as number) ? null : parsedPrazo,
+        margem: isNaN(parsedMargem as number) ? null : parsedMargem,
+        valor_liberado: isNaN(parsedValorLiberado as number) ? null : parsedValorLiberado,
       });
       setSavedSuccess(true);
       onRefresh();
@@ -225,6 +244,31 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                       {lead.unit?.name || lead.unit_name || 'Loja Principal'}
                     </span>
                   </div>
+
+                  <div>
+                    <span className="text-slate-400 block font-medium">Banco</span>
+                    <span className="font-semibold text-slate-800">{lead.banco || '-'}</span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 block font-medium">Tabela</span>
+                    <span className="font-semibold text-slate-800">{lead.tabela || '-'}</span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 block font-medium">Prazo</span>
+                    <span className="font-semibold text-slate-800">{lead.prazo ? `${lead.prazo}x` : '-'}</span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 block font-medium">Margem</span>
+                    <span className="font-semibold text-slate-800">{formatCurrency(lead.margem)}</span>
+                  </div>
+
+                  <div>
+                    <span className="text-slate-400 block font-medium">Valor Liberado</span>
+                    <span className="font-semibold text-slate-800">{formatCurrency(lead.valor_liberado)}</span>
+                  </div>
                 </div>
               </div>
 
@@ -232,7 +276,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
               <form onSubmit={handleSave} className="space-y-4">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-brand-600 uppercase tracking-wider mb-1">
                   <Edit3 className="w-3.5 h-3.5" />
-                  <span>Campos Editáveis (Proposta & Observações)</span>
+                  <span>Campos Editáveis (Proposta & Valores)</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -261,6 +305,71 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
                     />
                   </div>
+
+                  {/*<div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Banco
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Banco Itaú, Bradesco, C6..."
+                      value={banco}
+                      onChange={(e) => setBanco(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Tabela
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: Tabela Normal, Flex..."
+                      value={tabela}
+                      onChange={(e) => setTabela(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Prazo (Parcelas)
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="Ex: 84"
+                      value={prazo}
+                      onChange={(e) => setPrazo(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Margem (R$)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: 450.00"
+                      value={margem}
+                      onChange={(e) => setMargem(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Valor Liberado (R$)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Ex: 12500.00"
+                      value={valorLiberado}
+                      onChange={(e) => setValorLiberado(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
+                    />
+                  </div>*/}
                 </div>
 
                 <div>

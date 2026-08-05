@@ -40,6 +40,8 @@ export async function fetchLeads(params: {
   status?: string;
   search?: string;
   attendant_id?: string;
+  banco?: string;
+  tabela?: string;
 }): Promise<LeadPaginationResponse> {
   const API_URL = getApiUrl();
   const query = new URLSearchParams();
@@ -48,6 +50,8 @@ export async function fetchLeads(params: {
   if (params.status && params.status !== 'all') query.append('status', params.status);
   if (params.search) query.append('search', params.search);
   if (params.attendant_id) query.append('attendant_id', params.attendant_id);
+  if (params.banco && params.banco !== 'all') query.append('banco', params.banco);
+  if (params.tabela && params.tabela !== 'all') query.append('tabela', params.tabela);
 
   const res = await fetch(`${API_URL}/api/v1/leads?${query.toString()}`, {
     headers: {
@@ -95,7 +99,16 @@ export async function updateLeadStatus(leadId: string, status: string): Promise<
 
 export async function updateLeadDetails(
   leadId: string,
-  details: { notes?: string; verified_cpf?: string; proposal_number?: string }
+  details: {
+    notes?: string;
+    verified_cpf?: string;
+    proposal_number?: string;
+    prazo?: number | null;
+    margem?: number | null;
+    valor_liberado?: number | null;
+    banco?: string | null;
+    tabela?: string | null;
+  }
 ): Promise<Lead> {
   const API_URL = getApiUrl();
   const res = await fetch(`${API_URL}/api/v1/leads/${leadId}/details`, {
