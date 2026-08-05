@@ -35,9 +35,15 @@ async def receive_meta_lead(
                     "name": "João Silva",
                     "phone": "+5511999998888",
                     "email": "joao.silva@example.com",
+                    "cpf": "123.456.789-00",
                     "campaign_name": "Campanha Meta Ads",
                     "meta_lead_id": "1234567890",
-                    "channel_code": "meta_ads"
+                    "channel_code": "meta_ads",
+                    "prazo": 84,
+                    "margem": 450.00,
+                    "valor_liberado": 12500.00,
+                    "banco": "Banco Itaú",
+                    "tabela": "Tabela Flex"
                 }
             },
             "meta_graph": {
@@ -49,7 +55,12 @@ async def receive_meta_lead(
                     "email": "maria.santos@example.com",
                     "form_name": "Formulário de Leads",
                     "id": "9876543210",
-                    "channel": "facebook_ads"
+                    "channel": "facebook_ads",
+                    "prazo": "84",
+                    "margem": "450.00",
+                    "valor_liberado": "12500.00",
+                    "banco": "Bradesco",
+                    "tabela": "Tabela Normal"
                 }
             }
         }
@@ -62,17 +73,54 @@ async def receive_meta_lead(
     lead_name = payload.get("name") or payload.get("full_name") or "Lead Meta Ads"
     phone = payload.get("phone") or payload.get("phone_number") or "+5511999999999"
     email = payload.get("email")
+    cpf = payload.get("cpf")
     campaign_name = payload.get("campaign_name") or payload.get("form_name") or "Meta Ads Campaign"
     meta_lead_id = payload.get("meta_lead_id") or payload.get("id")
     channel_code = payload.get("channel_code") or payload.get("channel")
+
+    # Extração dos novos campos
+    raw_prazo = payload.get("prazo")
+    raw_margem = payload.get("margem")
+    raw_valor_liberado = payload.get("valor_liberado") or payload.get("valor") or payload.get("valor_emprestimo")
+    banco = payload.get("banco")
+    tabela = payload.get("tabela")
+
+    prazo: Optional[int] = None
+    if raw_prazo is not None:
+        try:
+            prazo = int(raw_prazo)
+        except (ValueError, TypeError):
+            prazo = None
+
+    margem: Optional[float] = None
+    if raw_margem is not None:
+        try:
+            val_str = str(raw_margem).replace(",", ".") if isinstance(raw_margem, str) else raw_margem
+            margem = float(val_str)
+        except (ValueError, TypeError):
+            margem = None
+
+    valor_liberado: Optional[float] = None
+    if raw_valor_liberado is not None:
+        try:
+            val_str = str(raw_valor_liberado).replace(",", ".") if isinstance(raw_valor_liberado, str) else raw_valor_liberado
+            valor_liberado = float(val_str)
+        except (ValueError, TypeError):
+            valor_liberado = None
 
     lead_in = LeadCreate(
         name=lead_name,
         phone=phone,
         email=email,
+        cpf=cpf,
         meta_lead_id=meta_lead_id,
         campaign_name=campaign_name,
         channel_code=channel_code,
+        prazo=prazo,
+        margem=margem,
+        valor_liberado=valor_liberado,
+        banco=str(banco).strip() if banco else None,
+        tabela=str(tabela).strip() if tabela else None,
         status="new"
     )
 
