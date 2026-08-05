@@ -1,7 +1,7 @@
 import uuid
 from typing import Optional
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Boolean
+from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Boolean, Integer, Float
 
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -22,6 +22,12 @@ class Lead(Base):
     campaign_name = Column(String(255), nullable=True)
     product_name = Column(String(255), nullable=True)
     channel_code = Column(String(50), nullable=True, index=True)
+
+    prazo = Column(Integer, nullable=True)
+    margem = Column(Float, nullable=True)
+    valor_liberado = Column(Float, nullable=True)
+    banco = Column(String(100), nullable=True)
+    tabela = Column(String(100), nullable=True)
 
     status = Column(String(50), default="new", nullable=False) # 'new', 'assigned', 'in_progress', 'converted', 'lost', 'expired'
     is_revealed = Column(Boolean, default=False, nullable=False)

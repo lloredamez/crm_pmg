@@ -26,6 +26,12 @@ class LeadBase(BaseModel):
     product: Optional[str] = None
     channel_code: Optional[str] = None
 
+    prazo: Optional[int] = None
+    margem: Optional[float] = None
+    valor_liberado: Optional[float] = None
+    banco: Optional[str] = None
+    tabela: Optional[str] = None
+
     status: str = Field(default="new", pattern="^(new|assigned|in_progress|converted|lost|expired)$")
 
 class LeadCreate(LeadBase):
@@ -38,6 +44,11 @@ class LeadUpdateDetails(BaseModel):
     notes: Optional[str] = None
     verified_cpf: Optional[str] = None
     proposal_number: Optional[str] = None
+    prazo: Optional[int] = None
+    margem: Optional[float] = None
+    valor_liberado: Optional[float] = None
+    banco: Optional[str] = None
+    tabela: Optional[str] = None
 
 class LeadReassign(BaseModel):
     attendant_id: UUID

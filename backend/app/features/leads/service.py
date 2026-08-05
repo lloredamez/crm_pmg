@@ -22,10 +22,20 @@ class LeadService:
         lead = Lead(
             name=lead_in.name,
             phone=lead_in.phone,
+            cpf=lead_in.cpf,
+            verified_cpf=lead_in.verified_cpf,
+            proposal_number=lead_in.proposal_number,
+            notes=lead_in.notes,
             email=lead_in.email,
             meta_lead_id=lead_in.meta_lead_id,
             campaign_name=lead_in.campaign_name,
+            product_name=lead_in.product_name or lead_in.product,
             channel_code=lead_in.channel_code,
+            prazo=lead_in.prazo,
+            margem=lead_in.margem,
+            valor_liberado=lead_in.valor_liberado,
+            banco=lead_in.banco,
+            tabela=lead_in.tabela,
             status="new"
         )
         self.db.add(lead)
@@ -294,7 +304,9 @@ class LeadService:
                     Lead.name.ilike(search_pattern),
                     Lead.phone.ilike(search_pattern),
                     Lead.email.ilike(search_pattern),
-                    Lead.campaign_name.ilike(search_pattern)
+                    Lead.campaign_name.ilike(search_pattern),
+                    Lead.banco.ilike(search_pattern),
+                    Lead.tabela.ilike(search_pattern)
                 )
             )
 
@@ -381,6 +393,16 @@ class LeadService:
             lead.verified_cpf = details.verified_cpf
         if details.proposal_number is not None:
             lead.proposal_number = details.proposal_number
+        if details.prazo is not None:
+            lead.prazo = details.prazo
+        if details.margem is not None:
+            lead.margem = details.margem
+        if details.valor_liberado is not None:
+            lead.valor_liberado = details.valor_liberado
+        if details.banco is not None:
+            lead.banco = details.banco
+        if details.tabela is not None:
+            lead.tabela = details.tabela
 
         lead.last_interaction_at = datetime.now(timezone.utc)
         await self.db.commit()

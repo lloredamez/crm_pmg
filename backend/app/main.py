@@ -53,6 +53,11 @@ async def seed_initial_data():
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS meta_lead_id VARCHAR(255);"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS campaign_name VARCHAR(255);"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS product_name VARCHAR(255);"))
+        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS prazo INTEGER;"))
+        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS margem DOUBLE PRECISION;"))
+        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS valor_liberado DOUBLE PRECISION;"))
+        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS banco VARCHAR(100);"))
+        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS tabela VARCHAR(100);"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS disposition_id UUID REFERENCES dispositions(id) ON DELETE SET NULL;"))
 
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS dispositioned_at TIMESTAMPTZ;"))
