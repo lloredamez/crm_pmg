@@ -88,6 +88,8 @@ async def tabulate_lead(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    if current_user.role in ["manager", "supervisor"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Gerentes e supervisores não podem tabular leads")
     service = DispositionService(db)
     lead = await service.tabulate_lead(lead_id, tabulate_in)
     if not lead:

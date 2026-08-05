@@ -57,7 +57,7 @@ async def create_lead(lead_in: LeadCreate, db: AsyncSession = Depends(get_db)):
 @router.get("", response_model=LeadPaginationResponse)
 async def list_leads(
     page: int = Query(1, ge=1),
-    limit: int = Query(10, ge=1, le=100),
+    limit: int = Query(10, ge=1, le=1000),
     status: Optional[str] = Query(None),
     search: Optional[str] = Query(None),
     attendant_id: Optional[UUID] = Query(None),
@@ -125,8 +125,11 @@ async def update_lead_details(
 @router.post("/{lead_id}/reveal", response_model=LeadResponse)
 async def reveal_lead(
     lead_id: UUID,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    if current_user.role in ["manager", "supervisor"]:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Gerentes e supervisores não podem revelar dados de leads")
     service = LeadService(db)
     lead = await service.reveal_lead(lead_id)
     if not lead:

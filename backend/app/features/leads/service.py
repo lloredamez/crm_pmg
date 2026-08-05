@@ -492,6 +492,12 @@ class LeadService:
         if not lead:
             return None
 
+        target_user = await self.db.get(User, new_attendant_id)
+        if not target_user:
+            raise HTTPException(status_code=404, detail="Atendente destino não encontrado")
+        if target_user.role != "attendant":
+            raise HTTPException(status_code=400, detail="Não é permitido reatribuir leads para gerentes ou supervisores")
+
         old_attendant_id = lead.current_attendant_id
         now = datetime.now(timezone.utc)
 
