@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/features/auth/auth-provider';
 import { Header } from '@/components/layout/header';
 import { KpiCards } from '@/components/dashboard/kpi-cards';
+import { AttendantPerformanceTable } from '@/components/dashboard/attendant-performance-table';
 import { AnalyticsChart } from '@/components/dashboard/analytics-chart';
 import { LeadTable } from '@/components/leads/lead-table';
 import { LeadModal } from '@/components/leads/lead-modal';
@@ -67,16 +68,16 @@ export default function LeadsDashboardPage() {
     : undefined;
 
   const { data: leadsData, refetch: refetchLeads } = useQuery({
-    queryKey: ['leads', page, statusFilter, searchQuery, activeAttendantId, bancoFilter, tabelaFilter],
+    queryKey: ['leads', page, statusFilter, searchQuery, activeAttendantId, bancoFilter, tabelaFilter, activeTab],
     queryFn: () =>
       fetchLeads({
         page,
-        limit: 10,
-        status: statusFilter,
-        search: searchQuery,
-        attendant_id: activeAttendantId,
-        banco: bancoFilter,
-        tabela: tabelaFilter,
+        limit: activeTab === 'overview' ? 500 : 10,
+        status: activeTab === 'overview' ? 'all' : statusFilter,
+        search: activeTab === 'overview' ? undefined : searchQuery,
+        attendant_id: activeTab === 'overview' ? undefined : activeAttendantId,
+        banco: activeTab === 'overview' ? undefined : bancoFilter,
+        tabela: activeTab === 'overview' ? undefined : tabelaFilter,
       }),
     enabled: !!user,
     refetchInterval: 5000, // Automatic real-time polling fallback
@@ -230,51 +231,53 @@ export default function LeadsDashboardPage() {
               </div>
             )}
 
-            {/* Analytics Section */}
-            {activeTab === 'overview' || activeTab === 'analytics' ? (
+            {/* Dashboard View (Overview): Tabela de Desempenho por Atendente */}
+            {activeTab === 'overview' ? (
+              <AttendantPerformanceTable leads={leads} users={users} />
+            ) : activeTab === 'analytics' ? (
               <AnalyticsChart />
-            ) : null}
-
-            {/* Data Grid Section */}
-            <LeadTable
-              leads={leads}
-              users={users}
-              total={total}
-              page={page}
-              pages={pages}
-              onPageChange={setPage}
-              statusFilter={statusFilter}
-              onStatusFilterChange={(st) => {
-                setStatusFilter(st);
-                setPage(1);
-              }}
-              bancoFilter={bancoFilter}
-              onBancoFilterChange={(b) => {
-                setBancoFilter(b);
-                setPage(1);
-              }}
-              tabelaFilter={tabelaFilter}
-              onTabelaFilterChange={(t) => {
-                setTabelaFilter(t);
-                setPage(1);
-              }}
-              attendantFilter={selectedAttendantFilter}
-              onAttendantFilterChange={(attId) => {
-                setSelectedAttendantFilter(attId);
-                setPage(1);
-              }}
-              searchQuery={searchQuery}
-              onSearchChange={(q) => {
-                setSearchQuery(q);
-                setPage(1);
-              }}
-              onOpenLeadModal={(lead) => setSelectedLead(lead)}
-              onOpenDetailsModal={(lead) => setSelectedDetailsLead(lead)}
-              onOpenTabulateModal={(lead) => setSelectedTabulateLead(lead)}
-              onRevealLead={handleRevealLead}
-              onReassignSingle={handleReassignSingle}
-              onBulkReassign={handleBulkReassign}
-            />
+            ) : (
+              /* Leads View: Tabela de Gerenciamento de Leads */
+              <LeadTable
+                leads={leads}
+                users={users}
+                total={total}
+                page={page}
+                pages={pages}
+                onPageChange={setPage}
+                statusFilter={statusFilter}
+                onStatusFilterChange={(st) => {
+                  setStatusFilter(st);
+                  setPage(1);
+                }}
+                bancoFilter={bancoFilter}
+                onBancoFilterChange={(b) => {
+                  setBancoFilter(b);
+                  setPage(1);
+                }}
+                tabelaFilter={tabelaFilter}
+                onTabelaFilterChange={(t) => {
+                  setTabelaFilter(t);
+                  setPage(1);
+                }}
+                attendantFilter={selectedAttendantFilter}
+                onAttendantFilterChange={(attId) => {
+                  setSelectedAttendantFilter(attId);
+                  setPage(1);
+                }}
+                searchQuery={searchQuery}
+                onSearchChange={(q) => {
+                  setSearchQuery(q);
+                  setPage(1);
+                }}
+                onOpenLeadModal={(lead) => setSelectedLead(lead)}
+                onOpenDetailsModal={(lead) => setSelectedDetailsLead(lead)}
+                onOpenTabulateModal={(lead) => setSelectedTabulateLead(lead)}
+                onRevealLead={handleRevealLead}
+                onReassignSingle={handleReassignSingle}
+                onBulkReassign={handleBulkReassign}
+              />
+            )}
           </>
         )}
       </main>

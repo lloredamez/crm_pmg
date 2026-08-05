@@ -5,6 +5,8 @@ import { Lead, Disposition } from '@/features/leads/types';
 import { fetchDispositions, tabulateLead } from '@/features/dispositions/api';
 import { X, Tag, Clock, CheckCircle, AlertCircle, Save } from 'lucide-react';
 
+import { useAuth } from '@/features/auth/auth-provider';
+
 interface TabulateLeadModalProps {
   lead: Lead | null;
   isOpen: boolean;
@@ -18,6 +20,8 @@ export const TabulateLeadModal: React.FC<TabulateLeadModalProps> = ({
   onClose,
   onSuccess,
 }) => {
+  const { user } = useAuth();
+  const isManagerOrSupervisor = user?.role === 'manager' || user?.role === 'supervisor';
   const [dispositions, setDispositions] = useState<Disposition[]>([]);
   const [selectedDispId, setSelectedDispId] = useState<string>('');
   const [notes, setNotes] = useState('');
@@ -66,6 +70,10 @@ export const TabulateLeadModal: React.FC<TabulateLeadModalProps> = ({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isManagerOrSupervisor) {
+      setErrorMsg('Gerentes e supervisores não têm permissão para tabular leads.');
+      return;
+    }
     if (isTerminal) {
       setErrorMsg('Este lead atingiu o final do fluxo e não pode mais ser tabulado.');
       return;

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   useReactTable,
   getCoreRowModel,
@@ -81,6 +81,35 @@ export const LeadTable: React.FC<LeadTableProps> = ({
     { id: 'converted', label: 'Vendas' },
     { id: 'lost', label: 'Perdas' },
   ];
+
+  const allowedReassignUsers = useMemo(() => {
+    // Apenas usuários com papel de 'attendant' podem receber reatribuições
+    const attendantUsers = users.filter((u) => u.role === 'attendant');
+
+    if (!user) return attendantUsers;
+    if (user.role === 'admin') return attendantUsers;
+
+    if (user.role === 'manager') {
+      const managedUnitIds =
+        user.managed_unit_ids || (user.unit_id ? [user.unit_id] : []);
+      if (managedUnitIds.length > 0) {
+        return attendantUsers.filter((u) => u.unit_id && managedUnitIds.includes(u.unit_id));
+      }
+      if (user.unit_id) {
+        return attendantUsers.filter((u) => u.unit_id === user.unit_id);
+      }
+      return attendantUsers;
+    }
+
+    if (user.role === 'supervisor') {
+      if (user.unit_id) {
+        return attendantUsers.filter((u) => u.unit_id === user.unit_id);
+      }
+      return attendantUsers;
+    }
+
+    return attendantUsers;
+  }, [users, user]);
 
   const columns: ColumnDef<Lead>[] = [
     {
@@ -322,25 +351,31 @@ export const LeadTable: React.FC<LeadTableProps> = ({
           dispCategory.includes('fechado') ||
           dispCategory.includes('sem interesse');
 
-        const isTabulateDisabled = !isRevealed || isTerminal;
+        const isManagerOrSupervisorRole = user?.role === 'manager' || user?.role === 'supervisor';
+        const isTabulateDisabled = !isRevealed || isTerminal || isManagerOrSupervisorRole;
+        const isRevealDisabled = isRevealed || isManagerOrSupervisorRole;
 
         return (
           <div className="flex items-center gap-2">
             <button
-              onClick={() => onRevealLead?.(lead)}
-              disabled={isRevealed}
+              onClick={() => !isRevealDisabled && onRevealLead?.(lead)}
+              disabled={isRevealDisabled}
               className={`p-1.5 rounded-lg transition-colors ${
-                isRevealed
+                isManagerOrSupervisorRole
+                  ? 'text-slate-300 bg-slate-50 cursor-not-allowed opacity-40'
+                  : isRevealed
                   ? 'text-emerald-600 bg-emerald-50 cursor-default'
                   : 'text-slate-500 hover:text-brand-600 hover:bg-brand-50'
               }`}
               title={
-                isRevealed
+                isManagerOrSupervisorRole
+                  ? 'Ação de revelar dados restrita a atendentes'
+                  : isRevealed
                   ? 'Dados revelados (Em Contato)'
                   : 'Ver Telefone & CPF (Tabular como Em Contato)'
               }
             >
-              <Eye className={`w-4 h-4 ${isRevealed ? 'text-emerald-600' : 'text-slate-500 hover:text-brand-600'}`} />
+              <Eye className={`w-4 h-4 ${isManagerOrSupervisorRole ? 'text-slate-300' : isRevealed ? 'text-emerald-600' : 'text-slate-500 hover:text-brand-600'}`} />
             </button>
 
             <button
@@ -348,11 +383,13 @@ export const LeadTable: React.FC<LeadTableProps> = ({
               disabled={isTabulateDisabled}
               className={`p-1.5 rounded-lg transition-colors ${
                 isTabulateDisabled
-                  ? 'text-slate-300 bg-slate-50 cursor-not-allowed opacity-50'
+                  ? 'text-slate-300 bg-slate-50 cursor-not-allowed opacity-40'
                   : 'text-slate-500 hover:text-brand-600 hover:bg-brand-50'
               }`}
               title={
-                !isRevealed
+                isManagerOrSupervisorRole
+                  ? 'Ação de tabulação restrita a atendentes'
+                  : !isRevealed
                   ? 'Clique no olho para revelar os dados do lead primeiro'
                   : isTerminal
                   ? 'Lead no final do fluxo (Venda/Perda) - Tabulação desabilitada'
@@ -391,7 +428,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
                 className="text-[11px] bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 text-slate-600 focus:outline-none"
               >
                 <option value="" disabled>Reatribuir...</option>
-                {users.map((u) => (
+                {allowedReassignUsers.map((u: User) => (
                   <option key={u.id} value={u.id}>
                     {u.name} ({u.status})
                   </option>
@@ -536,7 +573,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
                 className="bg-transparent font-medium text-slate-700 focus:outline-none cursor-pointer"
               >
                 <option value="all">Todos os Atendentes</option>
-                {users.map((u) => (
+                {allowedReassignUsers.map((u: User) => (
                   <option key={u.id} value={u.id}>
                     {u.name} ({u.status})
                   </option>
@@ -573,7 +610,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
               className="text-xs bg-white border border-brand-300 rounded-xl px-3 py-1.5 text-slate-800 focus:outline-none"
             >
               <option value="">Selecione o Atendente Destino...</option>
-              {users.map((u) => (
+              {allowedReassignUsers.map((u: User) => (
                 <option key={u.id} value={u.id}>
                   {u.name} ({u.status})
                 </option>
