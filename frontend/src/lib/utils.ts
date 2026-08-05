@@ -34,3 +34,11 @@ export function formatCpf(cpf?: string | null): string {
   return cpf;
 }
 
+export function formatCurrency(value?: number | null): string {
+  if (value === undefined || value === null || isNaN(value)) return "-";
+  return new Intl.NumberFormat("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+  }).format(value);
+}
+

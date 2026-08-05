@@ -2,12 +2,16 @@
 
 import React from 'react';
 import { ArrowUpRight, ArrowDownRight, Clock, Users, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { formatCurrency } from '@/lib/utils';
 
 interface KpiCardsProps {
   totalLeads: number;
   assignedLeads: number;
   convertedLeads: number;
   slaExpiredCount: number;
+  totalValorLiberado?: number;
+  valorLiberadoAtivos?: number;
+  valorLiberadoConvertidos?: number;
 }
 
 export const KpiCards: React.FC<KpiCardsProps> = ({
@@ -15,6 +19,9 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
   assignedLeads,
   convertedLeads,
   slaExpiredCount,
+  totalValorLiberado = 0,
+  valorLiberadoAtivos = 0,
+  valorLiberadoConvertidos = 0,
 }) => {
   const cards = [
     {
@@ -22,7 +29,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       value: totalLeads.toString(),
       badge: '+12%',
       badgeType: 'mint',
-      subtitle: 'vs. 1.240 mês anterior',
+      subtitle: `Total Liberado: ${formatCurrency(totalValorLiberado)}`,
       icon: Users,
     },
     {
@@ -30,7 +37,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       value: assignedLeads.toString(),
       badge: '+4',
       badgeType: 'mint',
-      subtitle: 'primeira resposta < 15 min',
+      subtitle: `Total Liberado: ${formatCurrency(valorLiberadoAtivos)}`,
       icon: Clock,
     },
     {
@@ -38,7 +45,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       value: convertedLeads.toString(),
       badge: '+8.4%',
       badgeType: 'mint',
-      subtitle: 'taxa de conversão 24%',
+      subtitle: `Total Liberado: ${formatCurrency(valorLiberadoConvertidos)}`,
       icon: CheckCircle2,
     },
     {
