@@ -15,7 +15,7 @@ import { TabulateLeadModal } from '@/components/leads/tabulate-lead-modal';
 import { SimulateLeadModal } from '@/components/leads/simulate-lead-modal';
 import { UserManagement } from '@/components/users/user-management';
 import { SettingsPage } from '@/components/settings/settings-page';
-import { fetchLeads, fetchUsers, updateUserStatus, reassignLead, bulkReassignLeads, revealLead } from '@/features/leads/api';
+import { fetchLeads, fetchUsers, updateUserStatus, reassignLead, bulkReassignLeads, revealLead, claimLead } from '@/features/leads/api';
 import { Lead, User } from '@/features/leads/types';
 import { useSocket } from '@/features/socket/socket-provider';
 
@@ -62,7 +62,7 @@ export default function LeadsDashboardPage() {
 
   // Fetch Leads with Role & Custom Header Filters
   const activeAttendantId = isAttendant
-    ? user?.id
+    ? (statusFilter === 'new' ? undefined : user?.id)
     : selectedAttendantFilter !== 'all'
     ? selectedAttendantFilter
     : undefined;
@@ -173,13 +173,17 @@ export default function LeadsDashboardPage() {
   // Compute KPI metrics dynamically
   const activeLeads = leads.filter((l) => l.status === 'assigned' || l.status === 'in_progress');
   const convertedLeadsList = leads.filter((l) => l.status === 'converted');
+  const lostLeadsList = leads.filter(
+    (l) => l.status === 'lost' || l.disposition?.category?.toLowerCase().includes('perda')
+  );
   const assignedLeadsCount = activeLeads.length;
   const convertedLeadsCount = convertedLeadsList.length;
-  const expiredSlaCount = leads.filter((l) => l.status === 'expired').length;
+  const lostLeadsCount = lostLeadsList.length;
 
   const totalValorLiberado = leads.reduce((sum, l) => sum + (l.valor_liberado || 0), 0);
   const valorLiberadoAtivos = activeLeads.reduce((sum, l) => sum + (l.valor_liberado || 0), 0);
   const valorLiberadoConvertidos = convertedLeadsList.reduce((sum, l) => sum + (l.valor_liberado || 0), 0);
+  const valorLiberadoPerdidos = lostLeadsList.reduce((sum, l) => sum + (l.valor_liberado || 0), 0);
 
   const handleRevealLead = async (lead: Lead) => {
     if (lead.is_revealed) return;
@@ -188,6 +192,16 @@ export default function LeadsDashboardPage() {
       refetchLeads();
     } catch (err) {
       console.error('Erro ao revelar lead:', err);
+    }
+  };
+
+  const handleClaimLead = async (leadId: string) => {
+    try {
+      await claimLead(leadId);
+      queryClient.invalidateQueries({ queryKey: ['leads'] });
+      refetchLeads();
+    } catch (err: any) {
+      alert(err.message || 'Erro ao pegar lead do balde');
     }
   };
 
@@ -216,10 +230,11 @@ export default function LeadsDashboardPage() {
               totalLeads={total}
               assignedLeads={assignedLeadsCount}
               convertedLeads={convertedLeadsCount}
-              slaExpiredCount={expiredSlaCount}
+              lostLeads={lostLeadsCount}
               totalValorLiberado={totalValorLiberado}
               valorLiberadoAtivos={valorLiberadoAtivos}
               valorLiberadoConvertidos={valorLiberadoConvertidos}
+              valorLiberadoPerdidos={valorLiberadoPerdidos}
             />
 
             {/* Role Filter Notice */}
@@ -274,6 +289,7 @@ export default function LeadsDashboardPage() {
                 onOpenDetailsModal={(lead) => setSelectedDetailsLead(lead)}
                 onOpenTabulateModal={(lead) => setSelectedTabulateLead(lead)}
                 onRevealLead={handleRevealLead}
+                onClaimLead={handleClaimLead}
                 onReassignSingle={handleReassignSingle}
                 onBulkReassign={handleBulkReassign}
               />

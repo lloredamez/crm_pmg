@@ -108,6 +108,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('access_token', newToken);
       setToken(newToken);
       setUser(userData);
+      setIsLoading(false);
       router.push('/leads');
     } catch (error: any) {
       setIsLoading(false);

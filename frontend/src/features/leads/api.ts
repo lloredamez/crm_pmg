@@ -133,6 +133,17 @@ export async function revealLead(leadId: string): Promise<Lead> {
   return handleResponse<Lead>(res);
 }
 
+export async function claimLead(leadId: string): Promise<Lead> {
+  const API_URL = getApiUrl();
+  const res = await fetch(`${API_URL}/api/v1/leads/${leadId}/claim`, {
+    method: 'POST',
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  return handleResponse<Lead>(res);
+}
+
 export async function reassignLead(leadId: string, attendantId: string): Promise<Lead> {
   const API_URL = getApiUrl();
   const res = await fetch(`${API_URL}/api/v1/leads/${leadId}/reassign`, {
