@@ -36,10 +36,13 @@ async def emit_lead_assigned(attendant_id: str, lead_data: dict):
     await sio.emit("leads:updated", lead_data)  # Broadcast grid update
 
 async def emit_lead_reassigned(old_attendant_id: str, new_attendant_id: str, lead_data: dict):
-    if old_attendant_id:
+    if old_attendant_id and old_attendant_id != new_attendant_id:
         await sio.emit("lead:timeout_removed", {"lead_id": lead_data.get("id"), "reason": "SLA Timeout Exceeded"}, room=f"user_{old_attendant_id}")
-    if new_attendant_id:
+    if new_attendant_id and old_attendant_id != new_attendant_id:
         await sio.emit("lead:assigned", lead_data, room=f"user_{new_attendant_id}")
+    await sio.emit("leads:updated", lead_data)
+
+async def emit_lead_updated(lead_data: dict):
     await sio.emit("leads:updated", lead_data)
 
 async def emit_sla_warning(attendant_id: str, lead_data: dict):

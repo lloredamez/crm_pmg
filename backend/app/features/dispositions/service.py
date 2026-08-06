@@ -189,7 +189,7 @@ class DispositionService:
 
         # Trigger WebSocket update event
         try:
-            from app.core.socket_manager import emit_lead_reassigned
+            from app.core.socket_manager import emit_lead_updated
             lead_dict = {
                 "id": str(lead.id),
                 "name": lead.name,
@@ -199,11 +199,7 @@ class DispositionService:
                 "assigned_at": lead.assigned_at.isoformat() if lead.assigned_at else None,
                 "attendant_name": lead.current_attendant.name if lead.current_attendant else ""
             }
-            await emit_lead_reassigned(
-                str(lead.current_attendant_id) if lead.current_attendant_id else "",
-                str(lead.current_attendant_id) if lead.current_attendant_id else "",
-                lead_dict
-            )
+            await emit_lead_updated(lead_dict)
         except Exception:
             pass
 

@@ -18,11 +18,6 @@ celery_app.conf.update(
     timezone="UTC",
     enable_utc=True,
     beat_schedule={
-        "process-unassigned-leads-every-2-min": {
-            "task": "process_unassigned_leads",
-            "schedule": 120.0,
-            "args": (50,)
-        },
         "check-disposition-timeouts-every-30-sec": {
             "task": "check_disposition_timeouts",
             "schedule": 30.0,

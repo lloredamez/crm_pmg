@@ -172,3 +172,12 @@ async def get_lead_history(
         raise HTTPException(status_code=404, detail="Lead não encontrado")
     return await service.get_lead_history(lead_id)
 
+@router.post("/{lead_id}/claim", response_model=LeadResponse)
+async def claim_lead(
+    lead_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    service = LeadService(db)
+    return await service.claim_lead(lead_id, current_user)
+

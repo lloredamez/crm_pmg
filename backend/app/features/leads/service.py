@@ -41,13 +41,14 @@ class LeadService:
         self.db.add(lead)
         await self.db.flush()
 
-        # Distribute via Round-Robin / Capacity Balance
-        assigned_user = await self.distribute_lead(lead)
+        # Novos leads vão diretamente para o Balde de Leads sem distribuição automática
+        lead.status = "new"
+        lead.current_attendant_id = None
         await self.db.commit()
         await self.db.refresh(lead)
 
-        if assigned_user:
-            # Trigger Socket Event
+        try:
+            from app.core.socket_manager import emit_lead_updated
             lead_dict = {
                 "id": str(lead.id),
                 "name": lead.name,
@@ -55,20 +56,11 @@ class LeadService:
                 "email": lead.email,
                 "campaign_name": lead.campaign_name,
                 "status": lead.status,
-                "assigned_at": lead.assigned_at.isoformat() if lead.assigned_at else None,
-                "attendant_name": assigned_user.name
+                "created_at": lead.created_at.isoformat() if lead.created_at else None,
             }
-            await emit_lead_assigned(str(assigned_user.id), lead_dict)
-
-            # Enqueue SLA Timeout Worker Task
-            try:
-                from app.workers.sla_tasks import check_lead_sla_timeout
-                check_lead_sla_timeout.apply_async(
-                    args=[str(lead.id)],
-                    countdown=1 * 60 # 1 min timeout
-                )
-            except Exception as e:
-                pass
+            await emit_lead_updated(lead_dict)
+        except Exception:
+            pass
 
         return lead
 
@@ -107,119 +99,10 @@ class LeadService:
         return user_load[0][2]
 
     async def distribute_lead(self, lead: Lead, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
-        from app.models.unit import Unit
-        from app.models.channel import Channel
-        from sqlalchemy import nullsfirst
-
-        now = datetime.now(timezone.utc)
-        selected_user: Optional[User] = None
-        target_unit: Optional[Unit] = None
-
-        # Cenário 1: Lead já possui unit_id específico vinculado na origem
-        if lead.unit_id:
-            unit_res = await self.db.execute(
-                select(Unit)
-                .where(Unit.id == lead.unit_id, Unit.is_active.is_(True)))
-            target_unit = unit_res.scalar_one_or_none()
-            if target_unit:
-                selected_user = await self._find_eligible_attendant_for_unit(target_unit.id, exclude_user_id=exclude_user_id)
-
-        # Cenário 1.5: Lead especifica um canal (ex: GOOGLE_ADS) - direciona apenas às unidades vinculadas a esse canal
-        if not selected_user and lead.channel_code:
-            chan_res = await self.db.execute(
-                select(Channel)
-                .options(selectinload(Channel.units))
-                .where(Channel.code == lead.channel_code.upper().strip(), Channel.is_active.is_(True))
-            )
-            channel = chan_res.scalar_one_or_none()
-            if channel and channel.units:
-                eligible_units = [u for u in channel.units if u.is_active]
-                eligible_units.sort(key=lambda u: (u.last_assigned_at or datetime.min.replace(tzinfo=timezone.utc), u.code))
-                for unit in eligible_units:
-                    user = await self._find_eligible_attendant_for_unit(unit.id, exclude_user_id=exclude_user_id)
-                    if user:
-                        selected_user = user
-                        target_unit = unit
-                        break
-
-        # Cenário 2: Esteira Geral (ou Transbordo se a unidade de origem/canal não tiver consultores online)
-        if not selected_user:
-            units_res = await self.db.execute(
-                select(Unit)
-                .where(Unit.is_active.is_(True))
-                .order_by(nullsfirst(Unit.last_assigned_at.asc()), Unit.code.asc())
-            )
-            units = list(units_res.scalars().all())
-
-            for unit in units:
-                user = await self._find_eligible_attendant_for_unit(unit.id, exclude_user_id=exclude_user_id)
-                if user:
-                    selected_user = user
-                    target_unit = unit
-                    break
-
-        # Cenário 3: Atendentes Globais (sem unidade vinculada) como reserva de contingência
-        if not selected_user:
-            query_global = select(User).where(
-                User.status == "online",
-                User.unit_id.is_(None),
-                User.role.in_(["attendant"])
-            )
-            if exclude_user_id:
-                query_global = query_global.where(User.id != exclude_user_id)
-
-            global_users_res = await self.db.execute(query_global)
-            global_users = list(global_users_res.scalars().all())
-            user_load = []
-            for u in global_users:
-                count_res = await self.db.execute(
-                    select(func.count(Lead.id)).where(
-                        Lead.current_attendant_id == u.id,
-                        Lead.status.in_(["assigned", "in_progress"])
-                    )
-                )
-                cnt = count_res.scalar() or 0
-                if cnt < u.max_simultaneous_leads:
-                    last_assigned = u.last_assigned_at or datetime.min.replace(tzinfo=timezone.utc)
-                    user_load.append((cnt, last_assigned, u))
-            if user_load:
-                user_load.sort(key=lambda x: (x[1], x[0]))
-                selected_user = user_load[0][2]
-
-        if not selected_user:
-            lead.status = "new"
-            return None
-
-        # Aplica a atribuição do lead
-        if target_unit:
-            lead.unit_id = target_unit.id
-            target_unit.last_assigned_at = now
-
-        lead.current_attendant_id = selected_user.id
-        lead.status = "assigned"
-        lead.assigned_at = now
-        selected_user.last_assigned_at = now
-
-        # Registra histórico de atribuição
-        assignment = LeadAssignment(
-            lead_id=lead.id,
-            attendant_id=selected_user.id,
-            status="active",
-            assigned_at=now
-        )
-        self.db.add(assignment)
-
-        # Enqueue SLA Timeout Worker Task for the newly assigned attendant
-        try:
-            from app.workers.sla_tasks import check_lead_sla_timeout
-            check_lead_sla_timeout.apply_async(
-                args=[str(lead.id)],
-                countdown=1 * 60 # 1 min timeout
-            )
-        except Exception:
-            pass
-
-        return selected_user
+        # Distribuição automática desativada: todos os leads permanecem no Balde até o resgate manual pelo atendente
+        lead.status = "new"
+        lead.current_attendant_id = None
+        return None
 
     async def get_lead_by_id(self, lead_id: UUID, current_user: Optional[User] = None) -> Optional[Lead]:
         query = select(Lead).options(selectinload(Lead.current_attendant), selectinload(Lead.unit), selectinload(Lead.disposition)).where(Lead.id == lead_id)
@@ -270,33 +153,65 @@ class LeadService:
 
         # Role-based filtering
         if current_user:
+            is_balde_filter = status_filter and status_filter.lower() in ["new", "balde"]
+
             if current_user.role == "manager":
                 managed_unit_ids = [u.id for u in current_user.managed_units] if current_user.managed_units else []
                 if managed_unit_ids:
-                    query = query.outerjoin(User, Lead.current_attendant_id == User.id).where(
-                        or_(
-                            Lead.unit_id.in_(managed_unit_ids),
-                            User.unit_id.in_(managed_unit_ids)
+                    if is_balde_filter:
+                        query = query.outerjoin(User, Lead.current_attendant_id == User.id).where(
+                            or_(
+                                Lead.current_attendant_id.is_(None),
+                                Lead.unit_id.in_(managed_unit_ids),
+                                User.unit_id.in_(managed_unit_ids)
+                            )
                         )
-                    )
+                    else:
+                        query = query.outerjoin(User, Lead.current_attendant_id == User.id).where(
+                            or_(
+                                Lead.unit_id.in_(managed_unit_ids),
+                                User.unit_id.in_(managed_unit_ids)
+                            )
+                        )
                 else:
-                    query = query.where(False)
+                    if is_balde_filter:
+                        query = query.where(Lead.current_attendant_id.is_(None))
+                    else:
+                        query = query.where(False)
             elif current_user.role == "supervisor":
                 if current_user.unit_id:
-                    query = query.outerjoin(User, Lead.current_attendant_id == User.id).where(
-                        or_(
-                            Lead.unit_id == current_user.unit_id,
-                            User.unit_id == current_user.unit_id
+                    if is_balde_filter:
+                        query = query.outerjoin(User, Lead.current_attendant_id == User.id).where(
+                            or_(
+                                Lead.current_attendant_id.is_(None),
+                                Lead.unit_id == current_user.unit_id,
+                                User.unit_id == current_user.unit_id
+                            )
                         )
-                    )
+                    else:
+                        query = query.outerjoin(User, Lead.current_attendant_id == User.id).where(
+                            or_(
+                                Lead.unit_id == current_user.unit_id,
+                                User.unit_id == current_user.unit_id
+                            )
+                        )
+                else:
+                    if is_balde_filter:
+                        query = query.where(Lead.current_attendant_id.is_(None))
             elif current_user.role == "attendant":
-                query = query.where(Lead.current_attendant_id == current_user.id)
+                if is_balde_filter:
+                    query = query.where(or_(Lead.current_attendant_id == current_user.id, Lead.current_attendant_id.is_(None)))
+                else:
+                    query = query.where(Lead.current_attendant_id == current_user.id)
             # admin has no restrictions
 
         if status_filter and status_filter.lower() != "all":
-            query = query.where(Lead.status == status_filter.lower())
+            if status_filter.lower() in ["new", "balde"]:
+                query = query.where(or_(Lead.status.in_(["new", "expired"]), Lead.current_attendant_id.is_(None)))
+            else:
+                query = query.where(Lead.status == status_filter.lower())
 
-        if attendant_id:
+        if attendant_id and (not status_filter or status_filter.lower() not in ["new", "balde"]):
             query = query.where(Lead.current_attendant_id == attendant_id)
 
         if banco_filter and banco_filter.lower() != "all":
@@ -311,6 +226,8 @@ class LeadService:
                 or_(
                     Lead.name.ilike(search_pattern),
                     Lead.phone.ilike(search_pattern),
+                    Lead.cpf.ilike(search_pattern),
+                    Lead.verified_cpf.ilike(search_pattern),
                     Lead.email.ilike(search_pattern),
                     Lead.campaign_name.ilike(search_pattern),
                     Lead.banco.ilike(search_pattern),
@@ -332,47 +249,8 @@ class LeadService:
         return leads, total
 
     async def process_pending_unassigned_leads(self, limit: int = 50) -> int:
-        result = await self.db.execute(
-            select(Lead)
-            .where(Lead.status == "new")
-            .order_by(Lead.created_at.asc())
-            .limit(limit)
-        )
-        pending_leads = list(result.scalars().all())
-        if not pending_leads:
-            return 0
-
-        assigned_count = 0
-        for lead in pending_leads:
-            assigned_user = await self.distribute_lead(lead)
-            if assigned_user:
-                assigned_count += 1
-                await self.db.flush()
-                lead_dict = {
-                    "id": str(lead.id),
-                    "name": lead.name,
-                    "phone": lead.phone,
-                    "email": lead.email,
-                    "campaign_name": lead.campaign_name,
-                    "status": lead.status,
-                    "assigned_at": lead.assigned_at.isoformat() if lead.assigned_at else None,
-                    "attendant_name": assigned_user.name
-                }
-                await emit_lead_assigned(str(assigned_user.id), lead_dict)
-
-                try:
-                    from app.workers.sla_tasks import check_lead_sla_timeout
-                    check_lead_sla_timeout.apply_async(
-                        args=[str(lead.id)],
-                        countdown=15 * 60
-                    )
-                except Exception as e:
-                    pass
-
-        if assigned_count > 0:
-            await self.db.commit()
-
-        return assigned_count
+        # Leads no balde não são distribuídos automaticamente; permanecem no balde até o resgate manual pelo atendente.
+        return 0
 
     async def update_status(self, lead_id: UUID, new_status: str) -> Optional[Lead]:
         lead = await self.get_lead_by_id(lead_id)
@@ -466,7 +344,7 @@ class LeadService:
         await self.db.refresh(lead)
 
         try:
-            from app.core.socket_manager import emit_lead_reassigned
+            from app.core.socket_manager import emit_lead_updated
             lead_dict = {
                 "id": str(lead.id),
                 "name": lead.name,
@@ -477,11 +355,7 @@ class LeadService:
                 "assigned_at": lead.assigned_at.isoformat() if lead.assigned_at else None,
                 "attendant_name": lead.current_attendant.name if lead.current_attendant else ""
             }
-            await emit_lead_reassigned(
-                str(lead.current_attendant_id) if lead.current_attendant_id else "",
-                str(lead.current_attendant_id) if lead.current_attendant_id else "",
-                lead_dict
-            )
+            await emit_lead_updated(lead_dict)
         except Exception:
             pass
 
@@ -542,6 +416,73 @@ class LeadService:
             "attendant_name": new_attendant.name if new_attendant else ""
         }
         await emit_lead_reassigned(str(old_attendant_id) if old_attendant_id else "", str(new_attendant_id), lead_dict)
+
+        return lead
+
+    async def claim_lead(self, lead_id: UUID, current_user: User) -> Lead:
+        from fastapi import HTTPException
+        lead = await self.db.get(Lead, lead_id)
+        if not lead:
+            raise HTTPException(status_code=404, detail="Lead não encontrado")
+
+        if lead.current_attendant_id is not None and lead.status not in ["new", "expired"]:
+            raise HTTPException(status_code=400, detail="Este lead já está atribuído a outro atendente")
+
+        # Checagem de capacidade caso o usuário seja atendente
+        if current_user.role == "attendant":
+            active_count_res = await self.db.execute(
+                select(func.count(Lead.id)).where(
+                    Lead.current_attendant_id == current_user.id,
+                    Lead.status.in_(["assigned", "in_progress"])
+                )
+            )
+            cnt = active_count_res.scalar() or 0
+            if cnt >= current_user.max_simultaneous_leads:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Você já atingiu seu limite máximo de leads simultâneos ({current_user.max_simultaneous_leads}). Finalize um atendimento antes de pegar novos leads."
+                )
+
+        now = datetime.now(timezone.utc)
+        lead.current_attendant_id = current_user.id
+        lead.status = "assigned"
+        lead.assigned_at = now
+        current_user.last_assigned_at = now
+
+        new_assignment = LeadAssignment(
+            lead_id=lead.id,
+            attendant_id=current_user.id,
+            status="active",
+            assigned_at=now
+        )
+        self.db.add(new_assignment)
+        await self.db.commit()
+        await self.db.refresh(lead)
+
+        # Agenda a verificação de SLA para o lead resgatado
+        try:
+            from app.workers.sla_tasks import check_lead_sla_timeout
+            check_lead_sla_timeout.apply_async(
+                args=[str(lead.id)],
+                countdown=1 * 60 # 1 min timeout
+            )
+        except Exception:
+            pass
+
+        # Dispara notificação via Socket
+        try:
+            lead_dict = {
+                "id": str(lead.id),
+                "name": lead.name,
+                "phone": lead.phone,
+                "email": lead.email,
+                "status": lead.status,
+                "assigned_at": lead.assigned_at.isoformat() if lead.assigned_at else None,
+                "attendant_name": current_user.name
+            }
+            await emit_lead_assigned(str(current_user.id), lead_dict)
+        except Exception:
+            pass
 
         return lead
 

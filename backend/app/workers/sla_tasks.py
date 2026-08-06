@@ -49,15 +49,10 @@ async def _async_check_lead_sla(lead_id_str: str):
                 .values(status="expired_timeout", unassigned_at=now)
             )
 
-        # Clear current assignment and re-distribute
+        # Ao estourar o SLA, limpa o atendente atual e envia o lead de volta ao Balde
         lead.current_attendant_id = None
-        await session.flush()
-        service = LeadService(session)
-        new_attendant = await service.distribute_lead(lead, exclude_user_id=old_attendant_id)
-        
-        action_taken = "reallocated" if new_attendant else "marked_expired"
-        if not new_attendant:
-            lead.status = "expired"
+        lead.status = "new"
+        action_taken = "sent_to_balde"
 
         # Registrar o evento de estouro de SLA
         sla_breach = SlaBreach(
@@ -82,16 +77,16 @@ async def _async_check_lead_sla(lead_id_str: str):
                 "name": lead.name,
                 "phone": lead.phone,
                 "status": lead.status,
-                "assigned_at": lead.assigned_at.isoformat() if lead.assigned_at else None,
-                "attendant_name": new_attendant.name if new_attendant else ""
+                "assigned_at": None,
+                "attendant_name": ""
             }
             await emit_lead_reassigned(
                 str(old_attendant_id) if old_attendant_id else "",
-                str(new_attendant.id) if new_attendant else "",
+                "",
                 lead_dict
             )
         except Exception as e:
-            logger.error(f"Failed to emit socket notification during SLA reallocation: {e}")
+            logger.error(f"Failed to emit socket notification during SLA timeout: {e}")
 
 @celery_app.task(name="check_lead_sla_timeout")
 def check_lead_sla_timeout(lead_id: str):
@@ -134,11 +129,8 @@ async def _async_check_disposition_timeouts():
 
             lead.current_attendant_id = None
             lead.disposition_timeout_at = None
-            await session.flush()
-            new_attendant = await service.distribute_lead(lead, exclude_user_id=old_attendant_id)
-            action_taken = "reallocated" if new_attendant else "marked_expired"
-            if not new_attendant:
-                lead.status = "expired"
+            lead.status = "new"
+            action_taken = "sent_to_balde"
 
             # Registrar o evento de estouro de SLA de tabulacao
             sla_breach = SlaBreach(
@@ -155,7 +147,6 @@ async def _async_check_disposition_timeouts():
             await session.commit()
             await session.refresh(lead)
 
-
             try:
                 from app.core.socket_manager import emit_lead_reassigned
                 lead_dict = {
@@ -163,12 +154,12 @@ async def _async_check_disposition_timeouts():
                     "name": lead.name,
                     "phone": lead.phone,
                     "status": lead.status,
-                    "assigned_at": lead.assigned_at.isoformat() if lead.assigned_at else None,
-                    "attendant_name": new_attendant.name if new_attendant else ""
+                    "assigned_at": None,
+                    "attendant_name": ""
                 }
                 await emit_lead_reassigned(
                     str(old_attendant_id) if old_attendant_id else "",
-                    str(new_attendant.id) if new_attendant else "",
+                    "",
                     lead_dict
                 )
             except Exception:
