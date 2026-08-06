@@ -1,27 +1,29 @@
 'use client';
 
 import React from 'react';
-import { ArrowUpRight, ArrowDownRight, Clock, Users, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Clock, Users, CheckCircle2, XCircle } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 
 interface KpiCardsProps {
   totalLeads: number;
   assignedLeads: number;
   convertedLeads: number;
-  slaExpiredCount: number;
+  lostLeads?: number;
   totalValorLiberado?: number;
   valorLiberadoAtivos?: number;
   valorLiberadoConvertidos?: number;
+  valorLiberadoPerdidos?: number;
 }
 
 export const KpiCards: React.FC<KpiCardsProps> = ({
   totalLeads,
   assignedLeads,
   convertedLeads,
-  slaExpiredCount,
+  lostLeads = 0,
   totalValorLiberado = 0,
   valorLiberadoAtivos = 0,
   valorLiberadoConvertidos = 0,
+  valorLiberadoPerdidos = 0,
 }) => {
   const cards = [
     {
@@ -49,12 +51,12 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
       icon: CheckCircle2,
     },
     {
-      title: 'Estouro SLA / Realocados',
-      value: slaExpiredCount.toString(),
-      badge: '-8%',
+      title: 'Leads Perdidos',
+      value: lostLeads.toString(),
+      badge: '-5.2%',
       badgeType: 'pink',
-      subtitle: 'revertidos por timeout',
-      icon: AlertTriangle,
+      subtitle: `Total Perdido: ${formatCurrency(valorLiberadoPerdidos)}`,
+      icon: XCircle,
     },
   ];
 
@@ -76,7 +78,7 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
 
             <div className="flex items-baseline justify-between gap-2">
               <h3 className="text-2xl font-bold text-slate-900 tracking-tight">{card.value}</h3>
-              <span
+              {/*<span
                 className={
                   card.badgeType === 'mint'
                     ? 'badge-mint'
@@ -89,8 +91,8 @@ export const KpiCards: React.FC<KpiCardsProps> = ({
                   <ArrowDownRight className="w-3 h-3 text-rose-600" />
                 )}
                 {card.badge}
-              </span>
-            </div>
+              </span>*/
+            }</div>
 
             <p className="text-slate-400 text-xs mt-2 font-normal">{card.subtitle}</p>
           </div>
