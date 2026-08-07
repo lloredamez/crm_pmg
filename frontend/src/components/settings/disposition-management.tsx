@@ -254,14 +254,25 @@ export const DispositionManagement: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-                {dispositions.map((disp) => (
-                  <tr key={disp.id} className="hover:bg-slate-50/50 transition-colors">
-                    <td className="py-3.5 px-4 font-bold text-slate-900">{disp.name}</td>
-                    <td className="py-3.5 px-4">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700">
-                        {disp.category}
-                      </span>
-                    </td>
+                {dispositions.map((disp) => {
+                  const isSemTabulacao = disp.category === 'Sem Tabulação' || disp.name.toLowerCase().includes('sem tabulação');
+                  return (
+                    <tr key={disp.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="py-3.5 px-4 font-bold text-slate-900">
+                        <div className="flex items-center gap-2">
+                          <span>{disp.name}</span>
+                          {isSemTabulacao && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
+                              SLA Inicial
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700">
+                          {disp.category}
+                        </span>
+                      </td>
                     <td className="py-3.5 px-4">
                       {disp.has_timeout ? (
                         <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold">
@@ -306,7 +317,8 @@ export const DispositionManagement: React.FC = () => {
                       </div>
                     </td>
                   </tr>
-                ))}
+                );
+                })}
               </tbody>
             </table>
           </div>
