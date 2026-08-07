@@ -56,7 +56,7 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     socketInstance.on('connect', () => {
       setIsConnected(true);
       if (typeof window !== 'undefined') {
-        const storedUser = localStorage.getItem('user');
+        const storedUser = sessionStorage.getItem('user');
         if (storedUser) {
           try {
             const parsed = JSON.parse(storedUser);

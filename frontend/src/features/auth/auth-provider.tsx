@@ -40,7 +40,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const router = useRouter();
 
   useEffect(() => {
-    const storedToken = localStorage.getItem('access_token');
+    // Limpar resíduos legados do localStorage
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('user');
+
+    const storedToken = sessionStorage.getItem('access_token');
     if (storedToken) {
       setToken(storedToken);
       fetchMe(storedToken);
@@ -48,6 +52,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (user?.id && token) {
+        const apiUrl = getApiUrl();
+        fetch(`${apiUrl}/api/v1/users/${user.id}/status`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: 'offline' }),
+          keepalive: true,
+        }).catch(() => {});
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [user, token]);
 
   const fetchMe = async (authToken: string) => {
     const apiUrl = getApiUrl();
@@ -60,6 +86,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (res.ok) {
         const userData = await res.json();
         setUser(userData);
+        sessionStorage.setItem('user', JSON.stringify(userData));
       } else {
         logout();
       }
@@ -98,7 +125,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const newToken = data.access_token;
       const userData = data.user;
 
-      localStorage.setItem('access_token', newToken);
+      sessionStorage.setItem('access_token', newToken);
+      sessionStorage.setItem('user', JSON.stringify(userData));
       setToken(newToken);
       setUser(userData);
       setIsLoading(false);
@@ -112,8 +140,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    if (user?.id && token) {
+      try {
+        const apiUrl = getApiUrl();
+        await fetch(`${apiUrl}/api/v1/users/${user.id}/status`, {
+          method: 'PATCH',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ status: 'offline' }),
+        });
+      } catch (e) {
+        console.error('Erro ao definir status offline:', e);
+      }
+    }
+    sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('user');
     localStorage.removeItem('access_token');
+    localStorage.removeItem('user');
     setToken(null);
     setUser(null);
     setIsLoading(false);

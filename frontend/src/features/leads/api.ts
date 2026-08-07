@@ -3,7 +3,7 @@ import { getApiUrl } from '@/lib/config';
 
 const getAuthHeaders = (): Record<string, string> => {
   if (typeof window !== 'undefined') {
-    const token = localStorage.getItem('access_token');
+    const token = sessionStorage.getItem('access_token');
     if (token) {
       return { Authorization: `Bearer ${token}` };
     }
