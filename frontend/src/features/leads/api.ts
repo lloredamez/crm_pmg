@@ -100,6 +100,8 @@ export async function updateLeadStatus(leadId: string, status: string): Promise<
 export async function updateLeadDetails(
   leadId: string,
   details: {
+    name?: string;
+    phone?: string;
     notes?: string;
     verified_cpf?: string;
     proposal_number?: string;

@@ -5,6 +5,7 @@ export interface User {
   id: string;
   name: string;
   email: string;
+  cpf?: string | null;
   role: UserRole;
   status: UserStatus;
   max_simultaneous_leads: number;
@@ -83,6 +84,7 @@ export interface Lead {
   dispositioned_at?: string | null;
 
   disposition_timeout_at?: string | null;
+  unassigned_sla_minutes?: number | null;
   assigned_at?: string | null;
   last_interaction_at?: string | null;
   created_at: string;
