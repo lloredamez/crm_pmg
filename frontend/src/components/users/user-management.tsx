@@ -20,6 +20,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
   const { token } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [cpf, setCpf] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('attendant');
   const [maxLeads, setMaxLeads] = useState(10);
@@ -33,6 +34,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [editName, setEditName] = useState('');
   const [editEmail, setEditEmail] = useState('');
+  const [editCpf, setEditCpf] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [editRole, setEditRole] = useState('attendant');
   const [editMaxLeads, setEditMaxLeads] = useState(10);
@@ -83,6 +85,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
     setEditingUser(user);
     setEditName(user.name);
     setEditEmail(user.email);
+    setEditCpf(user.cpf || '');
     setEditPassword('');
     setEditRole(user.role);
     setEditMaxLeads(user.max_simultaneous_leads);
@@ -100,6 +103,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
       const payload: any = {
         name,
         email,
+        cpf: cpf.trim() || null,
         password,
         role,
         max_simultaneous_leads: Number(maxLeads),
@@ -128,6 +132,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
       setMessage(`Usuário ${name} cadastrado com sucesso!`);
       setName('');
       setEmail('');
+      setCpf('');
       setPassword('');
       onRefresh();
     } catch (err: any) {
@@ -147,6 +152,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
       const payload: any = {
         name: editName,
         email: editEmail,
+        cpf: editCpf.trim() || null,
         role: editRole,
         max_simultaneous_leads: Number(editMaxLeads),
       };
@@ -269,6 +275,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
             </div>
 
             <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">CPF</label>
+              <input
+                type="text"
+                placeholder="000.000.000-00"
+                value={cpf}
+                onChange={(e) => setCpf(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+              />
+            </div>
+
+            <div>
               <label className="block text-xs font-semibold text-slate-700 mb-1">Senha Inicial</label>
               <input
                 type="password"
@@ -366,6 +383,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 text-[11px] font-semibold uppercase tracking-wider">
                   <th className="py-3 px-4">Nome / E-mail</th>
+                  <th className="py-3 px-4">CPF</th>
                   <th className="py-3 px-4">Perfil</th>
                   <th className="py-3 px-4">Unidade(s)</th>
                   <th className="py-3 px-4">Status</th>
@@ -389,6 +407,9 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                       <td className="py-3 px-4 font-medium text-slate-900">
                         <div>{u.name}</div>
                         <div className="text-[11px] text-slate-400 font-normal">{u.email}</div>
+                      </td>
+                      <td className="py-3 px-4 font-mono text-[11px] text-slate-600">
+                        {u.cpf || '-'}
                       </td>
                       <td className="py-3 px-4">{getRoleBadge(u.role)}</td>
                       <td className="py-3 px-4 font-medium text-slate-600">
@@ -471,6 +492,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                   placeholder="pedro@crmleads.com"
                   value={editEmail}
                   onChange={(e) => setEditEmail(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">CPF</label>
+                <input
+                  type="text"
+                  placeholder="000.000.000-00"
+                  value={editCpf}
+                  onChange={(e) => setEditCpf(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                 />
               </div>
