@@ -12,12 +12,20 @@ class TokenPayload(BaseModel):
     sub: Optional[str] = None
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: Optional[str] = None
+    username: Optional[str] = None
+    cpf: Optional[str] = None
+    identifier: Optional[str] = None
     password: str = Field(..., min_length=4)
+
+    @property
+    def get_login_identifier(self) -> str:
+        return (self.identifier or self.email or self.username or self.cpf or "").strip()
 
 class UserCreateWithPassword(BaseModel):
     name: str = Field(..., min_length=2, max_length=255)
     email: EmailStr
+    cpf: Optional[str] = Field(None, max_length=14)
     password: str = Field(..., min_length=4)
     role: str = Field(default="attendant", pattern="^(admin|manager|supervisor|attendant)$")
     status: str = Field(default="offline", pattern="^(online|offline|busy)$")

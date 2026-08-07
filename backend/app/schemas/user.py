@@ -6,6 +6,7 @@ from pydantic import BaseModel, EmailStr, Field
 class UserBase(BaseModel):
     name: str = Field(..., min_length=2, max_length=255)
     email: EmailStr
+    cpf: Optional[str] = Field(None, max_length=14)
     role: str = Field(default="attendant", pattern="^(admin|manager|supervisor|attendant)$")
     status: str = Field(default="offline", pattern="^(online|offline|busy)$")
     max_simultaneous_leads: int = Field(default=10, ge=1, le=100)
@@ -18,6 +19,7 @@ class UserCreate(UserBase):
 class UserUpdate(BaseModel):
     name: Optional[str] = Field(None, min_length=2, max_length=255)
     email: Optional[EmailStr] = None
+    cpf: Optional[str] = Field(None, max_length=14)
     password: Optional[str] = Field(None, min_length=4)
     role: Optional[str] = Field(None, pattern="^(admin|manager|supervisor|attendant)$")
     max_simultaneous_leads: Optional[int] = Field(None, ge=1, le=100)

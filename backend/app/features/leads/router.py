@@ -151,7 +151,8 @@ async def reassign_lead(
 @router.post("/bulk-reassign", status_code=status.HTTP_200_OK)
 async def bulk_reassign_leads(
     bulk_in: BulkReassignRequest,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_roles(["admin", "manager", "supervisor"]))
 ):
     service = LeadService(db)
     reassigned_count = 0
