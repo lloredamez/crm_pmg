@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="100%" height="100%">
+  <defs>
+    <!-- Background Gradient -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8b5cf6" />
+      <stop offset="50%" stop-color="#7c3aed" />
+      <stop offset="100%" stop-color="#5b21b6" />
+    </linearGradient>
+
+    <!-- Zap Lightning Gradient -->
+    <linearGradient id="zapGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="100%" stop-color="#f3e8ff" />
+    </linearGradient>
+
+    <!-- Mint SLA Status Gradient -->
+    <linearGradient id="mintGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#34d399" />
+      <stop offset="100%" stop-color="#059669" />
+    </linearGradient>
+
+    <!-- Glowing Shadow Filters -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#4c1d95" flood-opacity="0.45" />
+    </filter>
+
+    <filter id="zapShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000000" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- Squircle Base Container -->
+  <rect x="32" y="32" width="448" height="448" rx="120" ry="120" fill="url(#bgGrad)" filter="url(#glow)" />
+
+  <!-- Inner Subtle Glass Rim Accent -->
+  <rect x="32" y="32" width="448" height="448" rx="120" ry="120" fill="none" stroke="#ffffff" stroke-opacity="0.2" stroke-width="8" />
+
+  <!-- Central Zap Lightning Bolt (Lead Distribution & SLA Speed) -->
+  <path d="M281.6 81.92 L143.36 261.12 H261.12 L225.28 430.08 L368.64 250.88 H256 Z" fill="url(#zapGrad)" filter="url(#zapShadow)" />
+
+  <!-- SLA Active Mint Indicator Badge (Bottom Right) -->
+  <circle cx="378.88" cy="378.88" r="61.44" fill="#065f46" />
+  <circle cx="378.88" cy="378.88" r="51.2" fill="url(#mintGrad)" />
+  <circle cx="378.88" cy="378.88" r="22.5" fill="#ffffff" fill-opacity="0.95" />
+</svg>

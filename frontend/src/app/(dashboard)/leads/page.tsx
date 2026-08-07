@@ -99,16 +99,27 @@ export default function LeadsDashboardPage() {
       refetchUsers();
     };
 
+    const handleUserStatusUpdated = (data: { user_id: string; status: string }) => {
+      queryClient.setQueryData<User[]>(['users'], (oldUsers) => {
+        if (!oldUsers) return oldUsers;
+        return oldUsers.map((u) => (u.id === data.user_id ? { ...u, status: data.status as any } : u));
+      });
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      refetchUsers();
+    };
+
     socket.on('leads:updated', handleRefreshData);
     socket.on('lead:assigned', handleRefreshData);
     socket.on('lead:timeout_removed', handleRefreshData);
     socket.on('lead:reassigned', handleRefreshData);
+    socket.on('user:status_updated', handleUserStatusUpdated);
 
     return () => {
       socket.off('leads:updated', handleRefreshData);
       socket.off('lead:assigned', handleRefreshData);
       socket.off('lead:timeout_removed', handleRefreshData);
       socket.off('lead:reassigned', handleRefreshData);
+      socket.off('user:status_updated', handleUserStatusUpdated);
     };
   }, [socket, user?.id, queryClient, refetchLeads, refetchUsers]);
 
