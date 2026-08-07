@@ -59,9 +59,31 @@ async def _async_check_lead_sla(lead_id_str: str):
                 .values(status="expired_timeout", unassigned_at=now)
             )
 
-        # Ao estourar o SLA, limpa o atendente atual e envia o lead de volta ao Balde
-        lead.current_attendant_id = None
-        lead.status = "new"
+        # Ao estourar o SLA, cria o registro em bucket_leads e remove de leads
+        from app.models.bucket_lead import BucketLead
+        bucket_lead = BucketLead(
+            id=lead.id,
+            name=lead.name,
+            phone=lead.phone,
+            cpf=lead.cpf,
+            verified_cpf=lead.verified_cpf,
+            proposal_number=lead.proposal_number,
+            notes=lead.notes,
+            email=lead.email,
+            meta_lead_id=lead.meta_lead_id,
+            campaign_name=lead.campaign_name,
+            product_name=lead.product_name,
+            product=lead.product,
+            channel_code=lead.channel_code,
+            prazo=lead.prazo,
+            margem=lead.margem,
+            valor_liberado=lead.valor_liberado,
+            banco=lead.banco,
+            tabela=lead.tabela,
+            unit_id=lead.unit_id,
+            created_at=lead.created_at
+        )
+        session.add(bucket_lead)
         action_taken = "sent_to_balde"
 
         # Registrar o evento de estouro de SLA
@@ -76,8 +98,8 @@ async def _async_check_lead_sla(lead_id_str: str):
         )
         session.add(sla_breach)
 
+        await session.delete(lead)
         await session.commit()
-        await session.refresh(lead)
 
         # Emit Socket notification
         try:
@@ -137,9 +159,30 @@ async def _async_check_disposition_timeouts():
                     .values(status="disposition_timeout", unassigned_at=now)
                 )
 
-            lead.current_attendant_id = None
-            lead.disposition_timeout_at = None
-            lead.status = "new"
+            from app.models.bucket_lead import BucketLead
+            bucket_lead = BucketLead(
+                id=lead.id,
+                name=lead.name,
+                phone=lead.phone,
+                cpf=lead.cpf,
+                verified_cpf=lead.verified_cpf,
+                proposal_number=lead.proposal_number,
+                notes=lead.notes,
+                email=lead.email,
+                meta_lead_id=lead.meta_lead_id,
+                campaign_name=lead.campaign_name,
+                product_name=lead.product_name,
+                product=lead.product,
+                channel_code=lead.channel_code,
+                prazo=lead.prazo,
+                margem=lead.margem,
+                valor_liberado=lead.valor_liberado,
+                banco=lead.banco,
+                tabela=lead.tabela,
+                unit_id=lead.unit_id,
+                created_at=lead.created_at
+            )
+            session.add(bucket_lead)
             action_taken = "sent_to_balde"
 
             # Registrar o evento de estouro de SLA de tabulacao
@@ -154,8 +197,8 @@ async def _async_check_disposition_timeouts():
             )
             session.add(sla_breach)
 
+            await session.delete(lead)
             await session.commit()
-            await session.refresh(lead)
 
             try:
                 from app.core.socket_manager import emit_lead_reassigned

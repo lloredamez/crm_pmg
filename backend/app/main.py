@@ -68,6 +68,9 @@ async def seed_initial_data():
         await conn.execute(text("ALTER TABLE lead_assignments ADD COLUMN IF NOT EXISTS disposition_notes TEXT;"))
 
         await conn.execute(text("ALTER TABLE dispositions ALTER COLUMN timeout_minutes TYPE FLOAT USING timeout_minutes::double precision;"))
+        await conn.execute(text("ALTER TABLE lead_assignments DROP CONSTRAINT IF EXISTS lead_assignments_lead_id_fkey;"))
+        await conn.execute(text("ALTER TABLE sla_breaches DROP CONSTRAINT IF EXISTS sla_breaches_lead_id_fkey;"))
+        await conn.execute(text("ALTER TABLE lead_tabulations DROP CONSTRAINT IF EXISTS lead_tabulations_lead_id_fkey;"))
 
         await conn.execute(text("""
             CREATE TABLE IF NOT EXISTS user_units (
