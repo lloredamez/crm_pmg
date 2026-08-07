@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, foreign
 from app.core.database import Base
 
 class LeadAssignment(Base):
@@ -17,4 +17,5 @@ class LeadAssignment(Base):
     assigned_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
     unassigned_at = Column(DateTime(timezone=True), nullable=True)
 
+    lead = relationship("Lead", primaryjoin="foreign(LeadAssignment.lead_id) == Lead.id", back_populates="assignments")
     attendant = relationship("User", back_populates="assignments")

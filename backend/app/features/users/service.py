@@ -88,6 +88,9 @@ class UserService:
             lead_service = LeadService(self.db)
             await lead_service.process_pending_unassigned_leads(limit=10)
 
+        from app.core.socket_manager import emit_user_status_updated
+        await emit_user_status_updated(user.id, user.status, user.name)
+
         return user
 
     async def get_online_attendants(self) -> List[User]:

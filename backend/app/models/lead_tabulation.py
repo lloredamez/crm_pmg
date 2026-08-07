@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, foreign
 from app.core.database import Base
 
 class LeadTabulation(Base):
@@ -16,5 +16,6 @@ class LeadTabulation(Base):
     disposition_notes = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
+    lead = relationship("Lead", primaryjoin="foreign(LeadTabulation.lead_id) == Lead.id", back_populates="tabulations")
     attendant = relationship("User", back_populates="tabulations")
     disposition = relationship("Disposition", back_populates="tabulations")

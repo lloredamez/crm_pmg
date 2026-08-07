@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from sqlalchemy import Column, String, Float, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, foreign
 from app.core.database import Base
 
 class SlaBreach(Base):
@@ -17,5 +17,6 @@ class SlaBreach(Base):
     action_taken = Column(String(100), nullable=False)  # 'reallocated', 'marked_expired'
     breached_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
+    lead = relationship("Lead", primaryjoin="foreign(SlaBreach.lead_id) == Lead.id", back_populates="sla_breaches")
     attendant = relationship("User", back_populates="sla_breaches")
     unit = relationship("Unit", back_populates="sla_breaches")

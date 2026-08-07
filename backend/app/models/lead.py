@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Boolean, Integer, Float
 
 from sqlalchemy.dialects.postgresql import UUID
-from sqlalchemy.orm import relationship
+from sqlalchemy.orm import relationship, foreign
 from app.core.database import Base
 
 class Lead(Base):
@@ -44,10 +44,10 @@ class Lead(Base):
     unit = relationship("Unit", back_populates="leads")
     disposition = relationship("Disposition", back_populates="leads")
     current_attendant = relationship("User", back_populates="assigned_leads", foreign_keys=[current_attendant_id])
-    assignments = relationship("LeadAssignment", back_populates="lead", cascade="all, delete-orphan")
+    assignments = relationship("LeadAssignment", primaryjoin="Lead.id == foreign(LeadAssignment.lead_id)", back_populates="lead", cascade="all, delete-orphan")
     messages = relationship("Message", back_populates="lead", cascade="all, delete-orphan")
-    sla_breaches = relationship("SlaBreach", back_populates="lead", cascade="all, delete-orphan")
-    tabulations = relationship("LeadTabulation", back_populates="lead", cascade="all, delete-orphan")
+    sla_breaches = relationship("SlaBreach", primaryjoin="Lead.id == foreign(SlaBreach.lead_id)", back_populates="lead", cascade="all, delete-orphan")
+    tabulations = relationship("LeadTabulation", primaryjoin="Lead.id == foreign(LeadTabulation.lead_id)", back_populates="lead", cascade="all, delete-orphan")
 
     @property
     def current_disposition_name(self) -> Optional[str]:
