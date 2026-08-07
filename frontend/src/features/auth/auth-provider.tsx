@@ -30,15 +30,8 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
-export const getApiUrl = () => {
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
-  }
-  if (typeof window !== 'undefined') {
-    return `${window.location.protocol}//${window.location.hostname}:5052`;
-  }
-  return 'http://localhost:5052';
-};
+import { getApiUrl } from '@/lib/config';
+export { getApiUrl };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);

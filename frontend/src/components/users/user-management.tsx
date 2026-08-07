@@ -1,9 +1,8 @@
-'use client';
-
 import React, { useState, useEffect } from 'react';
 import { User } from '@/features/leads/types';
 import { useAuth } from '@/features/auth/auth-provider';
 import { ShieldCheck, UserCheck, Headset, UserPlus, Building2, CheckCircle2, Pencil, X } from 'lucide-react';
+import { getApiUrl } from '@/lib/config';
 
 interface UserManagementProps {
   users: User[];
@@ -43,7 +42,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
   const [editLoading, setEditLoading] = useState(false);
   const [editMessage, setEditMessage] = useState<string | null>(null);
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5052';
+  const API_URL = getApiUrl();
 
   useEffect(() => {
     fetchUnits();
