@@ -20,6 +20,21 @@ class DispositionService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
+    async def get_unassigned_sla_minutes(self) -> float:
+        from sqlalchemy import or_
+        query = select(Disposition).where(
+            Disposition.is_active.is_(True),
+            or_(
+                Disposition.name.ilike("%Sem Tabulação%"),
+                Disposition.category.ilike("%Sem Tabulação%")
+            )
+        )
+        res = await self.db.execute(query)
+        disp = res.scalars().first()
+        if disp and disp.has_timeout and disp.timeout_minutes is not None:
+            return float(disp.timeout_minutes)
+        return 15.0
+
     async def list_dispositions(self, active_only: bool = False) -> List[Disposition]:
         query = select(Disposition).order_by(Disposition.category.asc(), Disposition.name.asc())
         if active_only:

@@ -41,6 +41,8 @@ class LeadUpdateStatus(BaseModel):
     status: str = Field(..., pattern="^(new|assigned|in_progress|converted|lost|expired)$")
 
 class LeadUpdateDetails(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
     notes: Optional[str] = None
     verified_cpf: Optional[str] = None
     proposal_number: Optional[str] = None
@@ -71,6 +73,7 @@ class LeadResponse(LeadBase):
     dispositioned_at: Optional[datetime] = None
 
     disposition_timeout_at: Optional[datetime] = None
+    unassigned_sla_minutes: Optional[float] = 15.0
     is_revealed: bool = False
     revealed_at: Optional[datetime] = None
     assigned_at: Optional[datetime] = None

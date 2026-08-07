@@ -60,5 +60,13 @@ class Lead(Base):
             pass
         return None
 
+    @property
+    def unassigned_sla_minutes(self) -> float:
+        return getattr(self, "_unassigned_sla_minutes", 15.0)
+
+    @unassigned_sla_minutes.setter
+    def unassigned_sla_minutes(self, val: float):
+        self._unassigned_sla_minutes = val
+
 
 

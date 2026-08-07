@@ -16,6 +16,7 @@ class UserService:
         user = User(
             name=user_in.name,
             email=user_in.email,
+            cpf=user_in.cpf,
             role=user_in.role,
             status=user_in.status,
             max_simultaneous_leads=user_in.max_simultaneous_leads,
@@ -51,6 +52,8 @@ class UserService:
             user.name = user_in.name
         if user_in.email is not None:
             user.email = user_in.email
+        if user_in.cpf is not None:
+            user.cpf = user_in.cpf
         if user_in.role is not None:
             user.role = user_in.role
         if user_in.max_simultaneous_leads is not None:

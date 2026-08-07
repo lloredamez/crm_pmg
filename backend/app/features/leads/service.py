@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_, update
 from sqlalchemy.orm import selectinload
 from app.models.lead import Lead
+from app.models.bucket_lead import BucketLead
 from app.models.user import User
 from app.models.lead_assignment import LeadAssignment
 from app.models.sla_breach import SlaBreach
@@ -18,58 +19,112 @@ class LeadService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def create_and_assign_lead(self, lead_in: LeadCreate) -> Lead:
-        lead = Lead(
-            name=lead_in.name,
-            phone=lead_in.phone,
-            cpf=lead_in.cpf,
-            verified_cpf=lead_in.verified_cpf,
-            proposal_number=lead_in.proposal_number,
-            notes=lead_in.notes,
-            email=lead_in.email,
-            meta_lead_id=lead_in.meta_lead_id,
-            campaign_name=lead_in.campaign_name,
-            product_name=lead_in.product_name or lead_in.product,
-            channel_code=lead_in.channel_code,
-            prazo=lead_in.prazo,
-            margem=lead_in.margem,
-            valor_liberado=lead_in.valor_liberado,
-            banco=lead_in.banco,
-            tabela=lead_in.tabela,
-            status="new"
-        )
-        self.db.add(lead)
-        await self.db.flush()
+    async def create_and_assign_lead(self, lead_in: LeadCreate):
+        assigned_user = await self._find_eligible_attendant_for_unit(None)
 
-        # Novos leads vão diretamente para o Balde de Leads sem distribuição automática
-        lead.status = "new"
-        lead.current_attendant_id = None
-        await self.db.commit()
-        await self.db.refresh(lead)
+        if assigned_user:
+            now = datetime.now(timezone.utc)
+            lead = Lead(
+                name=lead_in.name,
+                phone=lead_in.phone,
+                cpf=lead_in.cpf,
+                verified_cpf=lead_in.verified_cpf,
+                proposal_number=lead_in.proposal_number,
+                notes=lead_in.notes,
+                email=lead_in.email,
+                meta_lead_id=lead_in.meta_lead_id,
+                campaign_name=lead_in.campaign_name,
+                product_name=lead_in.product_name or lead_in.product,
+                channel_code=lead_in.channel_code,
+                prazo=lead_in.prazo,
+                margem=lead_in.margem,
+                valor_liberado=lead_in.valor_liberado,
+                banco=lead_in.banco,
+                tabela=lead_in.tabela,
+                status="assigned",
+                current_attendant_id=assigned_user.id,
+                assigned_at=now,
+                unit_id=assigned_user.unit_id
+            )
+            self.db.add(lead)
+            await self.db.flush()
 
-        try:
-            from app.core.socket_manager import emit_lead_updated
-            lead_dict = {
-                "id": str(lead.id),
-                "name": lead.name,
-                "phone": lead.phone,
-                "email": lead.email,
-                "campaign_name": lead.campaign_name,
-                "status": lead.status,
-                "created_at": lead.created_at.isoformat() if lead.created_at else None,
-            }
-            await emit_lead_updated(lead_dict)
-        except Exception:
-            pass
+            assigned_user.last_assigned_at = now
+            assignment = LeadAssignment(
+                lead_id=lead.id,
+                attendant_id=assigned_user.id,
+                status="active",
+                assigned_at=now
+            )
+            self.db.add(assignment)
+            await self.db.commit()
+            await self.db.refresh(lead)
 
-        return lead
+            try:
+                from app.core.socket_manager import emit_lead_assigned
+                lead_dict = {
+                    "id": str(lead.id),
+                    "name": lead.name,
+                    "phone": lead.phone,
+                    "email": lead.email,
+                    "campaign_name": lead.campaign_name,
+                    "status": lead.status,
+                    "created_at": lead.created_at.isoformat() if lead.created_at else None,
+                    "assigned_at": lead.assigned_at.isoformat() if lead.assigned_at else None,
+                    "attendant_name": assigned_user.name,
+                }
+                await emit_lead_assigned(str(assigned_user.id), lead_dict)
+            except Exception:
+                pass
 
-    async def _find_eligible_attendant_for_unit(self, unit_id: UUID, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
+            return lead
+        else:
+            bucket_lead = BucketLead(
+                name=lead_in.name,
+                phone=lead_in.phone,
+                cpf=lead_in.cpf,
+                verified_cpf=lead_in.verified_cpf,
+                proposal_number=lead_in.proposal_number,
+                notes=lead_in.notes,
+                email=lead_in.email,
+                meta_lead_id=lead_in.meta_lead_id,
+                campaign_name=lead_in.campaign_name,
+                product_name=lead_in.product_name or lead_in.product,
+                channel_code=lead_in.channel_code,
+                prazo=lead_in.prazo,
+                margem=lead_in.margem,
+                valor_liberado=lead_in.valor_liberado,
+                banco=lead_in.banco,
+                tabela=lead_in.tabela,
+            )
+            self.db.add(bucket_lead)
+            await self.db.commit()
+            await self.db.refresh(bucket_lead)
+
+            try:
+                from app.core.socket_manager import emit_lead_updated
+                lead_dict = {
+                    "id": str(bucket_lead.id),
+                    "name": bucket_lead.name,
+                    "phone": bucket_lead.phone,
+                    "email": bucket_lead.email,
+                    "campaign_name": bucket_lead.campaign_name,
+                    "status": "new",
+                    "created_at": bucket_lead.created_at.isoformat() if bucket_lead.created_at else None,
+                }
+                await emit_lead_updated(lead_dict)
+            except Exception:
+                pass
+
+            return bucket_lead
+
+    async def _find_eligible_attendant_for_unit(self, unit_id: Optional[UUID] = None, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
         query = select(User).where(
             User.status == "online",
-            User.unit_id == unit_id,
             User.role.in_(["attendant"])
         )
+        if unit_id:
+            query = query.where(User.unit_id == unit_id)
         if exclude_user_id:
             query = query.where(User.id != exclude_user_id)
 
@@ -99,12 +154,37 @@ class LeadService:
         return user_load[0][2]
 
     async def distribute_lead(self, lead: Lead, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
-        # Distribuição automática desativada: todos os leads permanecem no Balde até o resgate manual pelo atendente
-        lead.status = "new"
-        lead.current_attendant_id = None
-        return None
+        selected_user = None
+        if lead.unit_id:
+            selected_user = await self._find_eligible_attendant_for_unit(lead.unit_id, exclude_user_id=exclude_user_id)
 
-    async def get_lead_by_id(self, lead_id: UUID, current_user: Optional[User] = None) -> Optional[Lead]:
+        if not selected_user:
+            selected_user = await self._find_eligible_attendant_for_unit(None, exclude_user_id=exclude_user_id)
+
+        if not selected_user:
+            lead.status = "new"
+            lead.current_attendant_id = None
+            return None
+
+        now = datetime.now(timezone.utc)
+        lead.current_attendant_id = selected_user.id
+        lead.status = "assigned"
+        lead.assigned_at = now
+        if not lead.unit_id and selected_user.unit_id:
+            lead.unit_id = selected_user.unit_id
+
+        selected_user.last_assigned_at = now
+
+        assignment = LeadAssignment(
+            lead_id=lead.id,
+            attendant_id=selected_user.id,
+            status="active",
+            assigned_at=now
+        )
+        self.db.add(assignment)
+        return selected_user
+
+    async def get_lead_by_id(self, lead_id: UUID, current_user: Optional[User] = None):
         query = select(Lead).options(selectinload(Lead.current_attendant), selectinload(Lead.unit), selectinload(Lead.disposition)).where(Lead.id == lead_id)
         if current_user:
             if current_user.role == "manager":
@@ -129,8 +209,20 @@ class LeadService:
             elif current_user.role == "attendant":
                 query = query.where(Lead.current_attendant_id == current_user.id)
 
+        from app.features.dispositions.service import DispositionService
+        unassigned_sla = await DispositionService(self.db).get_unassigned_sla_minutes()
+
         result = await self.db.execute(query)
-        return result.scalar_one_or_none()
+        lead = result.scalar_one_or_none()
+        if lead:
+            lead.unassigned_sla_minutes = unassigned_sla
+            return lead
+
+        b_res = await self.db.execute(select(BucketLead).options(selectinload(BucketLead.unit)).where(BucketLead.id == lead_id))
+        b_lead = b_res.scalar_one_or_none()
+        if b_lead:
+            b_lead.unassigned_sla_minutes = unassigned_sla
+        return b_lead
 
     async def list_leads(
         self,
@@ -142,7 +234,58 @@ class LeadService:
         banco_filter: Optional[str] = None,
         tabela_filter: Optional[str] = None,
         current_user: Optional[User] = None
-    ) -> Tuple[List[Lead], int]:
+    ) -> Tuple[List, int]:
+        from app.features.dispositions.service import DispositionService
+        unassigned_sla = await DispositionService(self.db).get_unassigned_sla_minutes()
+
+        is_balde_filter = status_filter and status_filter.lower() in ["new", "balde"]
+
+        if is_balde_filter:
+            b_query = select(BucketLead).options(selectinload(BucketLead.unit))
+
+            if current_user:
+                if current_user.role == "manager":
+                    managed_unit_ids = [u.id for u in current_user.managed_units] if current_user.managed_units else []
+                    if managed_unit_ids:
+                        b_query = b_query.where(or_(BucketLead.unit_id.is_(None), BucketLead.unit_id.in_(managed_unit_ids)))
+                elif current_user.role == "supervisor":
+                    if current_user.unit_id:
+                        b_query = b_query.where(or_(BucketLead.unit_id.is_(None), BucketLead.unit_id == current_user.unit_id))
+
+            if banco_filter and banco_filter.lower() != "all":
+                b_query = b_query.where(BucketLead.banco.ilike(f"%{banco_filter}%"))
+
+            if tabela_filter and tabela_filter.lower() != "all":
+                b_query = b_query.where(BucketLead.tabela.ilike(f"%{tabela_filter}%"))
+
+            if search:
+                search_pattern = f"%{search}%"
+                b_query = b_query.where(
+                    or_(
+                        BucketLead.name.ilike(search_pattern),
+                        BucketLead.phone.ilike(search_pattern),
+                        BucketLead.cpf.ilike(search_pattern),
+                        BucketLead.verified_cpf.ilike(search_pattern),
+                        BucketLead.email.ilike(search_pattern),
+                        BucketLead.campaign_name.ilike(search_pattern),
+                        BucketLead.banco.ilike(search_pattern),
+                        BucketLead.tabela.ilike(search_pattern)
+                    )
+                )
+
+            count_b_query = select(func.count()).select_from(b_query.subquery())
+            total_res = await self.db.execute(count_b_query)
+            total = total_res.scalar() or 0
+
+            offset = (page - 1) * limit
+            b_query = b_query.order_by(BucketLead.created_at.desc()).offset(offset).limit(limit)
+
+            result = await self.db.execute(b_query)
+            bucket_leads = list(result.scalars().all())
+            for bl in bucket_leads:
+                bl.unassigned_sla_minutes = unassigned_sla
+            return bucket_leads, total
+
         query = select(Lead).options(
             selectinload(Lead.current_attendant),
             selectinload(Lead.unit),
@@ -150,68 +293,34 @@ class LeadService:
             selectinload(Lead.assignments)
         )
 
-
         # Role-based filtering
         if current_user:
-            is_balde_filter = status_filter and status_filter.lower() in ["new", "balde"]
-
             if current_user.role == "manager":
                 managed_unit_ids = [u.id for u in current_user.managed_units] if current_user.managed_units else []
                 if managed_unit_ids:
-                    if is_balde_filter:
-                        query = query.outerjoin(User, Lead.current_attendant_id == User.id).where(
-                            or_(
-                                Lead.current_attendant_id.is_(None),
-                                Lead.unit_id.in_(managed_unit_ids),
-                                User.unit_id.in_(managed_unit_ids)
-                            )
+                    query = query.outerjoin(User, Lead.current_attendant_id == User.id).where(
+                        or_(
+                            Lead.unit_id.in_(managed_unit_ids),
+                            User.unit_id.in_(managed_unit_ids)
                         )
-                    else:
-                        query = query.outerjoin(User, Lead.current_attendant_id == User.id).where(
-                            or_(
-                                Lead.unit_id.in_(managed_unit_ids),
-                                User.unit_id.in_(managed_unit_ids)
-                            )
-                        )
+                    )
                 else:
-                    if is_balde_filter:
-                        query = query.where(Lead.current_attendant_id.is_(None))
-                    else:
-                        query = query.where(False)
+                    query = query.where(False)
             elif current_user.role == "supervisor":
                 if current_user.unit_id:
-                    if is_balde_filter:
-                        query = query.outerjoin(User, Lead.current_attendant_id == User.id).where(
-                            or_(
-                                Lead.current_attendant_id.is_(None),
-                                Lead.unit_id == current_user.unit_id,
-                                User.unit_id == current_user.unit_id
-                            )
+                    query = query.outerjoin(User, Lead.current_attendant_id == User.id).where(
+                        or_(
+                            Lead.unit_id == current_user.unit_id,
+                            User.unit_id == current_user.unit_id
                         )
-                    else:
-                        query = query.outerjoin(User, Lead.current_attendant_id == User.id).where(
-                            or_(
-                                Lead.unit_id == current_user.unit_id,
-                                User.unit_id == current_user.unit_id
-                            )
-                        )
-                else:
-                    if is_balde_filter:
-                        query = query.where(Lead.current_attendant_id.is_(None))
+                    )
             elif current_user.role == "attendant":
-                if is_balde_filter:
-                    query = query.where(or_(Lead.current_attendant_id == current_user.id, Lead.current_attendant_id.is_(None)))
-                else:
-                    query = query.where(Lead.current_attendant_id == current_user.id)
-            # admin has no restrictions
+                query = query.where(Lead.current_attendant_id == current_user.id)
 
         if status_filter and status_filter.lower() != "all":
-            if status_filter.lower() in ["new", "balde"]:
-                query = query.where(or_(Lead.status.in_(["new", "expired"]), Lead.current_attendant_id.is_(None)))
-            else:
-                query = query.where(Lead.status == status_filter.lower())
+            query = query.where(Lead.status == status_filter.lower())
 
-        if attendant_id and (not status_filter or status_filter.lower() not in ["new", "balde"]):
+        if attendant_id:
             query = query.where(Lead.current_attendant_id == attendant_id)
 
         if banco_filter and banco_filter.lower() != "all":
@@ -235,21 +344,22 @@ class LeadService:
                 )
             )
 
-        # Count total
         count_query = select(func.count()).select_from(query.subquery())
         total_res = await self.db.execute(count_query)
         total = total_res.scalar() or 0
 
-        # Pagination & Ordering
         offset = (page - 1) * limit
         query = query.order_by(Lead.created_at.desc()).offset(offset).limit(limit)
 
         result = await self.db.execute(query)
         leads = list(result.scalars().all())
+        for l in leads:
+            l.unassigned_sla_minutes = unassigned_sla
         return leads, total
 
     async def process_pending_unassigned_leads(self, limit: int = 50) -> int:
-        # Leads no balde não são distribuídos automaticamente; permanecem no balde até o resgate manual pelo atendente.
+        # Leads na tabela separada bucket_leads NUNCA são distribuídos pelo worker.
+        # Eles só saem quando um atendente resgata manualmente ("Pegar Lead").
         return 0
 
     async def update_status(self, lead_id: UUID, new_status: str) -> Optional[Lead]:
@@ -273,6 +383,10 @@ class LeadService:
         if not lead:
             return None
 
+        if hasattr(details, 'name') and details.name is not None:
+            lead.name = details.name
+        if hasattr(details, 'phone') and details.phone is not None:
+            lead.phone = details.phone
         if details.notes is not None:
             lead.notes = details.notes
         if details.verified_cpf is not None:
@@ -421,6 +535,88 @@ class LeadService:
 
     async def claim_lead(self, lead_id: UUID, current_user: User) -> Lead:
         from fastapi import HTTPException
+
+        bucket_lead = await self.db.get(BucketLead, lead_id)
+        if bucket_lead:
+            if current_user.role == "attendant":
+                active_count_res = await self.db.execute(
+                    select(func.count(Lead.id)).where(
+                        Lead.current_attendant_id == current_user.id,
+                        Lead.status.in_(["assigned", "in_progress"])
+                    )
+                )
+                cnt = active_count_res.scalar() or 0
+                if cnt >= current_user.max_simultaneous_leads:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Você já atingiu seu limite máximo de leads simultâneos ({current_user.max_simultaneous_leads}). Finalize um atendimento antes de pegar novos leads."
+                    )
+
+            now = datetime.now(timezone.utc)
+            lead = Lead(
+                id=bucket_lead.id,
+                name=bucket_lead.name,
+                phone=bucket_lead.phone,
+                cpf=bucket_lead.cpf,
+                verified_cpf=bucket_lead.verified_cpf,
+                proposal_number=bucket_lead.proposal_number,
+                notes=bucket_lead.notes,
+                email=bucket_lead.email,
+                meta_lead_id=bucket_lead.meta_lead_id,
+                campaign_name=bucket_lead.campaign_name,
+                product_name=bucket_lead.product_name,
+                channel_code=bucket_lead.channel_code,
+                prazo=bucket_lead.prazo,
+                margem=bucket_lead.margem,
+                valor_liberado=bucket_lead.valor_liberado,
+                banco=bucket_lead.banco,
+                tabela=bucket_lead.tabela,
+                status="assigned",
+                current_attendant_id=current_user.id,
+                assigned_at=now,
+                unit_id=current_user.unit_id or bucket_lead.unit_id,
+                created_at=bucket_lead.created_at
+            )
+
+            await self.db.delete(bucket_lead)
+            self.db.add(lead)
+
+            current_user.last_assigned_at = now
+            new_assignment = LeadAssignment(
+                lead_id=lead.id,
+                attendant_id=current_user.id,
+                status="active",
+                assigned_at=now
+            )
+            self.db.add(new_assignment)
+            await self.db.commit()
+            await self.db.refresh(lead)
+
+            try:
+                from app.workers.sla_tasks import check_lead_sla_timeout
+                check_lead_sla_timeout.apply_async(
+                    args=[str(lead.id)],
+                    countdown=1 * 60
+                )
+            except Exception:
+                pass
+
+            try:
+                lead_dict = {
+                    "id": str(lead.id),
+                    "name": lead.name,
+                    "phone": lead.phone,
+                    "email": lead.email,
+                    "status": lead.status,
+                    "assigned_at": lead.assigned_at.isoformat() if lead.assigned_at else None,
+                    "attendant_name": current_user.name
+                }
+                await emit_lead_assigned(str(current_user.id), lead_dict)
+            except Exception:
+                pass
+
+            return lead
+
         lead = await self.db.get(Lead, lead_id)
         if not lead:
             raise HTTPException(status_code=404, detail="Lead não encontrado")

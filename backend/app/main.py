@@ -3,7 +3,7 @@ import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import select, text
+from sqlalchemy import select, text, or_
 from sqlalchemy.orm import selectinload
 
 from app.core.config import settings
@@ -17,8 +17,7 @@ from app.models.channel import Channel
 from app.models.sla_breach import SlaBreach
 from app.models.channel_disposition_sla import ChannelDispositionSla
 from app.models.lead_tabulation import LeadTabulation
-
-
+from app.models.bucket_lead import BucketLead
 
 from app.models.category import Category
 
@@ -42,6 +41,7 @@ async def seed_initial_data():
         await conn.run_sync(Base.metadata.create_all)
         # Adiciona colunas que possam faltar em tabelas pré-existentes no volume do Postgres
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS hashed_password VARCHAR(255) DEFAULT '';"))
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS unit_id UUID REFERENCES units(id) ON DELETE SET NULL;"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_assigned_at TIMESTAMPTZ;"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);"))
@@ -110,6 +110,7 @@ async def seed_initial_data():
                 User(
                     name="Carlos Admin",
                     email="admin@crmleads.com",
+                    cpf="111.111.111-11",
                     hashed_password=default_password,
                     role="admin",
                     status="online",
@@ -119,6 +120,7 @@ async def seed_initial_data():
                 User(
                     name="Marcos Vinícius",
                     email="supervisor@crmleads.com",
+                    cpf="333.333.333-33",
                     hashed_password=default_password,
                     role="supervisor",
                     status="online",
@@ -128,6 +130,7 @@ async def seed_initial_data():
                 User(
                     name="Ana Silva",
                     email="ana.silva@crmleads.com",
+                    cpf="444.444.444-44",
                     hashed_password=default_password,
                     role="attendant",
                     status="online",
@@ -137,6 +140,7 @@ async def seed_initial_data():
                 User(
                     name="Bruno Costa",
                     email="bruno.costa@crmleads.com",
+                    cpf="555.555.555-55",
                     hashed_password=default_password,
                     role="attendant",
                     status="online",
@@ -146,6 +150,7 @@ async def seed_initial_data():
                 User(
                     name="Carlos Oliveira",
                     email="carlos.oliveira@crmleads.com",
+                    cpf="666.666.666-66",
                     hashed_password=default_password,
                     role="attendant",
                     status="online",
@@ -155,6 +160,7 @@ async def seed_initial_data():
                 User(
                     name="Daniela Santos",
                     email="daniela.santos@crmleads.com",
+                    cpf="777.777.777-77",
                     hashed_password=default_password,
                     role="attendant",
                     status="online",
@@ -164,6 +170,7 @@ async def seed_initial_data():
                 User(
                     name="Eduardo Lima",
                     email="eduardo.lima@crmleads.com",
+                    cpf="888.888.888-88",
                     hashed_password=default_password,
                     role="attendant",
                     status="online",
@@ -186,9 +193,21 @@ async def seed_initial_data():
                 "eduardo.lima@crmleads.com": "Eduardo Lima",
                 "gerente.regional@crmleads.com": "Roberto Mendes",
             }
+            demo_cpfs = {
+                "admin@crmleads.com": "111.111.111-11",
+                "supervisor@crmleads.com": "333.333.333-33",
+                "ana.silva@crmleads.com": "444.444.444-44",
+                "bruno.costa@crmleads.com": "555.555.555-55",
+                "carlos.oliveira@crmleads.com": "666.666.666-66",
+                "daniela.santos@crmleads.com": "777.777.777-77",
+                "eduardo.lima@crmleads.com": "888.888.888-88",
+                "gerente.regional@crmleads.com": "222.222.222-22",
+            }
             for idx, user in enumerate(existing_users):
                 if user.email in clean_names:
                     user.name = clean_names[user.email]
+                if user.email in demo_cpfs and not user.cpf:
+                    user.cpf = demo_cpfs[user.email]
                 if not user.hashed_password:
                     user.hashed_password = default_password
                 if user.role not in ["admin", "manager"] and not user.unit_id and u_list:
@@ -206,6 +225,7 @@ async def seed_initial_data():
             manager_user = User(
                 name="Roberto Mendes",
                 email="gerente.regional@crmleads.com",
+                cpf="222.222.222-22",
                 hashed_password=default_password,
                 role="manager",
                 status="online",
@@ -222,6 +242,7 @@ async def seed_initial_data():
         if not existing_dispositions:
             logger.info("Nenhuma tabulação encontrada. Criando tabulações padrão...")
             default_dispositions = [
+                Disposition(name="Sem Tabulação (Primeiro Contato)", category="Sem Tabulação", has_timeout=True, timeout_minutes=15),
                 Disposition(name="Vendido", category="Venda", has_timeout=False, timeout_minutes=None),
                 Disposition(name="Em Contato", category="Negociação", has_timeout=True, timeout_minutes=120),
                 Disposition(name="Formalização", category="Negociação", has_timeout=True, timeout_minutes=240),
@@ -230,6 +251,24 @@ async def seed_initial_data():
             session.add_all(default_dispositions)
             await session.commit()
             logger.info("Tabulações padrão criadas com sucesso!")
+        else:
+            sem_tab_check = await session.execute(
+                select(Disposition).where(
+                    or_(
+                        Disposition.name.ilike("%Sem Tabulação%"),
+                        Disposition.category.ilike("%Sem Tabulação%")
+                    )
+                )
+            )
+            if not sem_tab_check.scalars().first():
+                sem_tab_disp = Disposition(
+                    name="Sem Tabulação (Primeiro Contato)",
+                    category="Sem Tabulação",
+                    has_timeout=True,
+                    timeout_minutes=15
+                )
+                session.add(sem_tab_disp)
+                await session.commit()
 
         # Seed de Canais Padrão
         chan_res = await session.execute(select(Channel))

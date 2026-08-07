@@ -32,10 +32,20 @@ async def _async_check_lead_sla(lead_id_str: str):
             logger.info(f"SLA Check: Lead {lead_id} had interaction at {lead.last_interaction_at}, SLA satisfied.")
             return
 
+        from app.features.dispositions.service import DispositionService
+        disp_service = DispositionService(session)
+        target_sla_minutes = await disp_service.get_unassigned_sla_minutes()
+
+        now = datetime.now(timezone.utc)
+        if lead.assigned_at:
+            elapsed_minutes = (now - lead.assigned_at).total_seconds() / 60.0
+            if elapsed_minutes < target_sla_minutes:
+                logger.info(f"SLA Check: Lead {lead_id} assigned {elapsed_minutes:.1f}m ago, configured SLA is {target_sla_minutes}m, not expired yet.")
+                return
+
         logger.warning(f"SLA TIMEOUT EXCEEDED for Lead {lead_id}! Current attendant: {lead.current_attendant_id}. Reallocating...")
         
         old_attendant_id = lead.current_attendant_id
-        now = datetime.now(timezone.utc)
 
         # Invalidate current assignment
         if old_attendant_id:
@@ -60,7 +70,7 @@ async def _async_check_lead_sla(lead_id_str: str):
             attendant_id=old_attendant_id,
             unit_id=lead.unit_id,
             breach_type="first_contact_timeout",
-            target_sla_minutes=1.0,
+            target_sla_minutes=target_sla_minutes,
             action_taken=action_taken,
             breached_at=now
         )
