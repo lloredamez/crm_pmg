@@ -115,26 +115,32 @@ export const LeadTable: React.FC<LeadTableProps> = ({
     return attendantUsers;
   }, [users, user]);
 
+  const canBulkReassign = isSupervisorRole || isManagerOrAdminRole;
+
   const columns: ColumnDef<Lead>[] = [
-    {
-      id: 'select',
-      header: ({ table }) => (
-        <input
-          type="checkbox"
-          className="rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
-          checked={table.getIsAllPageRowsSelected()}
-          onChange={table.getToggleAllPageRowsSelectedHandler()}
-        />
-      ),
-      cell: ({ row }) => (
-        <input
-          type="checkbox"
-          className="rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
-          checked={row.getIsSelected()}
-          onChange={row.getToggleSelectedHandler()}
-        />
-      ),
-    },
+    ...(canBulkReassign
+      ? [
+          {
+            id: 'select',
+            header: ({ table }: { table: any }) => (
+              <input
+                type="checkbox"
+                className="rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                checked={table.getIsAllPageRowsSelected()}
+                onChange={table.getToggleAllPageRowsSelectedHandler()}
+              />
+            ),
+            cell: ({ row }: { row: any }) => (
+              <input
+                type="checkbox"
+                className="rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+                checked={row.getIsSelected()}
+                onChange={row.getToggleSelectedHandler()}
+              />
+            ),
+          },
+        ]
+      : []),
     {
       accessorKey: 'created_at',
       header: ({ column }) => (
@@ -628,7 +634,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
       </div>
 
       {/* Bulk Action Bar */}
-      {selectedLeadIds.length > 0 && (
+      {canBulkReassign && selectedLeadIds.length > 0 && (
         <div className="bg-brand-50 border border-brand-200 rounded-2xl p-3 mb-4 flex items-center justify-between gap-4 animate-in fade-in duration-200">
           <div className="flex items-center gap-2 text-xs font-semibold text-brand-900">
             <UserCheck className="w-4 h-4 text-brand-600" />

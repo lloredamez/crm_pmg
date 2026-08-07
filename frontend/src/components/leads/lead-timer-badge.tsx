@@ -61,8 +61,9 @@ export const LeadTimerBadge: React.FC<LeadTimerBadgeProps> = ({ lead }) => {
     if (!hasInteraction) {
       const assignedTime = lead.assigned_at || lead.created_at;
       const assignedMs = new Date(assignedTime).getTime();
-      targetTimeMs = assignedMs + 1 * 60 * 1000; // SLA de 1 minuto para 1º contato
-      totalDurationMs = 60 * 1000;
+      const slaMins = lead.unassigned_sla_minutes || 15;
+      totalDurationMs = slaMins * 60 * 1000;
+      targetTimeMs = assignedMs + totalDurationMs;
     }
   }
 

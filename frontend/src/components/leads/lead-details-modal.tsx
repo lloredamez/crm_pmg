@@ -20,6 +20,8 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
   onRefresh,
 }) => {
   const [activeTab, setActiveTab] = useState<'details' | 'history'>('details');
+  const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [verifiedCpf, setVerifiedCpf] = useState('');
   const [proposalNumber, setProposalNumber] = useState('');
   const [notes, setNotes] = useState('');
@@ -38,6 +40,8 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
 
   useEffect(() => {
     if (lead) {
+      setName(lead.name || '');
+      setPhone(lead.phone || '');
       setVerifiedCpf(lead.verified_cpf || '');
       setProposalNumber(lead.proposal_number || '');
       setNotes(lead.notes || '');
@@ -84,6 +88,8 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
       const parsedValorLiberado = valorLiberado.trim() !== '' ? parseFloat(valorLiberado.replace(',', '.')) : null;
 
       await updateLeadDetails(lead.id, {
+        name: name.trim() || lead.name,
+        phone: phone.trim() || lead.phone,
         verified_cpf: verifiedCpf,
         proposal_number: proposalNumber,
         notes: notes,
@@ -276,10 +282,36 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
               <form onSubmit={handleSave} className="space-y-4">
                 <div className="flex items-center gap-1.5 text-xs font-semibold text-brand-600 uppercase tracking-wider mb-1">
                   <Edit3 className="w-3.5 h-3.5" />
-                  <span>Campos Editáveis (Proposta & Valores)</span>
+                  <span>Campos Editáveis (Dados do Lead & Proposta)</span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Nome do Lead / Cliente
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Nome completo do lead"
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Telefone / WhatsApp
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="(00) 00000-0000"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                    />
+                  </div>
+
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
                       CPF Correto / Verificado
