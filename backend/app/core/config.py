@@ -13,7 +13,7 @@ def get_jwt_secret() -> str:
     return secrets.token_hex(32)
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Lead CRM System API"
+    PROJECT_NAME: str = "Lead CRM"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
