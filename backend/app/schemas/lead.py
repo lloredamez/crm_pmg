@@ -13,8 +13,8 @@ class UnitNestedResponse(BaseModel):
         from_attributes = True
 
 class LeadBase(BaseModel):
-    name: str = Field(..., min_length=2, max_length=255)
-    phone: str = Field(..., min_length=8, max_length=50)
+    name: str = Field(default="-", min_length=1, max_length=255)
+    phone: Optional[str] = Field(default="", max_length=50)
     cpf: Optional[str] = None
     verified_cpf: Optional[str] = None
     proposal_number: Optional[str] = None

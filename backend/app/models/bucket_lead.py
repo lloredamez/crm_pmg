@@ -10,8 +10,8 @@ class BucketLead(Base):
     __tablename__ = "bucket_leads"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String(255), nullable=False)
-    phone = Column(String(50), nullable=False)
+    name = Column(String(255), nullable=False, default="-")
+    phone = Column(String(50), nullable=True, default="")
     cpf = Column(String(14), nullable=True)
     verified_cpf = Column(String(14), nullable=True)
     proposal_number = Column(String(100), nullable=True)
