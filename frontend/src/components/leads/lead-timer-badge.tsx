@@ -84,11 +84,22 @@ export const LeadTimerBadge: React.FC<LeadTimerBadgeProps> = ({ lead }) => {
     );
   }
 
-  // Formatação de minutos e segundos
+  // Formatação dinâmica: Dias (ex: 1d), Horas (ex: 1h:23) ou Minutos/Segundos (ex: 15:30)
   const totalSeconds = Math.floor(remainingMs / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  const formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  let formattedTime = '';
+
+  if (totalSeconds >= 86400) {
+    const days = Math.floor(totalSeconds / 86400);
+    formattedTime = `${days}d`;
+  } else if (totalSeconds >= 3600) {
+    const hours = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    formattedTime = `${hours}h:${String(mins).padStart(2, '0')}`;
+  } else {
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    formattedTime = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+  }
 
   // Porcentagem restante do tempo para determinar nível de alerta
   const ratio = Math.min(1, Math.max(0, remainingMs / totalDurationMs));
