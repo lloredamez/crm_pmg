@@ -10,6 +10,7 @@ from app.models.user import User
 from app.models.lead_assignment import LeadAssignment
 from app.models.sla_breach import SlaBreach
 from app.models.lead_tabulation import LeadTabulation
+from app.models.channel import Channel
 from app.schemas.lead import LeadCreate, LeadUpdateStatus
 
 
@@ -20,7 +21,35 @@ class LeadService:
         self.db = db
 
     async def create_and_assign_lead(self, lead_in: LeadCreate):
-        assigned_user = await self._find_eligible_attendant_for_unit(None)
+        assigned_user = None
+        primary_unit_id: Optional[UUID] = None
+
+        if lead_in.channel_code and lead_in.channel_code.strip():
+            code_clean = lead_in.channel_code.strip()
+            chan_res = await self.db.execute(
+                select(Channel)
+                .options(selectinload(Channel.units))
+                .where(func.lower(Channel.code) == func.lower(code_clean))
+            )
+            chan = chan_res.scalar_one_or_none()
+            if chan:
+                if chan.units:
+                    target_unit_ids = [u.id for u in chan.units]
+                    primary_unit_id = target_unit_ids[0]
+                    assigned_user = await self._find_eligible_attendant_for_units(target_unit_ids)
+                else:
+                    assigned_user = await self._find_eligible_attendant_for_units(None)
+            else:
+                if lead_in.unit_id:
+                    primary_unit_id = lead_in.unit_id
+                    assigned_user = await self._find_eligible_attendant_for_units([lead_in.unit_id])
+                else:
+                    assigned_user = await self._find_eligible_attendant_for_units(None)
+        elif lead_in.unit_id:
+            primary_unit_id = lead_in.unit_id
+            assigned_user = await self._find_eligible_attendant_for_units([lead_in.unit_id])
+        else:
+            assigned_user = await self._find_eligible_attendant_for_units(None)
 
         if assigned_user:
             now = datetime.now(timezone.utc)
@@ -96,6 +125,7 @@ class LeadService:
                 valor_liberado=lead_in.valor_liberado,
                 banco=lead_in.banco,
                 tabela=lead_in.tabela,
+                unit_id=primary_unit_id,
             )
             self.db.add(bucket_lead)
             await self.db.commit()
@@ -118,13 +148,13 @@ class LeadService:
 
             return bucket_lead
 
-    async def _find_eligible_attendant_for_unit(self, unit_id: Optional[UUID] = None, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
+    async def _find_eligible_attendant_for_units(self, unit_ids: Optional[List[UUID]] = None, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
         query = select(User).where(
             User.status == "online",
             User.role.in_(["attendant"])
         )
-        if unit_id:
-            query = query.where(User.unit_id == unit_id)
+        if unit_ids:
+            query = query.where(User.unit_id.in_(unit_ids))
         if exclude_user_id:
             query = query.where(User.id != exclude_user_id)
 
@@ -153,13 +183,27 @@ class LeadService:
         user_load.sort(key=lambda x: (x[1], x[0]))
         return user_load[0][2]
 
+    async def _find_eligible_attendant_for_unit(self, unit_id: Optional[UUID] = None, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
+        unit_ids = [unit_id] if unit_id else None
+        return await self._find_eligible_attendant_for_units(unit_ids, exclude_user_id=exclude_user_id)
+
     async def distribute_lead(self, lead: Lead, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
         selected_user = None
         if lead.unit_id:
-            selected_user = await self._find_eligible_attendant_for_unit(lead.unit_id, exclude_user_id=exclude_user_id)
+            selected_user = await self._find_eligible_attendant_for_units([lead.unit_id], exclude_user_id=exclude_user_id)
+        elif lead.channel_code and lead.channel_code.strip():
+            chan_res = await self.db.execute(
+                select(Channel)
+                .options(selectinload(Channel.units))
+                .where(func.lower(Channel.code) == func.lower(lead.channel_code.strip()))
+            )
+            chan = chan_res.scalar_one_or_none()
+            if chan and chan.units:
+                unit_ids = [u.id for u in chan.units]
+                selected_user = await self._find_eligible_attendant_for_units(unit_ids, exclude_user_id=exclude_user_id)
 
-        if not selected_user:
-            selected_user = await self._find_eligible_attendant_for_unit(None, exclude_user_id=exclude_user_id)
+        if not selected_user and not lead.unit_id and not lead.channel_code:
+            selected_user = await self._find_eligible_attendant_for_units(None, exclude_user_id=exclude_user_id)
 
         if not selected_user:
             lead.status = "new"

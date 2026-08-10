@@ -33,7 +33,7 @@ class AuthService:
             select(User).options(selectinload(User.managed_units)).where(or_(*conditions))
         )
         user = result.scalar_one_or_none()
-        if not user:
+        if not user or not getattr(user, "is_active", True):
             return None
         if not verify_password(login_in.password, user.hashed_password):
             return None

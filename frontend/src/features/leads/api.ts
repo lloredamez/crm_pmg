@@ -213,3 +213,34 @@ export async function fetchLeadHistory(leadId: string): Promise<LeadHistoryItem[
   return handleResponse<LeadHistoryItem[]>(res);
 }
 
+export async function toggleUserActive(userId: string): Promise<User> {
+  const API_URL = getApiUrl();
+  const res = await fetch(`${API_URL}/api/v1/users/${userId}/toggle-active`, {
+    method: 'PATCH',
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  return handleResponse<User>(res);
+}
+
+export async function deleteUser(userId: string): Promise<void> {
+  const API_URL = getApiUrl();
+  const res = await fetch(`${API_URL}/api/v1/users/${userId}`, {
+    method: 'DELETE',
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  if (!res.ok) {
+    let errorMsg = `Erro ${res.status}`;
+    try {
+      const errData = await res.json();
+      errorMsg = errData.detail || errorMsg;
+    } catch (_) {
+      errorMsg = await res.text();
+    }
+    throw new Error(errorMsg || 'Falha ao excluir usuário');
+  }
+}
+

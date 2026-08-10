@@ -8,6 +8,7 @@ export interface User {
   cpf?: string | null;
   role: UserRole;
   status: UserStatus;
+  is_active?: boolean;
   max_simultaneous_leads: number;
   unit_id?: string | null;
   managed_unit_ids?: string[];

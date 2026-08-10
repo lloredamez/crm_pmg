@@ -143,8 +143,8 @@ class DispositionService:
         # Calculate disposition_timeout_at (check custom channel SLA first, then fallback to disposition timeout)
         effective_timeout = None
         if disposition.has_timeout:
-            if lead.channel_code:
-                chan_res = await self.db.execute(select(Channel).where(Channel.code == lead.channel_code))
+            if lead.channel_code and lead.channel_code.strip():
+                chan_res = await self.db.execute(select(Channel).where(func.lower(Channel.code) == func.lower(lead.channel_code.strip())))
                 channel_obj = chan_res.scalar_one_or_none()
                 if channel_obj:
                     override_res = await self.db.execute(

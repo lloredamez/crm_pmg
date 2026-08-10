@@ -44,6 +44,7 @@ async def seed_initial_data():
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS unit_id UUID REFERENCES units(id) ON DELETE SET NULL;"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_assigned_at TIMESTAMPTZ;"))
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS verified_cpf VARCHAR(14);"))
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS proposal_number VARCHAR(100);"))

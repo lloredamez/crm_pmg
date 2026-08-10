@@ -42,6 +42,22 @@ async def update_user_status(user_id: UUID, status_in: UserUpdateStatus, db: Asy
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     return user
 
+@router.patch("/{user_id}/toggle-active", response_model=UserResponse)
+async def toggle_user_active(user_id: UUID, db: AsyncSession = Depends(get_db)):
+    service = UserService(db)
+    user = await service.toggle_active(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    return user
+
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(user_id: UUID, db: AsyncSession = Depends(get_db)):
+    service = UserService(db)
+    success = await service.delete_user(user_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    return None
+
 
 @router.get("/units/all")
 async def list_units(db: AsyncSession = Depends(get_db)):

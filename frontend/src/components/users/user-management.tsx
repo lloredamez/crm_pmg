@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { User } from '@/features/leads/types';
 import { useAuth } from '@/features/auth/auth-provider';
-import { ShieldCheck, UserCheck, Headset, UserPlus, Building2, CheckCircle2, Pencil, X } from 'lucide-react';
+import { ShieldCheck, UserCheck, Headset, UserPlus, Building2, CheckCircle2, Pencil, X, Trash2, Power, AlertTriangle } from 'lucide-react';
 import { getApiUrl } from '@/lib/config';
+import { toggleUserActive, deleteUser } from '@/features/leads/api';
 
 interface UserManagementProps {
   users: User[];
@@ -16,7 +17,7 @@ interface UnitItem {
 }
 
 export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh }) => {
-  const { token } = useAuth();
+  const { token, user: currentUser } = useAuth();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [cpf, setCpf] = useState('');
@@ -36,11 +37,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
   const [editCpf, setEditCpf] = useState('');
   const [editPassword, setEditPassword] = useState('');
   const [editRole, setEditRole] = useState('attendant');
+  const [editIsActive, setEditIsActive] = useState(true);
   const [editMaxLeads, setEditMaxLeads] = useState(10);
   const [editUnitId, setEditUnitId] = useState<string>('');
   const [editSelectedManagedUnits, setEditSelectedManagedUnits] = useState<string[]>([]);
   const [editLoading, setEditLoading] = useState(false);
   const [editMessage, setEditMessage] = useState<string | null>(null);
+
+  // Delete User State
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [deletingLoading, setDeletingLoading] = useState(false);
 
   const API_URL = getApiUrl();
 
@@ -87,10 +93,36 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
     setEditCpf(user.cpf || '');
     setEditPassword('');
     setEditRole(user.role);
+    setEditIsActive(user.is_active !== false);
     setEditMaxLeads(user.max_simultaneous_leads);
     setEditUnitId(user.unit_id || (units.length > 0 ? units[0].id : ''));
     setEditSelectedManagedUnits(user.managed_unit_ids || []);
     setEditMessage(null);
+  };
+
+  const handleToggleActive = async (u: User) => {
+    try {
+      await toggleUserActive(u.id);
+      setMessage(`Status da conta de "${u.name}" alterado com sucesso!`);
+      onRefresh();
+    } catch (err: any) {
+      setMessage(`Erro: ${err.message}`);
+    }
+  };
+
+  const confirmDeleteUser = async () => {
+    if (!userToDelete) return;
+    setDeletingLoading(true);
+    try {
+      await deleteUser(userToDelete.id);
+      setMessage(`Usuário "${userToDelete.name}" excluído com sucesso! Leads ativos retornaram ao balde.`);
+      setUserToDelete(null);
+      onRefresh();
+    } catch (err: any) {
+      setMessage(`Erro ao excluir: ${err.message}`);
+    } finally {
+      setDeletingLoading(false);
+    }
   };
 
   const handleCreateUser = async (e: React.FormEvent) => {
@@ -153,6 +185,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
         email: editEmail,
         cpf: editCpf.trim() || null,
         role: editRole,
+        is_active: editIsActive,
         max_simultaneous_leads: Number(editMaxLeads),
       };
 
@@ -230,7 +263,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
       <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-lg font-bold text-slate-900">Gerenciamento de Equipe & Perfis</h2>
-          <p className="text-xs text-slate-400">Cadastre e administre administradores, gerentes, supervisores e atendentes</p>
+          <p className="text-xs text-slate-400">Cadastre, inative, ative e administre administradores, gerentes, supervisores e atendentes</p>
         </div>
       </div>
 
@@ -243,8 +276,11 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
           </div>
 
           {message && (
-            <div className="p-3 bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs rounded-2xl mb-4 font-medium">
-              {message}
+            <div className="p-3 bg-indigo-50 border border-indigo-200 text-indigo-800 text-xs rounded-2xl mb-4 font-medium flex items-center justify-between">
+              <span>{message}</span>
+              <button onClick={() => setMessage(null)} className="text-indigo-400 hover:text-indigo-600">
+                <X className="w-4 h-4" />
+              </button>
             </div>
           )}
 
@@ -375,7 +411,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
 
         {/* List of Users */}
         <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm lg:col-span-2">
-          <h3 className="font-bold text-slate-900 text-sm mb-4">Integrantes Ativos na Plataforma ({users.length})</h3>
+          <h3 className="font-bold text-slate-900 text-sm mb-4">Integrantes Cadastrados na Plataforma ({users.length})</h3>
 
           <div className="overflow-x-auto rounded-2xl border border-slate-100">
             <table className="w-full text-left border-collapse">
@@ -385,7 +421,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                   <th className="py-3 px-4">CPF</th>
                   <th className="py-3 px-4">Perfil</th>
                   <th className="py-3 px-4">Unidade(s)</th>
-                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4">Conta</th>
+                  <th className="py-3 px-4">Presença</th>
                   <th className="py-3 px-4">Capacidade SLA</th>
                   <th className="py-3 px-4 text-right">Ações</th>
                 </tr>
@@ -401,10 +438,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                     unitLabel = matched ? matched.code : 'Atribuída';
                   }
 
+                  const isActive = u.is_active !== false;
+
                   return (
-                    <tr key={u.id} className="hover:bg-slate-50/60">
+                    <tr key={u.id} className={`hover:bg-slate-50/60 ${!isActive ? 'bg-slate-50/40 opacity-75' : ''}`}>
                       <td className="py-3 px-4 font-medium text-slate-900">
-                        <div>{u.name}</div>
+                        <div className="flex items-center gap-1.5">
+                          <span>{u.name}</span>
+                          {!isActive && (
+                            <span className="text-[10px] bg-red-100 text-red-700 font-bold px-1.5 py-0.2 rounded">Inativo</span>
+                          )}
+                        </div>
                         <div className="text-[11px] text-slate-400 font-normal">{u.email}</div>
                       </td>
                       <td className="py-3 px-4 font-mono text-[11px] text-slate-600">
@@ -417,10 +461,21 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                         </span>
                       </td>
                       <td className="py-3 px-4">
+                        {isActive ? (
+                          <span className="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                            Ativo
+                          </span>
+                        ) : (
+                          <span className="bg-red-100 text-red-800 text-[10px] font-bold px-2 py-0.5 rounded-full inline-flex items-center gap-1">
+                            Inativo
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
                         <span className={`text-[11px] font-semibold ${
-                          u.status === 'online' ? 'text-emerald-600' : u.status === 'busy' ? 'text-amber-600' : 'text-slate-400'
+                          !isActive ? 'text-slate-400' : u.status === 'online' ? 'text-emerald-600' : u.status === 'busy' ? 'text-amber-600' : 'text-slate-400'
                         }`}>
-                          {u.status === 'online' ? '🟢 Online' : u.status === 'busy' ? '🟡 Ocupado' : '⚪ Offline'}
+                          {!isActive ? '⚪ Inativo' : u.status === 'online' ? '🟢 Online' : u.status === 'busy' ? '🟡 Ocupado' : '⚪ Offline'}
                         </span>
                       </td>
                       <td className="py-3 px-4 font-semibold text-slate-800">
@@ -430,13 +485,35 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                           <span className="text-slate-400 font-normal text-[11px]">N/A (Controle)</span>
                         )}
                       </td>
-                      <td className="py-3 px-4 text-right">
+                      <td className="py-3 px-4 text-right space-x-1">
                         <button
                           onClick={() => startEditing(u)}
-                          className="inline-flex items-center gap-1 text-slate-600 hover:text-brand-600 font-medium text-xs bg-slate-100 hover:bg-slate-200/80 px-2.5 py-1 rounded-lg transition-colors"
+                          title="Editar Integrante"
+                          className="inline-flex items-center gap-1 text-slate-600 hover:text-brand-600 font-medium text-xs bg-slate-100 hover:bg-slate-200/80 px-2 py-1 rounded-lg transition-colors"
                         >
                           <Pencil className="w-3.5 h-3.5" /> Editar
                         </button>
+                        <button
+                          onClick={() => handleToggleActive(u)}
+                          title={isActive ? "Inativar Usuário" : "Ativar Usuário"}
+                          className={`inline-flex items-center gap-1 font-medium text-xs px-2 py-1 rounded-lg transition-colors ${
+                            isActive
+                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200'
+                              : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200'
+                          }`}
+                        >
+                          <Power className="w-3.5 h-3.5" />
+                          {isActive ? 'Inativar' : 'Ativar'}
+                        </button>
+                        {currentUser?.id !== u.id && (
+                          <button
+                            onClick={() => setUserToDelete(u)}
+                            title="Excluir Usuário"
+                            className="inline-flex items-center gap-1 text-red-600 hover:text-red-700 font-medium text-xs bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-1 rounded-lg transition-colors"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Excluir
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -504,6 +581,18 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                   onChange={(e) => setEditCpf(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                 />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">Status da Conta</label>
+                <select
+                  value={editIsActive ? 'active' : 'inactive'}
+                  onChange={(e) => setEditIsActive(e.target.value === 'active')}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                >
+                  <option value="active">🟢 Ativo (Acesso Liberado)</option>
+                  <option value="inactive">🔴 Inativo (Acesso Bloqueado e Fora da Distribuição)</option>
+                </select>
               </div>
 
               <div>
@@ -603,6 +692,51 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Confirm Delete User Modal */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xl max-w-md w-full space-y-4 relative">
+            <div className="flex items-center gap-3 text-red-600">
+              <div className="p-2.5 bg-red-50 rounded-2xl border border-red-100">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="font-bold text-slate-900 text-base">Excluir Integrante</h3>
+                <p className="text-xs text-slate-500">Esta ação não pode ser desfeita.</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed bg-slate-50 p-3.5 rounded-2xl border border-slate-100">
+              Tem certeza que deseja excluir permanentemente o integrante <strong className="text-slate-900">{userToDelete.name}</strong> ({userToDelete.email})?
+              <br />
+              <span className="text-amber-700 font-medium mt-1 block">
+                ⚠️ Leads ativos atribuídos a este usuário retornarão para o Balde de Leads da sua unidade.
+              </span>
+            </p>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setUserToDelete(null)}
+                disabled={deletingLoading}
+                className="w-1/2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs py-2.5 rounded-xl transition-all"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmDeleteUser}
+                disabled={deletingLoading}
+                className="w-1/2 bg-red-600 hover:bg-red-700 disabled:opacity-50 text-white font-semibold text-xs py-2.5 rounded-xl shadow-sm shadow-red-500/20 transition-all flex items-center justify-center gap-1.5"
+              >
+                <Trash2 className="w-4 h-4" />
+                {deletingLoading ? 'Excluindo...' : 'Confirmar Exclusão'}
+              </button>
+            </div>
           </div>
         </div>
       )}

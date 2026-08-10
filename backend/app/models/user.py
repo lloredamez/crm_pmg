@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Table
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, Table
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -22,6 +22,7 @@ class User(Base):
     hashed_password = Column(String(255), nullable=False)
     role = Column(String(50), default="attendant", nullable=False)  # 'admin', 'manager', 'supervisor', 'attendant'
     status = Column(String(50), default="offline", nullable=False) # 'online', 'offline', 'busy'
+    is_active = Column(Boolean, default=True, nullable=False)
     max_simultaneous_leads = Column(Integer, default=10, nullable=False)
     unit_id = Column(UUID(as_uuid=True), ForeignKey("units.id", ondelete="SET NULL"), nullable=True)
     last_assigned_at = Column(DateTime(timezone=True), nullable=True)
