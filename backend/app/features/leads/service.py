@@ -87,7 +87,6 @@ class LeadService:
             )
             self.db.add(assignment)
             await self.db.commit()
-            await self.db.refresh(lead)
 
             try:
                 from app.core.socket_manager import emit_lead_assigned
@@ -106,7 +105,7 @@ class LeadService:
             except Exception:
                 pass
 
-            return lead
+            return await self.get_lead_by_id(lead.id)
         else:
             bucket_lead = BucketLead(
                 name=lead_in.name,
@@ -129,7 +128,6 @@ class LeadService:
             )
             self.db.add(bucket_lead)
             await self.db.commit()
-            await self.db.refresh(bucket_lead)
 
             try:
                 from app.core.socket_manager import emit_lead_updated
@@ -146,7 +144,7 @@ class LeadService:
             except Exception:
                 pass
 
-            return bucket_lead
+            return await self.get_lead_by_id(bucket_lead.id)
 
     async def _find_eligible_attendant_for_units(self, unit_ids: Optional[List[UUID]] = None, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
         query = select(User).where(
@@ -415,12 +413,11 @@ class LeadService:
         lead.status = new_status
         lead.last_interaction_at = datetime.now(timezone.utc)
         await self.db.commit()
-        await self.db.refresh(lead)
 
         if old_status in ["assigned", "in_progress"] and new_status not in ["assigned", "in_progress"]:
             await self.process_pending_unassigned_leads(limit=10)
 
-        return lead
+        return await self.get_lead_by_id(lead_id)
 
     async def update_details(self, lead_id: UUID, details) -> Optional[Lead]:
         lead = await self.get_lead_by_id(lead_id)
@@ -450,8 +447,7 @@ class LeadService:
 
         lead.last_interaction_at = datetime.now(timezone.utc)
         await self.db.commit()
-        await self.db.refresh(lead)
-        return lead
+        return await self.get_lead_by_id(lead_id)
 
     async def reveal_lead(self, lead_id: UUID) -> Optional[Lead]:
         from app.models.disposition import Disposition
@@ -499,7 +495,6 @@ class LeadService:
 
         lead.last_interaction_at = now
         await self.db.commit()
-        await self.db.refresh(lead)
 
         try:
             from app.core.socket_manager import emit_lead_updated
@@ -517,7 +512,7 @@ class LeadService:
         except Exception:
             pass
 
-        return lead
+        return await self.get_lead_by_id(lead_id)
 
     async def reassign_lead(self, lead_id: UUID, new_attendant_id: UUID, reason: str = "manually_reassigned") -> Optional[Lead]:
         lead = await self.get_lead_by_id(lead_id)
@@ -558,7 +553,6 @@ class LeadService:
         )
         self.db.add(new_assignment)
         await self.db.commit()
-        await self.db.refresh(lead)
 
         # Fetch attendant for notification
         new_attendant_res = await self.db.execute(select(User).where(User.id == new_attendant_id))
@@ -575,7 +569,7 @@ class LeadService:
         }
         await emit_lead_reassigned(str(old_attendant_id) if old_attendant_id else "", str(new_attendant_id), lead_dict)
 
-        return lead
+        return await self.get_lead_by_id(lead_id)
 
     async def claim_lead(self, lead_id: UUID, current_user: User) -> Lead:
         from fastapi import HTTPException
@@ -634,7 +628,6 @@ class LeadService:
             )
             self.db.add(new_assignment)
             await self.db.commit()
-            await self.db.refresh(lead)
 
             try:
                 from app.workers.sla_tasks import check_lead_sla_timeout
@@ -659,7 +652,7 @@ class LeadService:
             except Exception:
                 pass
 
-            return lead
+            return await self.get_lead_by_id(lead.id)
 
         lead = await self.db.get(Lead, lead_id)
         if not lead:
@@ -697,7 +690,6 @@ class LeadService:
         )
         self.db.add(new_assignment)
         await self.db.commit()
-        await self.db.refresh(lead)
 
         # Agenda a verificação de SLA para o lead resgatado
         try:
@@ -724,7 +716,7 @@ class LeadService:
         except Exception:
             pass
 
-        return lead
+        return await self.get_lead_by_id(lead.id)
 
     async def list_sla_breaches(
         self,

@@ -2,7 +2,7 @@ from uuid import UUID
 from datetime import datetime, timezone, timedelta
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import select, update, func, or_
 from sqlalchemy.orm import selectinload
 from fastapi import HTTPException
 from app.models.disposition import Disposition
@@ -199,8 +199,9 @@ class DispositionService:
 
         lead.last_interaction_at = now
         await self.db.commit()
-        await self.db.refresh(lead)
 
+        from app.features.leads.service import LeadService
+        full_lead = await LeadService(self.db).get_lead_by_id(lead.id)
 
         # Trigger WebSocket update event
         try:
@@ -212,13 +213,13 @@ class DispositionService:
                 "status": lead.status,
                 "disposition_name": disposition.name,
                 "assigned_at": lead.assigned_at.isoformat() if lead.assigned_at else None,
-                "attendant_name": lead.current_attendant.name if lead.current_attendant else ""
+                "attendant_name": full_lead.current_attendant.name if full_lead and full_lead.current_attendant else ""
             }
             await emit_lead_updated(lead_dict)
         except Exception:
             pass
 
-        return lead
+        return full_lead
 
     async def list_channel_slas(self, channel_id: Optional[UUID] = None) -> List[ChannelDispositionSla]:
         query = select(ChannelDispositionSla)
