@@ -70,8 +70,8 @@ async def receive_meta_lead(
     logger.info(f"Received Meta Ads Lead Webhook: {payload}")
     
     # Process Lead Data Payload (Direct format or Meta Graph API webhook structure)
-    lead_name = payload.get("name") or payload.get("full_name") or "Lead Meta Ads"
-    phone = payload.get("phone") or payload.get("phone_number") or "+5511999999999"
+    lead_name = payload.get("name") or payload.get("full_name") or "-"
+    phone = payload.get("phone") or payload.get("phone_number") or "-"
     email = payload.get("email")
     cpf = payload.get("cpf")
     campaign_name = payload.get("campaign_name") or payload.get("form_name") or "Meta Ads Campaign"
