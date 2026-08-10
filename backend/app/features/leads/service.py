@@ -161,12 +161,20 @@ class LeadService:
         if not online_users:
             return None
 
+        from app.models.disposition import Disposition
         user_load = []
         for user in online_users:
             active_count_res = await self.db.execute(
-                select(func.count(Lead.id)).where(
+                select(func.count(Lead.id))
+                .outerjoin(Disposition, Lead.disposition_id == Disposition.id)
+                .where(
                     Lead.current_attendant_id == user.id,
-                    Lead.status.in_(["assigned", "in_progress"])
+                    Lead.status.in_(["assigned", "in_progress"]),
+                    or_(
+                        Lead.disposition_id.is_(None),
+                        Disposition.category.ilike("%Sem Tabulação%"),
+                        Disposition.name.ilike("%Sem Tabulação%")
+                    )
                 )
             )
             count = active_count_res.scalar() or 0
@@ -597,17 +605,25 @@ class LeadService:
         bucket_lead = await self.db.get(BucketLead, lead_id)
         if bucket_lead:
             if current_user.role == "attendant":
+                from app.models.disposition import Disposition
                 active_count_res = await self.db.execute(
-                    select(func.count(Lead.id)).where(
+                    select(func.count(Lead.id))
+                    .outerjoin(Disposition, Lead.disposition_id == Disposition.id)
+                    .where(
                         Lead.current_attendant_id == current_user.id,
-                        Lead.status.in_(["assigned", "in_progress"])
+                        Lead.status.in_(["assigned", "in_progress"]),
+                        or_(
+                            Lead.disposition_id.is_(None),
+                            Disposition.category.ilike("%Sem Tabulação%"),
+                            Disposition.name.ilike("%Sem Tabulação%")
+                        )
                     )
                 )
                 cnt = active_count_res.scalar() or 0
                 if cnt >= current_user.max_simultaneous_leads:
                     raise HTTPException(
                         status_code=400,
-                        detail=f"Você já atingiu seu limite máximo de leads simultâneos ({current_user.max_simultaneous_leads}). Finalize um atendimento antes de pegar novos leads."
+                        detail=f"Você já atingiu seu limite máximo de leads sem tabulação ({current_user.max_simultaneous_leads}). Tabule um atendimento pendente antes de pegar novos leads."
                     )
 
             now = datetime.now(timezone.utc)
@@ -683,17 +699,25 @@ class LeadService:
 
         # Checagem de capacidade caso o usuário seja atendente
         if current_user.role == "attendant":
+            from app.models.disposition import Disposition
             active_count_res = await self.db.execute(
-                select(func.count(Lead.id)).where(
+                select(func.count(Lead.id))
+                .outerjoin(Disposition, Lead.disposition_id == Disposition.id)
+                .where(
                     Lead.current_attendant_id == current_user.id,
-                    Lead.status.in_(["assigned", "in_progress"])
+                    Lead.status.in_(["assigned", "in_progress"]),
+                    or_(
+                        Lead.disposition_id.is_(None),
+                        Disposition.category.ilike("%Sem Tabulação%"),
+                        Disposition.name.ilike("%Sem Tabulação%")
+                    )
                 )
             )
             cnt = active_count_res.scalar() or 0
             if cnt >= current_user.max_simultaneous_leads:
                 raise HTTPException(
                     status_code=400,
-                    detail=f"Você já atingiu seu limite máximo de leads simultâneos ({current_user.max_simultaneous_leads}). Finalize um atendimento antes de pegar novos leads."
+                    detail=f"Você já atingiu seu limite máximo de leads sem tabulação ({current_user.max_simultaneous_leads}). Tabule um atendimento pendente antes de pegar novos leads."
                 )
 
         now = datetime.now(timezone.utc)
