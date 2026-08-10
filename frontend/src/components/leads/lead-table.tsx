@@ -11,7 +11,7 @@ import {
   ColumnDef,
   SortingState,
 } from '@tanstack/react-table';
-import { Lead, User } from '@/features/leads/types';
+import { Lead, User, Disposition } from '@/features/leads/types';
 import { formatDate, formatPhone, formatCpf, formatCurrency, cn } from '@/lib/utils';
 import { useAuth } from '@/features/auth/auth-provider';
 import { LeadTimerBadge } from './lead-timer-badge';
@@ -31,6 +31,9 @@ interface LeadTableProps {
   onBancoFilterChange?: (banco: string) => void;
   tabelaFilter?: string;
   onTabelaFilterChange?: (tabela: string) => void;
+  dispositionFilter?: string;
+  onDispositionFilterChange?: (disposition: string) => void;
+  dispositions?: Disposition[];
   attendantFilter?: string;
   onAttendantFilterChange?: (attendantId: string) => void;
   searchQuery: string;
@@ -57,6 +60,9 @@ export const LeadTable: React.FC<LeadTableProps> = ({
   onBancoFilterChange,
   tabelaFilter = 'all',
   onTabelaFilterChange,
+  dispositionFilter = 'all',
+  onDispositionFilterChange,
+  dispositions = [],
   attendantFilter = 'all',
   onAttendantFilterChange,
   searchQuery,
@@ -516,6 +522,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
     statusFilter !== 'all' ||
     bancoFilter !== 'all' ||
     tabelaFilter !== 'all' ||
+    dispositionFilter !== 'all' ||
     attendantFilter !== 'all' ||
     !!searchQuery;
 
@@ -523,6 +530,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
     onStatusFilterChange('all');
     onBancoFilterChange?.('all');
     onTabelaFilterChange?.('all');
+    onDispositionFilterChange?.('all');
     onAttendantFilterChange?.('all');
     onSearchChange('');
   };
@@ -598,6 +606,36 @@ export const LeadTable: React.FC<LeadTableProps> = ({
               {availableTabelas.map((t) => (
                 <option key={t} value={t}>{t}</option>
               ))}
+            </select>
+          </div>
+
+          {/* Tabulação Filter Dropdown */}
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 text-xs">
+            <Tag className="w-3.5 h-3.5 text-slate-400" />
+            <select
+              value={dispositionFilter}
+              onChange={(e) => onDispositionFilterChange?.(e.target.value)}
+              className="bg-transparent font-medium text-slate-700 focus:outline-none cursor-pointer"
+            >
+              <option value="all">Todas as Tabulações</option>
+              <option value="sem_tabulacao">Sem Tabulação</option>
+              {dispositions.length > 0
+                ? dispositions.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name} ({d.category})
+                    </option>
+                  ))
+                : Array.from(
+                    new Set(
+                      leads
+                        .map((l) => l.disposition?.name)
+                        .filter((d): d is string => !!d && d.trim() !== '')
+                    )
+                  ).map((dispName) => (
+                    <option key={dispName} value={dispName}>
+                      {dispName}
+                    </option>
+                  ))}
             </select>
           </div>
 

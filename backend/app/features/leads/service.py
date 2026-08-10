@@ -275,6 +275,7 @@ class LeadService:
         attendant_id: Optional[UUID] = None,
         banco_filter: Optional[str] = None,
         tabela_filter: Optional[str] = None,
+        disposition_filter: Optional[str] = None,
         current_user: Optional[User] = None
     ) -> Tuple[List, int]:
         from app.features.dispositions.service import DispositionService
@@ -283,6 +284,8 @@ class LeadService:
         is_balde_filter = status_filter and status_filter.lower() in ["new", "balde"]
 
         if is_balde_filter:
+            if disposition_filter and disposition_filter.lower() not in ["all", "none", "sem_tabulacao", "sem tabulação"]:
+                return [], 0
             b_query = select(BucketLead).options(selectinload(BucketLead.unit))
 
             if current_user:
@@ -370,6 +373,23 @@ class LeadService:
 
         if tabela_filter and tabela_filter.lower() != "all":
             query = query.where(Lead.tabela.ilike(f"%{tabela_filter}%"))
+
+        if disposition_filter and disposition_filter.lower() != "all":
+            disp_lower = disposition_filter.lower()
+            if disp_lower in ["none", "sem_tabulacao", "sem tabulação"]:
+                query = query.where(Lead.disposition_id.is_(None))
+            else:
+                try:
+                    disp_uuid = UUID(disposition_filter)
+                    query = query.where(Lead.disposition_id == disp_uuid)
+                except ValueError:
+                    from app.models.disposition import Disposition
+                    query = query.join(Lead.disposition).where(
+                        or_(
+                            Disposition.name.ilike(f"%{disposition_filter}%"),
+                            Disposition.category.ilike(f"%{disposition_filter}%")
+                        )
+                    )
 
         if search:
             search_pattern = f"%{search}%"

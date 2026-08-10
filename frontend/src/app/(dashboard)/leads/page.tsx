@@ -16,7 +16,8 @@ import { SimulateLeadModal } from '@/components/leads/simulate-lead-modal';
 import { UserManagement } from '@/components/users/user-management';
 import { SettingsPage } from '@/components/settings/settings-page';
 import { fetchLeads, fetchUsers, updateUserStatus, reassignLead, bulkReassignLeads, revealLead, claimLead } from '@/features/leads/api';
-import { Lead, User } from '@/features/leads/types';
+import { fetchDispositions } from '@/features/dispositions/api';
+import { Lead, User, Disposition } from '@/features/leads/types';
 import { useSocket } from '@/features/socket/socket-provider';
 
 export default function LeadsDashboardPage() {
@@ -31,6 +32,7 @@ export default function LeadsDashboardPage() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [bancoFilter, setBancoFilter] = useState('all');
   const [tabelaFilter, setTabelaFilter] = useState('all');
+  const [dispositionFilter, setDispositionFilter] = useState('all');
   const [selectedAttendantFilter, setSelectedAttendantFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -60,6 +62,13 @@ export default function LeadsDashboardPage() {
     enabled: !!user,
   });
 
+  // Fetch Dispositions
+  const { data: dispositions = [] } = useQuery<Disposition[]>({
+    queryKey: ['dispositions'],
+    queryFn: () => fetchDispositions(false),
+    enabled: !!user,
+  });
+
   // Fetch Leads with Role & Custom Header Filters
   const activeAttendantId = isAttendant
     ? (statusFilter === 'new' ? undefined : user?.id)
@@ -68,7 +77,7 @@ export default function LeadsDashboardPage() {
     : undefined;
 
   const { data: leadsData, refetch: refetchLeads } = useQuery({
-    queryKey: ['leads', page, statusFilter, searchQuery, activeAttendantId, bancoFilter, tabelaFilter, activeTab],
+    queryKey: ['leads', page, statusFilter, searchQuery, activeAttendantId, bancoFilter, tabelaFilter, dispositionFilter, activeTab],
     queryFn: () =>
       fetchLeads({
         page,
@@ -78,6 +87,7 @@ export default function LeadsDashboardPage() {
         attendant_id: activeTab === 'overview' ? undefined : activeAttendantId,
         banco: activeTab === 'overview' ? undefined : bancoFilter,
         tabela: activeTab === 'overview' ? undefined : tabelaFilter,
+        disposition: activeTab === 'overview' ? undefined : dispositionFilter,
       }),
     enabled: !!user,
     refetchInterval: 5000, // Automatic real-time polling fallback
@@ -286,6 +296,12 @@ export default function LeadsDashboardPage() {
                   setTabelaFilter(t);
                   setPage(1);
                 }}
+                dispositionFilter={dispositionFilter}
+                onDispositionFilterChange={(d) => {
+                  setDispositionFilter(d);
+                  setPage(1);
+                }}
+                dispositions={dispositions}
                 attendantFilter={selectedAttendantFilter}
                 onAttendantFilterChange={(attId) => {
                   setSelectedAttendantFilter(attId);
