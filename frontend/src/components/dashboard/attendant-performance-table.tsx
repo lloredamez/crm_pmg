@@ -83,7 +83,7 @@ export const AttendantPerformanceTable: React.FC<AttendantPerformanceTableProps>
     const years = new Set<number>();
     years.add(currentYear);
     leads.forEach((l) => {
-      const dateStr = l.created_at || l.assigned_at;
+      const dateStr = l.dispositioned_at || l.assigned_at || l.created_at;
       if (dateStr) {
         const y = new Date(dateStr).getFullYear();
         if (!isNaN(y)) years.add(y);
@@ -95,7 +95,7 @@ export const AttendantPerformanceTable: React.FC<AttendantPerformanceTableProps>
   // Filter leads based on selected Year and Month
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
-      const dateStr = lead.created_at || lead.assigned_at;
+      const dateStr = lead.dispositioned_at || lead.assigned_at || lead.created_at;
       if (!dateStr) return true;
       const d = new Date(dateStr);
       if (isNaN(d.getTime())) return true;
@@ -122,6 +122,7 @@ export const AttendantPerformanceTable: React.FC<AttendantPerformanceTableProps>
         name: string;
         email: string;
         role: string;
+        status: string;
         totalLeads: number;
         vendas: number;
         perdas: number;
@@ -130,20 +131,27 @@ export const AttendantPerformanceTable: React.FC<AttendantPerformanceTableProps>
       }
     > = {};
 
-    // Initialize map for allowed registered users
+    const userMap = new Map(users.map((u) => [String(u.id).toLowerCase(), u]));
+
+    // Initialize map for registered attendants within user scope
     allowedUsers.forEach((u) => {
-      const key = String(u.id).toLowerCase();
-      attendantMap[key] = {
-        id: u.id,
-        name: u.name,
-        email: u.email,
-        role: u.role,
-        totalLeads: 0,
-        vendas: 0,
-        perdas: 0,
-        outros: 0,
-        valorTotalLiberado: 0,
-      };
+      // Only pre-fill users who are attendants (non-attendants will only be added if they have leads)
+      if (u.role === 'attendant') {
+        const key = String(u.id).toLowerCase();
+        const liveUser = userMap.get(key) || u;
+        attendantMap[key] = {
+          id: u.id,
+          name: u.name,
+          email: u.email,
+          role: u.role,
+          status: liveUser.status || 'offline',
+          totalLeads: 0,
+          vendas: 0,
+          perdas: 0,
+          outros: 0,
+          valorTotalLiberado: 0,
+        };
+      }
     });
 
     // Populate stats from filtered leads
@@ -156,11 +164,13 @@ export const AttendantPerformanceTable: React.FC<AttendantPerformanceTableProps>
         if (currentUser?.role === 'admin' || allowedUserIdsSet.has(attendantKey)) {
           if (!attendantMap[attendantKey]) {
             const rawName = lead.current_attendant?.name || 'Atendente';
+            const liveUser = userMap.get(attendantKey);
             attendantMap[attendantKey] = {
               id: String(rawAttendantId),
               name: rawName,
-              email: '',
-              role: 'attendant',
+              email: lead.current_attendant?.email || '',
+              role: lead.current_attendant?.role || 'attendant',
+              status: liveUser?.status || lead.current_attendant?.status || 'offline',
               totalLeads: 0,
               vendas: 0,
               perdas: 0,
@@ -172,50 +182,60 @@ export const AttendantPerformanceTable: React.FC<AttendantPerformanceTableProps>
           const stats = attendantMap[attendantKey];
           stats.totalLeads += 1;
 
-        const status = (lead.status || '').toLowerCase();
-        const dispCategory = (lead.disposition?.category || '').toLowerCase();
-        const dispName = (lead.disposition?.name || lead.current_disposition_name || '').toLowerCase();
+          const status = (lead.status || '').toLowerCase();
+          const dispCategory = (lead.disposition?.category || '').toLowerCase();
+          const dispName = (lead.disposition?.name || lead.current_disposition_name || '').toLowerCase();
 
-        const isVenda =
-          status === 'converted' ||
-          dispCategory.includes('venda') ||
-          dispCategory.includes('sucesso') ||
-          dispCategory.includes('fechado') ||
-          dispCategory.includes('ganho') ||
-          dispName.includes('venda') ||
-          dispName.includes('fechado') ||
-          dispName.includes('convertido');
+          const isVenda =
+            status === 'converted' ||
+            dispCategory.includes('venda') ||
+            dispCategory.includes('vendido') ||
+            dispCategory.includes('sucesso') ||
+            dispCategory.includes('fechado') ||
+            dispCategory.includes('ganho') ||
+            dispCategory.includes('pago') ||
+            dispName.includes('venda') ||
+            dispName.includes('vendido') ||
+            dispName.includes('fechado') ||
+            dispName.includes('convertido') ||
+            dispName.includes('pago');
 
-        const isPerda =
-          status === 'lost' ||
-          dispCategory.includes('perda') ||
-          dispCategory.includes('sem interesse') ||
-          dispCategory.includes('recusado') ||
-          dispCategory.includes('cancelado') ||
-          dispName.includes('perda') ||
-          dispName.includes('sem interesse');
+          const isPerda =
+            status === 'lost' ||
+            dispCategory.includes('perda') ||
+            dispCategory.includes('perdido') ||
+            dispCategory.includes('sem interesse') ||
+            dispCategory.includes('recusado') ||
+            dispCategory.includes('cancelado') ||
+            dispCategory.includes('desistência') ||
+            dispName.includes('perda') ||
+            dispName.includes('perdido') ||
+            dispName.includes('sem interesse') ||
+            dispName.includes('desistência');
 
-        if (isVenda) {
-          stats.vendas += 1;
-          const valor = lead.valor_liberado ? Number(lead.valor_liberado) : 0;
-          if (!isNaN(valor)) {
-            stats.valorTotalLiberado += valor;
+          if (isVenda) {
+            stats.vendas += 1;
+            const valor = lead.valor_liberado ? Number(lead.valor_liberado) : 0;
+            if (!isNaN(valor)) {
+              stats.valorTotalLiberado += valor;
+            }
+          } else if (isPerda) {
+            stats.perdas += 1;
+          } else {
+            stats.outros += 1;
           }
-        } else if (isPerda) {
-          stats.perdas += 1;
-        } else {
-          stats.outros += 1;
         }
       }
-    }
-  });
-
-    // Convert map to array and sort by Vendas desc, then Valor Total desc
-    return Object.values(attendantMap).sort((a, b) => {
-      if (b.vendas !== a.vendas) return b.vendas - a.vendas;
-      return b.valorTotalLiberado - a.valorTotalLiberado;
     });
-  }, [filteredLeads, users]);
+
+    // Filter to only include attendants or non-attendants with actual leads, then sort
+    return Object.values(attendantMap)
+      .filter((item) => item.role === 'attendant' || item.totalLeads > 0)
+      .sort((a, b) => {
+        if (b.vendas !== a.vendas) return b.vendas - a.vendas;
+        return b.valorTotalLiberado - a.valorTotalLiberado;
+      });
+  }, [filteredLeads, allowedUsers, currentUser, users]);
 
   // Overall totals calculation
   const totals = useMemo(() => {
@@ -315,6 +335,7 @@ export const AttendantPerformanceTable: React.FC<AttendantPerformanceTableProps>
           <thead>
             <tr className="bg-slate-50/80 border-b border-slate-100 text-slate-500 text-[11px] font-semibold tracking-wider uppercase">
               <th className="py-3.5 px-4">Atendente</th>
+              <th className="py-3.5 px-4 text-center">Status</th>
               <th className="py-3.5 px-4 text-center">Total Leads</th>
               <th className="py-3.5 px-4 text-center">Nº de Vendas</th>
               <th className="py-3.5 px-4 text-center">Nº de Perdas</th>
@@ -343,6 +364,34 @@ export const AttendantPerformanceTable: React.FC<AttendantPerformanceTableProps>
                           )}
                         </div>
                       </div>
+                    </td>
+
+                    {/* Status em Tempo Real */}
+                    <td className="py-3.5 px-4 text-center">
+                      <span
+                        className={`inline-flex items-center gap-1.5 font-semibold px-2.5 py-1 rounded-full text-[11px] ${
+                          item.status === 'online'
+                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200/80'
+                            : item.status === 'busy'
+                            ? 'bg-amber-50 text-amber-700 border border-amber-200/80'
+                            : 'bg-slate-100 text-slate-600 border border-slate-200/80'
+                        }`}
+                      >
+                        <span
+                          className={`w-2 h-2 rounded-full ${
+                            item.status === 'online'
+                              ? 'bg-emerald-500 animate-pulse'
+                              : item.status === 'busy'
+                              ? 'bg-amber-500'
+                              : 'bg-slate-400'
+                          }`}
+                        />
+                        {item.status === 'online'
+                          ? 'Online'
+                          : item.status === 'busy'
+                          ? 'Ocupado'
+                          : 'Offline'}
+                      </span>
                     </td>
 
                     {/* Total Leads */}
@@ -382,7 +431,7 @@ export const AttendantPerformanceTable: React.FC<AttendantPerformanceTableProps>
               })
             ) : (
               <tr>
-                <td colSpan={6} className="py-8 text-center text-slate-400 text-xs">
+                <td colSpan={7} className="py-8 text-center text-slate-400 text-xs">
                   Nenhum registro de atendimento encontrado no período selecionado.
                 </td>
               </tr>
@@ -396,6 +445,7 @@ export const AttendantPerformanceTable: React.FC<AttendantPerformanceTableProps>
                 <td className="py-3.5 px-4 uppercase tracking-wider text-[11px] font-bold text-slate-700">
                   Total Geral
                 </td>
+                <td className="py-3.5 px-4 text-center text-slate-400 font-normal text-xs">-</td>
                 <td className="py-3.5 px-4 text-center">{totals.totalLeads}</td>
                 <td className="py-3.5 px-4 text-center text-emerald-700 font-bold">
                   {totals.vendas}

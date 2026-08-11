@@ -351,7 +351,10 @@ class LeadService:
         # Role-based filtering
         if current_user:
             if current_user.role == "manager":
-                managed_unit_ids = [u.id for u in current_user.managed_units] if current_user.managed_units else []
+                managed_unit_ids = current_user.managed_unit_ids or []
+                if not managed_unit_ids and current_user.unit_id:
+                    managed_unit_ids = [current_user.unit_id]
+
                 if managed_unit_ids:
                     query = query.outerjoin(User, Lead.current_attendant_id == User.id).where(
                         or_(
@@ -359,8 +362,6 @@ class LeadService:
                             User.unit_id.in_(managed_unit_ids)
                         )
                     )
-                else:
-                    query = query.where(False)
             elif current_user.role == "supervisor":
                 if current_user.unit_id:
                     query = query.outerjoin(User, Lead.current_attendant_id == User.id).where(
