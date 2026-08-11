@@ -148,9 +148,11 @@ class LeadService:
 
     async def _find_eligible_attendant_for_units(self, unit_ids: Optional[List[UUID]] = None, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
         query = select(User).where(
+            User.is_active.is_(True),
             User.status == "online",
             User.role.in_(["attendant"])
-        )
+        ).order_by(User.created_at.asc(), User.id.asc())
+
         if unit_ids:
             query = query.where(User.unit_id.in_(unit_ids))
         if exclude_user_id:
@@ -162,7 +164,7 @@ class LeadService:
             return None
 
         from app.models.disposition import Disposition
-        user_load = []
+        eligible_users = []
         for user in online_users:
             active_count_res = await self.db.execute(
                 select(func.count(Lead.id))
@@ -180,14 +182,14 @@ class LeadService:
             count = active_count_res.scalar() or 0
             if count < user.max_simultaneous_leads:
                 last_assigned = user.last_assigned_at or datetime.min.replace(tzinfo=timezone.utc)
-                user_load.append((count, last_assigned, user))
+                eligible_users.append((last_assigned, user))
 
-        if not user_load:
+        if not eligible_users:
             return None
 
-        # Ordena estritamente por quem recebeu lead há mais tempo (Round-Robin puro)
-        user_load.sort(key=lambda x: (x[1], x[0]))
-        return user_load[0][2]
+        # Ordenação sequencial por quem recebeu lead há mais tempo (Round-Robin puro: A -> B -> C -> D -> A...)
+        eligible_users.sort(key=lambda x: x[0])
+        return eligible_users[0][1]
 
     async def _find_eligible_attendant_for_unit(self, unit_id: Optional[UUID] = None, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
         unit_ids = [unit_id] if unit_id else None
@@ -550,6 +552,8 @@ class LeadService:
         target_user = await self.db.get(User, new_attendant_id)
         if not target_user:
             raise HTTPException(status_code=404, detail="Atendente destino não encontrado")
+        if not target_user.is_active:
+            raise HTTPException(status_code=400, detail="Não é permitido reatribuir leads para atendentes inativos")
         if target_user.role != "attendant":
             raise HTTPException(status_code=400, detail="Não é permitido reatribuir leads para gerentes ou supervisores")
 
