@@ -246,3 +246,42 @@ export async function deleteUser(userId: string): Promise<void> {
   }
 }
 
+export interface AttendantPerformanceItem {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  status: string;
+  total_leads: number;
+  vendas: number;
+  perdas: number;
+  outros: number;
+  valor_total_liberado: number;
+}
+
+export interface AttendantPerformanceResponse {
+  items: AttendantPerformanceItem[];
+  total_attendants: number;
+}
+
+export async function fetchAttendantPerformance(params?: {
+  year?: number | 'all';
+  month?: number | 'all';
+}): Promise<AttendantPerformanceResponse> {
+  const API_URL = getApiUrl();
+  const query = new URLSearchParams();
+  if (params?.year && params.year !== 'all') {
+    query.append('year', params.year.toString());
+  }
+  if (params?.month !== undefined && params.month !== 'all') {
+    query.append('month', (Number(params.month) + 1).toString());
+  }
+
+  const res = await fetch(`${API_URL}/api/v1/leads/performance?${query.toString()}`, {
+    headers: {
+      ...getAuthHeaders(),
+    },
+  });
+  return handleResponse<AttendantPerformanceResponse>(res);
+}
+

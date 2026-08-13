@@ -17,6 +17,8 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '@/features/auth/auth-provider';
+import { useQuery } from '@tanstack/react-query';
+import { fetchAttendantPerformance } from '@/features/leads/api';
 
 interface AttendantPerformanceTableProps {
   leads: Lead[];
@@ -46,6 +48,13 @@ export const AttendantPerformanceTable: React.FC<AttendantPerformanceTableProps>
   const currentYear = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState<number | 'all'>('all');
   const [selectedMonth, setSelectedMonth] = useState<number | 'all'>('all');
+
+  const { data: perfResponse } = useQuery({
+    queryKey: ['attendant-performance', selectedYear, selectedMonth],
+    queryFn: () => fetchAttendantPerformance({ year: selectedYear, month: selectedMonth }),
+    enabled: !!currentUser,
+    refetchInterval: 5000,
+  });
 
   // Filter users based on supervisor/manager unit authorization
   const allowedUsers = useMemo(() => {
@@ -78,10 +87,12 @@ export const AttendantPerformanceTable: React.FC<AttendantPerformanceTableProps>
     return users;
   }, [users, currentUser]);
 
-  // Extract available years from leads
+  // Extract available years from leads or defaults
   const availableYears = useMemo(() => {
     const years = new Set<number>();
     years.add(currentYear);
+    years.add(currentYear - 1);
+    years.add(currentYear - 2);
     leads.forEach((l) => {
       const dateStr = l.dispositioned_at || l.assigned_at || l.created_at;
       if (dateStr) {
@@ -92,7 +103,7 @@ export const AttendantPerformanceTable: React.FC<AttendantPerformanceTableProps>
     return Array.from(years).sort((a, b) => b - a);
   }, [leads, currentYear]);
 
-  // Filter leads based on selected Year and Month
+  // Filter leads based on selected Year and Month (fallback)
   const filteredLeads = useMemo(() => {
     return leads.filter((lead) => {
       const dateStr = lead.dispositioned_at || lead.assigned_at || lead.created_at;
@@ -114,6 +125,21 @@ export const AttendantPerformanceTable: React.FC<AttendantPerformanceTableProps>
 
   // Group and compute metrics per attendant
   const performanceData = useMemo(() => {
+    if (perfResponse?.items && perfResponse.items.length > 0) {
+      return perfResponse.items.map((item) => ({
+        id: String(item.id),
+        name: item.name,
+        email: item.email || '',
+        role: item.role || 'attendant',
+        status: item.status || 'offline',
+        totalLeads: item.total_leads,
+        vendas: item.vendas,
+        perdas: item.perdas,
+        outros: item.outros,
+        valorTotalLiberado: item.valor_total_liberado,
+      }));
+    }
+
     const allowedUserIdsSet = new Set(allowedUsers.map((u) => String(u.id).toLowerCase()));
     const attendantMap: Record<
       string,
@@ -135,7 +161,6 @@ export const AttendantPerformanceTable: React.FC<AttendantPerformanceTableProps>
 
     // Initialize map for registered attendants within user scope
     allowedUsers.forEach((u) => {
-      // Only pre-fill users who are attendants (non-attendants will only be added if they have leads)
       if (u.role === 'attendant') {
         const key = String(u.id).toLowerCase();
         const liveUser = userMap.get(key) || u;
@@ -160,7 +185,6 @@ export const AttendantPerformanceTable: React.FC<AttendantPerformanceTableProps>
       if (rawAttendantId) {
         const attendantKey = String(rawAttendantId).toLowerCase();
 
-        // Only process leads assigned to attendants under current user's supervision/unit
         if (currentUser?.role === 'admin' || allowedUserIdsSet.has(attendantKey)) {
           if (!attendantMap[attendantKey]) {
             const rawName = lead.current_attendant?.name || 'Atendente';
@@ -228,14 +252,13 @@ export const AttendantPerformanceTable: React.FC<AttendantPerformanceTableProps>
       }
     });
 
-    // Filter to only include attendants or non-attendants with actual leads, then sort
     return Object.values(attendantMap)
       .filter((item) => item.role === 'attendant' || item.totalLeads > 0)
       .sort((a, b) => {
         if (b.vendas !== a.vendas) return b.vendas - a.vendas;
         return b.valorTotalLiberado - a.valorTotalLiberado;
       });
-  }, [filteredLeads, allowedUsers, currentUser, users]);
+  }, [perfResponse, filteredLeads, allowedUsers, currentUser, users]);
 
   // Overall totals calculation
   const totals = useMemo(() => {
