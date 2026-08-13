@@ -17,10 +17,29 @@ from app.schemas.lead import (
 )
 from app.schemas.sla_breach import SlaBreachResponse, SlaBreachPaginationResponse
 from app.schemas.lead_history import LeadHistoryItem
+from app.schemas.performance import AttendantPerformanceResponse, AttendantPerformanceItem
 from app.features.leads.service import LeadService
 
 
 router = APIRouter(prefix="/leads", tags=["Leads"])
+
+@router.get("/performance", response_model=AttendantPerformanceResponse)
+async def get_attendant_performance(
+    year: Optional[int] = Query(None),
+    month: Optional[int] = Query(None),
+    current_user: Optional[User] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    service = LeadService(db)
+    items = await service.get_attendant_performance(
+        year=year,
+        month=month,
+        current_user=current_user
+    )
+    return AttendantPerformanceResponse(
+        items=items,
+        total_attendants=len(items)
+    )
 
 @router.get("/sla-breaches", response_model=SlaBreachPaginationResponse)
 async def list_sla_breaches(

@@ -306,22 +306,22 @@ async def seed_initial_data():
             await session.commit()
             logger.info("Categorias padrão criadas com sucesso!")
 
-async def _periodic_disposition_checker():
-    from app.workers.sla_tasks import _async_check_disposition_timeouts
+async def _periodic_sla_checker():
+    from app.workers.sla_tasks import _async_check_all_expired_leads
     while True:
         try:
-            await asyncio.sleep(30)
-            await _async_check_disposition_timeouts()
+            await asyncio.sleep(15)
+            await _async_check_all_expired_leads()
         except asyncio.CancelledError:
             break
         except Exception as e:
-            logger.error(f"Error in periodic disposition SLA checker: {e}")
+            logger.error(f"Error in periodic SLA checker: {e}")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Iniciando aplicação FastAPI e executando seed de dados...")
     await seed_initial_data()
-    checker_task = asyncio.create_task(_periodic_disposition_checker())
+    checker_task = asyncio.create_task(_periodic_sla_checker())
     yield
     checker_task.cancel()
     logger.info("Encerrando aplicação FastAPI...")

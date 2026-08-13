@@ -288,6 +288,9 @@ class LeadService:
         disposition_filter: Optional[str] = None,
         current_user: Optional[User] = None
     ) -> Tuple[List, int]:
+        from app.workers.sla_tasks import _async_check_all_expired_leads
+        await _async_check_all_expired_leads(self.db)
+
         from app.features.dispositions.service import DispositionService
         unassigned_sla = await DispositionService(self.db).get_unassigned_sla_minutes()
 
@@ -872,6 +875,130 @@ class LeadService:
             e.pop("_timestamp", None)
 
         return events
+
+    async def get_attendant_performance(
+        self,
+        year: Optional[int] = None,
+        month: Optional[int] = None,
+        current_user: Optional[User] = None
+    ) -> List[dict]:
+        from app.models.disposition import Disposition
+        from sqlalchemy import extract, func, case, or_
+
+        u_query = select(User).where(User.role == "attendant")
+        if current_user:
+            if current_user.role == "manager":
+                managed_unit_ids = current_user.managed_unit_ids or []
+                if not managed_unit_ids and current_user.unit_id:
+                    managed_unit_ids = [current_user.unit_id]
+                if managed_unit_ids:
+                    u_query = u_query.where(User.unit_id.in_(managed_unit_ids))
+            elif current_user.role == "supervisor":
+                if current_user.unit_id:
+                    u_query = u_query.where(User.unit_id == current_user.unit_id)
+            elif current_user.role == "attendant":
+                u_query = u_query.where(User.id == current_user.id)
+
+        user_res = await self.db.execute(u_query)
+        attendants = list(user_res.scalars().all())
+
+        if not attendants:
+            return []
+
+        attendant_ids = [u.id for u in attendants]
+        lead_date = func.coalesce(Lead.dispositioned_at, Lead.assigned_at, Lead.created_at)
+
+        is_venda_cond = or_(
+            func.lower(Lead.status) == "converted",
+            func.lower(Disposition.category).like("%venda%"),
+            func.lower(Disposition.category).like("%vendido%"),
+            func.lower(Disposition.category).like("%sucesso%"),
+            func.lower(Disposition.category).like("%fechado%"),
+            func.lower(Disposition.category).like("%ganho%"),
+            func.lower(Disposition.category).like("%pago%"),
+            func.lower(Disposition.name).like("%venda%"),
+            func.lower(Disposition.name).like("%vendido%"),
+            func.lower(Disposition.name).like("%fechado%"),
+            func.lower(Disposition.name).like("%convertido%"),
+            func.lower(Disposition.name).like("%pago%")
+        )
+
+        is_perda_cond = or_(
+            func.lower(Lead.status) == "lost",
+            func.lower(Disposition.category).like("%perda%"),
+            func.lower(Disposition.category).like("%perdido%"),
+            func.lower(Disposition.category).like("%sem interesse%"),
+            func.lower(Disposition.category).like("%recusado%"),
+            func.lower(Disposition.category).like("%cancelado%"),
+            func.lower(Disposition.category).like("%desistência%"),
+            func.lower(Disposition.name).like("%perda%"),
+            func.lower(Disposition.name).like("%perdido%"),
+            func.lower(Disposition.name).like("%sem interesse%"),
+            func.lower(Disposition.name).like("%desistência%")
+        )
+
+        agg_query = (
+            select(
+                Lead.current_attendant_id.label("attendant_id"),
+                func.count(Lead.id).label("total_leads"),
+                func.sum(case((is_venda_cond, 1), else_=0)).label("vendas"),
+                func.sum(case((is_perda_cond, 1), else_=0)).label("perdas"),
+                func.sum(case((is_venda_cond, func.coalesce(Lead.valor_liberado, 0.0)), else_=0.0)).label("valor_total_liberado")
+            )
+            .outerjoin(Disposition, Lead.disposition_id == Disposition.id)
+            .where(Lead.current_attendant_id.in_(attendant_ids))
+        )
+
+        if year is not None:
+            agg_query = agg_query.where(extract("year", lead_date) == year)
+        if month is not None:
+            agg_query = agg_query.where(extract("month", lead_date) == month)
+
+        agg_query = agg_query.group_by(Lead.current_attendant_id)
+
+        agg_res = await self.db.execute(agg_query)
+        stats_map = {}
+        for row in agg_res.all():
+            att_id = row.attendant_id
+            total_l = row.total_leads or 0
+            v = row.vendas or 0
+            p = row.perdas or 0
+            val = float(row.valor_total_liberado or 0.0)
+            outros = total_l - v - p
+            if outros < 0:
+                outros = 0
+            stats_map[att_id] = {
+                "total_leads": total_l,
+                "vendas": v,
+                "perdas": p,
+                "outros": outros,
+                "valor_total_liberado": val
+            }
+
+        result_items = []
+        for u in attendants:
+            st = stats_map.get(u.id, {
+                "total_leads": 0,
+                "vendas": 0,
+                "perdas": 0,
+                "outros": 0,
+                "valor_total_liberado": 0.0
+            })
+            result_items.append({
+                "id": u.id,
+                "name": u.name,
+                "email": u.email or "",
+                "role": u.role or "attendant",
+                "status": u.status or "offline",
+                "total_leads": st["total_leads"],
+                "vendas": st["vendas"],
+                "perdas": st["perdas"],
+                "outros": st["outros"],
+                "valor_total_liberado": st["valor_total_liberado"]
+            })
+
+        result_items.sort(key=lambda x: (x["vendas"], x["valor_total_liberado"]), reverse=True)
+        return result_items
 
 
 
