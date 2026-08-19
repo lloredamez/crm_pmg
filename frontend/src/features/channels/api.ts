@@ -41,6 +41,7 @@ export async function createChannel(data: {
   code?: string;
   is_active?: boolean;
   unit_ids?: string[];
+  disposition_ids?: string[];
 }): Promise<Channel> {
   const API_URL = getApiUrl();
   const res = await fetch(`${API_URL}/api/v1/channels`, {
@@ -61,6 +62,7 @@ export async function updateChannel(
     code?: string;
     is_active?: boolean;
     unit_ids?: string[];
+    disposition_ids?: string[];
   }
 ): Promise<Channel> {
   const API_URL = getApiUrl();

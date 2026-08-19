@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { Lead, Disposition } from '@/features/leads/types';
 import { fetchDispositions, tabulateLead } from '@/features/dispositions/api';
+import { fetchChannels } from '@/features/channels/api';
 import { X, Tag, Clock, CheckCircle, AlertCircle, Save } from 'lucide-react';
 
 import { useAuth } from '@/features/auth/auth-provider';
@@ -40,12 +41,27 @@ export const TabulateLeadModal: React.FC<TabulateLeadModalProps> = ({
   const loadActiveDispositions = async () => {
     setLoading(true);
     try {
-      const data = await fetchDispositions(true);
-      setDispositions(data);
-      if (data.length > 0) {
+      const [data, channelsData] = await Promise.all([
+        fetchDispositions(true),
+        fetchChannels(true),
+      ]);
+
+      let available = data;
+      if (lead?.channel_code && channelsData.length > 0) {
+        const leadChan = channelsData.find(
+          (c) => c.code.toUpperCase() === lead.channel_code?.toUpperCase()
+        );
+        if (leadChan && leadChan.dispositions && leadChan.dispositions.length > 0) {
+          const allowedIds = new Set(leadChan.dispositions.map((d) => d.id));
+          available = data.filter((d) => allowedIds.has(d.id));
+        }
+      }
+
+      setDispositions(available);
+      if (available.length > 0) {
         // Preselect current lead disposition or first active
-        const match = data.find((d) => d.id === lead?.disposition_id);
-        setSelectedDispId(match ? match.id : data[0].id);
+        const match = available.find((d) => d.id === lead?.disposition_id);
+        setSelectedDispId(match ? match.id : available[0].id);
       }
     } catch (err) {
       console.error(err);

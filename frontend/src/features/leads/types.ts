@@ -28,6 +28,7 @@ export interface Channel {
   code: string;
   is_active: boolean;
   units?: Unit[];
+  dispositions?: Disposition[];
   created_at: string;
 }
 
@@ -64,6 +65,7 @@ export interface Lead {
   meta_lead_id?: string | null;
   campaign_name?: string | null;
   product_name?: string | null;
+  channel_code?: string | null;
   product?: string | null;
   prazo?: number | null;
   margem?: number | null;

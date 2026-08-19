@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Channel, Unit } from '@/features/leads/types';
+import { Channel, Unit, Disposition } from '@/features/leads/types';
 import {
   fetchChannels,
   createChannel,
@@ -10,11 +10,13 @@ import {
   deleteChannel,
 } from '@/features/channels/api';
 import { fetchUnits } from '@/features/units/api';
-import { Plus, Edit2, Trash2, Share2, Power, X, AlertCircle, Store, Check } from 'lucide-react';
+import { fetchDispositions } from '@/features/dispositions/api';
+import { Plus, Edit2, Trash2, Share2, Power, X, AlertCircle, Store, Check, Tag } from 'lucide-react';
 
 export const ChannelManagement: React.FC = () => {
   const [channels, setChannels] = useState<Channel[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
+  const [dispositions, setDispositions] = useState<Disposition[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
@@ -23,6 +25,7 @@ export const ChannelManagement: React.FC = () => {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
+  const [selectedDispIds, setSelectedDispIds] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -33,12 +36,14 @@ export const ChannelManagement: React.FC = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [channelsData, unitsData] = await Promise.all([
+      const [channelsData, unitsData, dispData] = await Promise.all([
         fetchChannels(false),
         fetchUnits(false),
+        fetchDispositions(false),
       ]);
       setChannels(channelsData);
       setUnits(unitsData);
+      setDispositions(dispData);
     } catch (err) {
       console.error(err);
     } finally {
@@ -50,8 +55,9 @@ export const ChannelManagement: React.FC = () => {
     setEditingChannel(null);
     setName('');
     setCode('');
-    // By default select all active units
+    // By default select all active units and dispositions
     setSelectedUnitIds(units.map((u) => u.id));
+    setSelectedDispIds(dispositions.map((d) => d.id));
     setErrorMsg('');
     setIsModalOpen(true);
   };
@@ -61,6 +67,7 @@ export const ChannelManagement: React.FC = () => {
     setName(channel.name);
     setCode(channel.code);
     setSelectedUnitIds(channel.units ? channel.units.map((u) => u.id) : []);
+    setSelectedDispIds(channel.dispositions ? channel.dispositions.map((d) => d.id) : []);
     setErrorMsg('');
     setIsModalOpen(true);
   };
@@ -68,6 +75,12 @@ export const ChannelManagement: React.FC = () => {
   const handleToggleUnitSelection = (unitId: string) => {
     setSelectedUnitIds((prev) =>
       prev.includes(unitId) ? prev.filter((id) => id !== unitId) : [...prev, unitId]
+    );
+  };
+
+  const handleToggleDispSelection = (dispId: string) => {
+    setSelectedDispIds((prev) =>
+      prev.includes(dispId) ? prev.filter((id) => id !== dispId) : [...prev, dispId]
     );
   };
 
@@ -106,6 +119,7 @@ export const ChannelManagement: React.FC = () => {
           name: name.trim(),
           code: code.trim() || undefined,
           unit_ids: selectedUnitIds,
+          disposition_ids: selectedDispIds,
         });
       } else {
         await createChannel({
@@ -113,6 +127,7 @@ export const ChannelManagement: React.FC = () => {
           code: code.trim() || undefined,
           is_active: true,
           unit_ids: selectedUnitIds,
+          disposition_ids: selectedDispIds,
         });
       }
       setIsModalOpen(false);
@@ -134,7 +149,7 @@ export const ChannelManagement: React.FC = () => {
             Canais de Leads
           </h2>
           <p className="text-xs text-slate-500 mt-1">
-            Cadastre os canais de captação (ex: Meta Ads, Google, WhatsApp) e associe quais lojas/unidades participam de cada canal.
+            Cadastre os canais de captação (ex: Meta Ads, Google, WhatsApp), associe lojas participantes e defina as tabulações disponíveis para cada canal.
           </p>
         </div>
 
@@ -164,6 +179,7 @@ export const ChannelManagement: React.FC = () => {
                   <th className="py-3 px-4">Nome do Canal</th>
                   <th className="py-3 px-4">Código / Chave</th>
                   <th className="py-3 px-4">Lojas Participantes</th>
+                  <th className="py-3 px-4">Tabulações Disponíveis</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4 text-right">Ações</th>
                 </tr>
@@ -197,6 +213,24 @@ export const ChannelManagement: React.FC = () => {
                         </div>
                       ) : (
                         <span className="text-slate-400 italic text-[11px]">Nenhuma loja associada</span>
+                      )}
+                    </td>
+
+                    <td className="py-3.5 px-4">
+                      {channel.dispositions && channel.dispositions.length > 0 ? (
+                        <div className="flex flex-wrap gap-1 max-w-xs">
+                          {channel.dispositions.map((disp) => (
+                            <span
+                              key={disp.id}
+                              className="inline-flex items-center gap-1 bg-amber-50 text-amber-800 border border-amber-200/80 text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                            >
+                              <Tag className="w-3 h-3 text-amber-600" />
+                              {disp.name}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 italic text-[11px]">Todas as tabulações</span>
                       )}
                     </td>
 
@@ -243,7 +277,7 @@ export const ChannelManagement: React.FC = () => {
       {/* Modal Create / Edit Channel */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-3xl max-w-xl sm:max-w-153.75 w-full p-6 shadow-2xl animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-bold text-slate-900 text-base">
                 {editingChannel ? 'Editar Canal de Leads' : 'Novo Canal de Leads'}
@@ -305,7 +339,7 @@ export const ChannelManagement: React.FC = () => {
                     Nenhuma loja cadastrada no sistema.
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 max-h-48 overflow-y-auto">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 max-h-40 overflow-y-auto">
                     {units.map((unit) => {
                       const isSelected = selectedUnitIds.includes(unit.id);
                       return (
@@ -328,6 +362,50 @@ export const ChannelManagement: React.FC = () => {
                             {isSelected && <Check className="w-3 h-3 stroke-3" />}
                           </div>
                           <span className="truncate">{unit.name}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Multi-select Disposition Selection */}
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-2">
+                <label className="block text-xs font-semibold text-slate-800">
+                  Tabulações Disponíveis neste Canal
+                </label>
+                <p className="text-[11px] text-slate-500">
+                  Selecione as tabulações que os atendentes poderão atribuir aos leads deste canal:
+                </p>
+
+                {dispositions.length === 0 ? (
+                  <div className="text-xs text-slate-400 italic py-2">
+                    Nenhuma tabulação cadastrada no sistema.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1 max-h-40 overflow-y-auto">
+                    {dispositions.map((disp) => {
+                      const isSelected = selectedDispIds.includes(disp.id);
+                      return (
+                        <div
+                          key={disp.id}
+                          onClick={() => handleToggleDispSelection(disp.id)}
+                          className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                            isSelected
+                              ? 'bg-amber-50/80 border-amber-300 text-amber-900 font-semibold shadow-xs'
+                              : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100/70'
+                          }`}
+                        >
+                          <div
+                            className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
+                              isSelected
+                                ? 'bg-amber-600 border-amber-600 text-white'
+                                : 'border-slate-300 bg-white'
+                            }`}
+                          >
+                            {isSelected && <Check className="w-3 h-3 stroke-3" />}
+                          </div>
+                          <span className="truncate">{disp.name}</span>
                         </div>
                       );
                     })}
