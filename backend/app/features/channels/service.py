@@ -52,7 +52,8 @@ class ChannelService:
             code=code.upper().strip(),
             is_active=channel_in.is_active,
             units=units,
-            dispositions=dispositions
+            dispositions=dispositions,
+            allowed_fields=channel_in.allowed_fields
         )
         self.db.add(channel)
         await self.db.commit()
@@ -77,6 +78,9 @@ class ChannelService:
         if channel_in.disposition_ids is not None:
             disp_res = await self.db.execute(select(Disposition).where(Disposition.id.in_(channel_in.disposition_ids)))
             channel.dispositions = list(disp_res.scalars().all())
+
+        if channel_in.allowed_fields is not None:
+            channel.allowed_fields = channel_in.allowed_fields
 
         await self.db.commit()
         return await self.get_channel_by_id(channel_id)

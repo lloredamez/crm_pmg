@@ -89,6 +89,8 @@ async def seed_initial_data():
             );
         """))
 
+        await conn.execute(text("ALTER TABLE channels ADD COLUMN IF NOT EXISTS allowed_fields JSON;"))
+
     async with AsyncSessionLocal() as session:
         # Seed das Unidades
         units_res = await session.execute(select(Unit))
