@@ -524,6 +524,31 @@ class LeadService:
                 if disp.has_timeout and disp.timeout_minutes and disp.timeout_minutes > 0:
                     lead.disposition_timeout_at = now + timedelta(minutes=disp.timeout_minutes)
 
+                # Registrar evento no histórico de tabulações
+                tabulation_entry = LeadTabulation(
+                    lead_id=lead.id,
+                    attendant_id=lead.current_attendant_id,
+                    disposition_id=disp.id,
+                    disposition_name=disp.name,
+                    disposition_notes="Tabulação inicial (ao revelar lead)",
+                    created_at=now
+                )
+                self.db.add(tabulation_entry)
+
+                if lead.current_attendant_id:
+                    await self.db.execute(
+                        update(LeadAssignment)
+                        .where(
+                            LeadAssignment.lead_id == lead.id,
+                            LeadAssignment.attendant_id == lead.current_attendant_id,
+                            LeadAssignment.status == "active"
+                        )
+                        .values(
+                            disposition_name=disp.name,
+                            disposition_notes="Tabulação inicial (ao revelar lead)"
+                        )
+                    )
+
         if lead.status == "new":
             lead.status = "assigned"
 

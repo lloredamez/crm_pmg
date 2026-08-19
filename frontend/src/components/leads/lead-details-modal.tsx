@@ -607,6 +607,22 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                                   Duração no atendimento: <span className="text-slate-700 font-semibold">{formatDuration(item.duration_seconds)}</span>
                                 </div>
                               )}
+
+                              {item.disposition_name && (
+                                <div className="flex items-center gap-1.5 text-slate-700 font-semibold text-xs mt-1.5 pt-1.5 border-t border-slate-200/60">
+                                  <Tag className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                                  <span>Tabulação no atendimento: <span className="text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">{item.disposition_name}</span></span>
+                                </div>
+                              )}
+                              {item.disposition_notes && (
+                                <div className="flex items-start gap-1.5 text-slate-600 text-xs pt-1">
+                                  <MessageSquare className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                                  <div>
+                                    <span className="font-semibold text-slate-700 block">Observação:</span>
+                                    <p className="text-slate-600 whitespace-pre-wrap mt-0.5 font-normal">{item.disposition_notes}</p>
+                                  </div>
+                                </div>
+                              )}
                             </>
                           )}
                         </div>

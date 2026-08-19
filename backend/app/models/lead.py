@@ -54,10 +54,12 @@ class Lead(Base):
         try:
             if self.assignments:
                 for a in self.assignments:
-                    if a.status == "active":
+                    if a.status == "active" and a.disposition_name:
                         return a.disposition_name
         except Exception:
             pass
+        if self.disposition:
+            return self.disposition.name
         return None
 
     @property
