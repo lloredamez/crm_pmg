@@ -29,6 +29,7 @@ export interface Channel {
   is_active: boolean;
   units?: Unit[];
   dispositions?: Disposition[];
+  allowed_fields?: string[] | null;
   created_at: string;
 }
 

@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Lead, LeadHistoryItem } from '@/features/leads/types';
+import { Lead, LeadHistoryItem, Channel } from '@/features/leads/types';
 import { updateLeadDetails, fetchLeadHistory } from '@/features/leads/api';
+import { fetchChannels } from '@/features/channels/api';
 import { formatDate, formatPhone, formatCpf, formatCurrency } from '@/lib/utils';
 import { X, Lock, Edit3, Save, FileText, CheckCircle, History, Clock, User, AlertCircle, RefreshCw, Tag, MessageSquare, Landmark, Table, DollarSign, Calculator } from 'lucide-react';
 
@@ -20,6 +21,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
   onRefresh,
 }) => {
   const [activeTab, setActiveTab] = useState<'details' | 'history'>('details');
+  const [channel, setChannel] = useState<Channel | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [verifiedCpf, setVerifiedCpf] = useState('');
@@ -55,10 +57,36 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
   }, [lead?.id]);
 
   useEffect(() => {
-    if (isOpen && lead && activeTab === 'history') {
-      loadHistory();
+    if (isOpen && lead) {
+      loadChannel();
+      if (activeTab === 'history') {
+        loadHistory();
+      }
     }
-  }, [isOpen, lead?.id, lead?.current_attendant_id, activeTab]);
+  }, [isOpen, lead?.id, lead?.channel_code, activeTab]);
+
+  const loadChannel = async () => {
+    if (!lead?.channel_code) {
+      setChannel(null);
+      return;
+    }
+    try {
+      const channels = await fetchChannels(false);
+      const matched = channels.find(
+        (c) => c.code.toUpperCase() === lead.channel_code?.toUpperCase()
+      );
+      setChannel(matched || null);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const isFieldAllowed = (fieldKey: string): boolean => {
+    if (!channel || !channel.allowed_fields || channel.allowed_fields.length === 0) {
+      return true; // Se o canal não tem restrições definidas, todos os campos ficam liberados
+    }
+    return channel.allowed_fields.includes(fieldKey);
+  };
 
 
   const loadHistory = async () => {
@@ -146,7 +174,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl max-w-xl w-full shadow-2xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+      <div className="bg-white rounded-3xl max-w-3xl w-full shadow-2xl overflow-hidden flex flex-col h-[80vh] max-h-200 min-h-150 animate-in zoom-in-95 duration-200">
         {/* Modal Header */}
         <div className="bg-slate-50 border-b border-slate-100 p-5 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -206,7 +234,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                   <span>Dados do Lead (Somente Leitura)</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-slate-50/80 rounded-2xl p-4 border border-slate-100 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 bg-slate-50/80 rounded-2xl p-4 border border-slate-100 text-xs">
                   <div>
                     <span className="text-slate-400 block font-medium">Nome do Lead</span>
                     <span className="font-semibold text-slate-800">{lead.name}</span>
@@ -285,137 +313,157 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                   <span>Campos Editáveis (Dados do Lead & Proposta)</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Nome do Lead / Cliente
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Nome completo do lead"
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
-                    />
-                  </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                  {isFieldAllowed('name') && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Nome do Lead / Cliente
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Nome completo do lead"
+                        value={name}
+                        onChange={(e) => setName(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                      />
+                    </div>
+                  )}
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Telefone / WhatsApp
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="(00) 00000-0000"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
-                    />
-                  </div>
+                  {isFieldAllowed('phone') && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Telefone / WhatsApp
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="(00) 00000-0000"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                      />
+                    </div>
+                  )}
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      CPF Correto / Verificado
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: 000.000.000-00"
-                      value={verifiedCpf}
-                      onChange={(e) => setVerifiedCpf(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
-                    />
-                  </div>
+                  {isFieldAllowed('verified_cpf') && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        CPF Correto / Verificado
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: 000.000.000-00"
+                        value={verifiedCpf}
+                        onChange={(e) => setVerifiedCpf(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                      />
+                    </div>
+                  )}
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Número da Proposta
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: PROP-2026-889"
-                      value={proposalNumber}
-                      onChange={(e) => setProposalNumber(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
-                    />
-                  </div>
+                  {isFieldAllowed('proposal_number') && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Número da Proposta
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: PROP-2026-889"
+                        value={proposalNumber}
+                        onChange={(e) => setProposalNumber(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                      />
+                    </div>
+                  )}
 
-                  {/*<div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Banco
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Banco Itaú, Bradesco, C6..."
-                      value={banco}
-                      onChange={(e) => setBanco(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
-                    />
-                  </div>
+                  {isFieldAllowed('banco') && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Banco
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Banco Itaú, Bradesco, C6..."
+                        value={banco}
+                        onChange={(e) => setBanco(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                      />
+                    </div>
+                  )}
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Tabela
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Tabela Normal, Flex..."
-                      value={tabela}
-                      onChange={(e) => setTabela(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
-                    />
-                  </div>
+                  {isFieldAllowed('tabela') && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Tabela
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Tabela Normal, Flex..."
+                        value={tabela}
+                        onChange={(e) => setTabela(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                      />
+                    </div>
+                  )}
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Prazo (Parcelas)
-                    </label>
-                    <input
-                      type="number"
-                      placeholder="Ex: 84"
-                      value={prazo}
-                      onChange={(e) => setPrazo(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
-                    />
-                  </div>
+                  {isFieldAllowed('prazo') && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Prazo (Parcelas)
+                      </label>
+                      <input
+                        type="number"
+                        placeholder="Ex: 84"
+                        value={prazo}
+                        onChange={(e) => setPrazo(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                      />
+                    </div>
+                  )}
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Margem (R$)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: 450.00"
-                      value={margem}
-                      onChange={(e) => setMargem(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
-                    />
-                  </div>
+                  {isFieldAllowed('margem') && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Margem (R$)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: 450.00"
+                        value={margem}
+                        onChange={(e) => setMargem(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                      />
+                    </div>
+                  )}
 
-                  <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Valor Liberado (R$)
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ex: 12500.00"
-                      value={valorLiberado}
-                      onChange={(e) => setValorLiberado(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
-                    />
-                  </div>*/}
+                  {isFieldAllowed('valor_liberado') && (
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        Valor Liberado (R$)
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: 12500.00"
+                        value={valorLiberado}
+                        onChange={(e) => setValorLiberado(e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                      />
+                    </div>
+                  )}
                 </div>
 
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Observações
-                  </label>
-                  <textarea
-                    rows={3}
-                    placeholder="Insira detalhes da proposta, negociação ou observações sobre o cliente..."
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 resize-none font-normal"
-                  />
-                </div>
+                {isFieldAllowed('notes') && (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                      Observações
+                    </label>
+                    <textarea
+                      rows={3}
+                      placeholder="Insira detalhes da proposta, negociação ou observações sobre o cliente..."
+                      value={notes}
+                      onChange={(e) => setNotes(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 resize-none font-normal"
+                    />
+                  </div>
+                )}
 
                 <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
                   <button
