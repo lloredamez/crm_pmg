@@ -12,6 +12,13 @@ unit_channels = Table(
     Column("channel_id", UUID(as_uuid=True), ForeignKey("channels.id", ondelete="CASCADE"), primary_key=True),
 )
 
+channel_dispositions = Table(
+    "channel_dispositions",
+    Base.metadata,
+    Column("channel_id", UUID(as_uuid=True), ForeignKey("channels.id", ondelete="CASCADE"), primary_key=True),
+    Column("disposition_id", UUID(as_uuid=True), ForeignKey("dispositions.id", ondelete="CASCADE"), primary_key=True),
+)
+
 class Channel(Base):
     __tablename__ = "channels"
 
@@ -22,5 +29,7 @@ class Channel(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     units = relationship("Unit", secondary=unit_channels, back_populates="channels")
+    dispositions = relationship("Disposition", secondary=channel_dispositions, back_populates="channels")
     disposition_slas = relationship("ChannelDispositionSla", back_populates="channel", cascade="all, delete-orphan")
+
 

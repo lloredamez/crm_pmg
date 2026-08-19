@@ -5,6 +5,7 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from app.models.channel import Channel
 from app.models.unit import Unit
+from app.models.disposition import Disposition
 from app.schemas.channel import ChannelCreate, ChannelUpdate
 
 class ChannelService:
@@ -12,14 +13,20 @@ class ChannelService:
         self.db = db
 
     async def list_channels(self, active_only: bool = False) -> List[Channel]:
-        query = select(Channel).options(selectinload(Channel.units)).order_by(Channel.name.asc())
+        query = select(Channel).options(
+            selectinload(Channel.units),
+            selectinload(Channel.dispositions)
+        ).order_by(Channel.name.asc())
         if active_only:
             query = query.where(Channel.is_active.is_(True))
         result = await self.db.execute(query)
         return list(result.scalars().all())
 
     async def get_channel_by_id(self, channel_id: UUID) -> Optional[Channel]:
-        query = select(Channel).options(selectinload(Channel.units)).where(Channel.id == channel_id)
+        query = select(Channel).options(
+            selectinload(Channel.units),
+            selectinload(Channel.dispositions)
+        ).where(Channel.id == channel_id)
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
 
@@ -35,11 +42,17 @@ class ChannelService:
             units_res = await self.db.execute(select(Unit).where(Unit.id.in_(channel_in.unit_ids)))
             units = list(units_res.scalars().all())
 
+        dispositions = []
+        if channel_in.disposition_ids:
+            disp_res = await self.db.execute(select(Disposition).where(Disposition.id.in_(channel_in.disposition_ids)))
+            dispositions = list(disp_res.scalars().all())
+
         channel = Channel(
             name=channel_in.name.strip(),
             code=code.upper().strip(),
             is_active=channel_in.is_active,
-            units=units
+            units=units,
+            dispositions=dispositions
         )
         self.db.add(channel)
         await self.db.commit()
@@ -60,6 +73,10 @@ class ChannelService:
         if channel_in.unit_ids is not None:
             units_res = await self.db.execute(select(Unit).where(Unit.id.in_(channel_in.unit_ids)))
             channel.units = list(units_res.scalars().all())
+
+        if channel_in.disposition_ids is not None:
+            disp_res = await self.db.execute(select(Disposition).where(Disposition.id.in_(channel_in.disposition_ids)))
+            channel.dispositions = list(disp_res.scalars().all())
 
         await self.db.commit()
         return await self.get_channel_by_id(channel_id)

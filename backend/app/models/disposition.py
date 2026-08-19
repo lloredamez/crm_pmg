@@ -19,5 +19,6 @@ class Disposition(Base):
     leads = relationship("Lead", back_populates="disposition")
     channel_slas = relationship("ChannelDispositionSla", back_populates="disposition", cascade="all, delete-orphan")
     tabulations = relationship("LeadTabulation", back_populates="disposition")
+    channels = relationship("Channel", secondary="channel_dispositions", back_populates="dispositions")
 
 

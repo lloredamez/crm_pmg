@@ -81,6 +81,14 @@ async def seed_initial_data():
             );
         """))
 
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS channel_dispositions (
+                channel_id UUID REFERENCES channels(id) ON DELETE CASCADE,
+                disposition_id UUID REFERENCES dispositions(id) ON DELETE CASCADE,
+                PRIMARY KEY (channel_id, disposition_id)
+            );
+        """))
+
     async with AsyncSessionLocal() as session:
         # Seed das Unidades
         units_res = await session.execute(select(Unit))
