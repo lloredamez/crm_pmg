@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     SECRET_KEY: str = get_jwt_secret()
     META_VERIFY_TOKEN: str = os.getenv("META_VERIFY_TOKEN", "lead_crm_meta_token_secret")
     SLA_TIMEOUT_MINUTES: int = int(os.getenv("SLA_TIMEOUT_MINUTES", "15"))
+    ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "http://localhost:5051,http://localhost:3000,http://127.0.0.1:5051")
+
+    @property
+    def CORS_ORIGINS(self) -> list[str]:
+        return [origin.strip() for origin in self.ALLOWED_ORIGINS.split(",") if origin.strip()]
 
     @property
     def ASYNC_DATABASE_URL(self) -> str:
