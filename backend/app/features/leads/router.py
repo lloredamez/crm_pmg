@@ -123,6 +123,7 @@ async def get_lead(
 async def update_lead_status(
     lead_id: UUID,
     status_in: LeadUpdateStatus,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     service = LeadService(db)
@@ -135,6 +136,7 @@ async def update_lead_status(
 async def update_lead_details(
     lead_id: UUID,
     details_in: LeadUpdateDetails,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     service = LeadService(db)
@@ -161,6 +163,7 @@ async def reveal_lead(
 async def reassign_lead(
     lead_id: UUID,
     reassign_in: LeadReassign,
+    current_user: User = Depends(require_roles(["admin", "manager", "supervisor"])),
     db: AsyncSession = Depends(get_db)
 ):
     service = LeadService(db)
@@ -186,6 +189,7 @@ async def bulk_reassign_leads(
 @router.get("/{lead_id}/history", response_model=List[LeadHistoryItem])
 async def get_lead_history(
     lead_id: UUID,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     service = LeadService(db)

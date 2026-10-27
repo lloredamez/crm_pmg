@@ -164,22 +164,26 @@ class LeadService:
             return None
 
         from app.models.disposition import Disposition
-        eligible_users = []
-        for user in online_users:
-            active_count_res = await self.db.execute(
-                select(func.count(Lead.id))
-                .outerjoin(Disposition, Lead.disposition_id == Disposition.id)
-                .where(
-                    Lead.current_attendant_id == user.id,
-                    Lead.status.in_(["assigned", "in_progress"]),
-                    or_(
-                        Lead.disposition_id.is_(None),
-                        Disposition.category.ilike("%Sem Tabulação%"),
-                        Disposition.name.ilike("%Sem Tabulação%")
-                    )
+        online_user_ids = [u.id for u in online_users]
+        counts_res = await self.db.execute(
+            select(Lead.current_attendant_id, func.count(Lead.id))
+            .outerjoin(Disposition, Lead.disposition_id == Disposition.id)
+            .where(
+                Lead.current_attendant_id.in_(online_user_ids),
+                Lead.status.in_(["assigned", "in_progress"]),
+                or_(
+                    Lead.disposition_id.is_(None),
+                    Disposition.category.ilike("%Sem Tabulação%"),
+                    Disposition.name.ilike("%Sem Tabulação%")
                 )
             )
-            count = active_count_res.scalar() or 0
+            .group_by(Lead.current_attendant_id)
+        )
+        active_counts = dict(counts_res.all())
+
+        eligible_users = []
+        for user in online_users:
+            count = active_counts.get(user.id, 0)
             if count < user.max_simultaneous_leads:
                 last_assigned = user.last_assigned_at or datetime.min.replace(tzinfo=timezone.utc)
                 eligible_users.append((last_assigned, user))
@@ -288,9 +292,6 @@ class LeadService:
         disposition_filter: Optional[str] = None,
         current_user: Optional[User] = None
     ) -> Tuple[List, int]:
-        from app.workers.sla_tasks import _async_check_all_expired_leads
-        await _async_check_all_expired_leads(self.db)
-
         from app.features.dispositions.service import DispositionService
         unassigned_sla = await DispositionService(self.db).get_unassigned_sla_minutes()
 
