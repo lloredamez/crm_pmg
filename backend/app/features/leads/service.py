@@ -40,14 +40,16 @@ class LeadService:
                 else:
                     assigned_user = await self._find_eligible_attendant_for_units(None)
             else:
-                if lead_in.unit_id:
-                    primary_unit_id = lead_in.unit_id
-                    assigned_user = await self._find_eligible_attendant_for_units([lead_in.unit_id])
+                lead_unit_id = getattr(lead_in, "unit_id", None)
+                if lead_unit_id:
+                    primary_unit_id = lead_unit_id
+                    assigned_user = await self._find_eligible_attendant_for_units([lead_unit_id])
                 else:
                     assigned_user = await self._find_eligible_attendant_for_units(None)
-        elif lead_in.unit_id:
-            primary_unit_id = lead_in.unit_id
-            assigned_user = await self._find_eligible_attendant_for_units([lead_in.unit_id])
+        elif getattr(lead_in, "unit_id", None):
+            lead_unit_id = getattr(lead_in, "unit_id", None)
+            primary_unit_id = lead_unit_id
+            assigned_user = await self._find_eligible_attendant_for_units([lead_unit_id])
         else:
             assigned_user = await self._find_eligible_attendant_for_units(None)
 

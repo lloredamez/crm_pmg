@@ -31,6 +31,7 @@ class LeadBase(BaseModel):
     valor_liberado: Optional[float] = None
     banco: Optional[str] = None
     tabela: Optional[str] = None
+    unit_id: Optional[UUID] = None
 
     status: str = Field(default="new", pattern="^(new|assigned|in_progress|converted|lost|expired)$")
 
