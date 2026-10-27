@@ -196,20 +196,30 @@ async def _async_check_all_expired_leads(session: Optional[AsyncSession] = None)
     if session is not None:
         await _process_expired_leads_in_session(session)
     else:
-        async with AsyncSessionLocal() as session_ctx:
+        from app.core.database import get_worker_session
+        async with get_worker_session() as session_ctx:
             await _process_expired_leads_in_session(session_ctx)
 
 async def _async_check_lead_sla(lead_id_str: str):
     await _async_check_all_expired_leads()
 
+def _run_async(coro):
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+
+    if loop and loop.is_running():
+        import concurrent.futures
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            return pool.submit(asyncio.run, coro).result()
+    else:
+        return asyncio.run(coro)
+
 @celery_app.task(name="check_lead_sla_timeout")
 def check_lead_sla_timeout(lead_id: str):
     logger.info(f"Executing Celery task SLA timeout check for lead {lead_id}")
-    loop = asyncio.get_event_loop()
-    if loop.is_running():
-        asyncio.ensure_future(_async_check_lead_sla(lead_id))
-    else:
-        loop.run_until_complete(_async_check_lead_sla(lead_id))
+    _run_async(_async_check_lead_sla(lead_id))
 
 async def _async_check_disposition_timeouts():
     await _async_check_all_expired_leads()
@@ -217,9 +227,6 @@ async def _async_check_disposition_timeouts():
 @celery_app.task(name="check_disposition_timeouts")
 def check_disposition_timeouts():
     logger.info("Executing Celery task to check disposition timeouts.")
-    loop = asyncio.get_event_loop()
-    if loop.is_running():
-        asyncio.ensure_future(_async_check_disposition_timeouts())
-    else:
-        loop.run_until_complete(_async_check_disposition_timeouts())
+    _run_async(_async_check_disposition_timeouts())
+
 
