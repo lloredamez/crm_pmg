@@ -188,9 +188,10 @@ export async function sendMessage(leadId: string, content: string, direction: 'i
   return handleResponse<Message>(res);
 }
 
-export async function createMockLead(data: { name: string; phone: string; campaign_name?: string }): Promise<void> {
+export async function createMockLead(data: { name: string; phone: string; campaign_name?: string; channel_code?: string }): Promise<void> {
   const API_URL = getApiUrl();
-  const res = await fetch(`${API_URL}/api/v1/webhooks/meta`, {
+  const endpoint = data.channel_code ? `${API_URL}/api/v1/webhooks/${encodeURIComponent(data.channel_code)}` : `${API_URL}/api/v1/webhooks`;
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -199,7 +200,8 @@ export async function createMockLead(data: { name: string; phone: string; campai
     body: JSON.stringify({
       name: data.name,
       phone: data.phone,
-      campaign_name: data.campaign_name || 'Simulação Manual Web'
+      campaign_name: data.campaign_name || 'Simulação Manual Web',
+      channel_code: data.channel_code
     })
   });
   await handleResponse<any>(res);
