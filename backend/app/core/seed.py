@@ -263,7 +263,7 @@ async def seed_initial_data():
             )
             if not sem_tab_check.scalars().first():
                 sem_tab_disp = Disposition(
-                    name="Sem Tabulação (Primeiro Contato)",
+                    name="Primeiro Contato",
                     category="Sem Tabulação",
                     has_timeout=True,
                     timeout_minutes=15
