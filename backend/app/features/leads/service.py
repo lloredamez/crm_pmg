@@ -317,9 +317,17 @@ class LeadService:
                 elif current_user.role == "supervisor":
                     if current_user.unit_id:
                         b_query = b_query.where(or_(BucketLead.unit_id.is_(None), BucketLead.unit_id == current_user.unit_id))
+                elif current_user.role == "attendant":
+                    if current_user.unit_id:
+                        b_query = b_query.where(or_(BucketLead.unit_id.is_(None), BucketLead.unit_id == current_user.unit_id))
 
-            if channel_filter and channel_filter.lower() != "all":
-                b_query = b_query.where(func.lower(BucketLead.channel_code) == channel_filter.lower())
+            if channel_filter and channel_filter.strip() and channel_filter.strip().lower() != "all":
+                b_query = b_query.where(
+                    BucketLead.channel_code.is_not(None),
+                    func.lower(func.trim(BucketLead.channel_code)) == channel_filter.strip().lower()
+                )
+            else:
+                return [], 0
 
             if banco_filter and banco_filter.lower() != "all":
                 b_query = b_query.where(BucketLead.banco.ilike(f"%{banco_filter}%"))
@@ -696,6 +704,7 @@ class LeadService:
                 valor_liberado=bucket_lead.valor_liberado,
                 banco=bucket_lead.banco,
                 tabela=bucket_lead.tabela,
+                custom_fields=bucket_lead.custom_fields or {},
                 status="assigned",
                 current_attendant_id=current_user.id,
                 assigned_at=now,

@@ -73,6 +73,35 @@ async def apply_database_migrations_and_schema():
         await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS custom_fields JSON;"))
         await conn.execute(text("ALTER TABLE bucket_leads ADD COLUMN IF NOT EXISTS custom_fields JSON;"))
 
+        # Índices de performance para consultas frequentes (listagem de leads, balde, round-robin, SLA e histórico)
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_leads_status ON leads (status);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_leads_current_attendant_id ON leads (current_attendant_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_leads_unit_id ON leads (unit_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_leads_disposition_id ON leads (disposition_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_leads_disposition_timeout_at ON leads (disposition_timeout_at) WHERE disposition_timeout_at IS NOT NULL;"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_leads_created_at_desc ON leads (created_at DESC);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_leads_channel_lower ON leads (lower(trim(channel_code)));"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_leads_attendant_status ON leads (current_attendant_id, status);"))
+
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_bucket_leads_unit_id ON bucket_leads (unit_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_bucket_leads_created_at_desc ON bucket_leads (created_at DESC);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_bucket_leads_channel_lower ON bucket_leads (lower(trim(channel_code)));"))
+
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_unit_id ON users (unit_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_round_robin ON users (role, is_active, status, unit_id);"))
+
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_lead_assignments_lead_id ON lead_assignments (lead_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_lead_assignments_attendant_id ON lead_assignments (attendant_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_lead_assignments_active ON lead_assignments (lead_id, attendant_id, status);"))
+
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_lead_tabulations_lead_id ON lead_tabulations (lead_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_lead_tabulations_attendant_id ON lead_tabulations (attendant_id);"))
+
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sla_breaches_lead_id ON sla_breaches (lead_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sla_breaches_attendant_id ON sla_breaches (attendant_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sla_breaches_unit_id ON sla_breaches (unit_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sla_breaches_breached_at_desc ON sla_breaches (breached_at DESC);"))
+
 
 async def seed_initial_data():
     """Inicializa tabelas e insere dados padrão demonstrativos se não existirem."""

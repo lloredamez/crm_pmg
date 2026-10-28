@@ -30,17 +30,17 @@ class Lead(Base):
     tabela = Column(String(100), nullable=True)
     custom_fields = Column(JSON, nullable=True, default=dict)
 
-    status = Column(String(50), default="new", nullable=False) # 'new', 'assigned', 'in_progress', 'converted', 'lost', 'expired'
+    status = Column(String(50), default="new", nullable=False, index=True) # 'new', 'assigned', 'in_progress', 'converted', 'lost', 'expired'
     is_revealed = Column(Boolean, default=False, nullable=False)
     revealed_at = Column(DateTime(timezone=True), nullable=True)
-    current_attendant_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    unit_id = Column(UUID(as_uuid=True), ForeignKey("units.id", ondelete="SET NULL"), nullable=True)
-    disposition_id = Column(UUID(as_uuid=True), ForeignKey("dispositions.id", ondelete="SET NULL"), nullable=True)
+    current_attendant_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    unit_id = Column(UUID(as_uuid=True), ForeignKey("units.id", ondelete="SET NULL"), nullable=True, index=True)
+    disposition_id = Column(UUID(as_uuid=True), ForeignKey("dispositions.id", ondelete="SET NULL"), nullable=True, index=True)
     dispositioned_at = Column(DateTime(timezone=True), nullable=True)
-    disposition_timeout_at = Column(DateTime(timezone=True), nullable=True)
+    disposition_timeout_at = Column(DateTime(timezone=True), nullable=True, index=True)
     assigned_at = Column(DateTime(timezone=True), nullable=True)
     last_interaction_at = Column(DateTime(timezone=True), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
 
     unit = relationship("Unit", back_populates="leads")
     disposition = relationship("Disposition", back_populates="leads")

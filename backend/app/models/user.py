@@ -20,11 +20,11 @@ class User(Base):
     email = Column(String(255), unique=True, nullable=False, index=True)
     cpf = Column(String(14), unique=True, nullable=True, index=True)
     hashed_password = Column(String(255), nullable=False)
-    role = Column(String(50), default="attendant", nullable=False)  # 'admin', 'manager', 'supervisor', 'attendant'
-    status = Column(String(50), default="offline", nullable=False) # 'online', 'offline', 'busy'
-    is_active = Column(Boolean, default=True, nullable=False)
+    role = Column(String(50), default="attendant", nullable=False, index=True)  # 'admin', 'manager', 'supervisor', 'attendant'
+    status = Column(String(50), default="offline", nullable=False, index=True) # 'online', 'offline', 'busy'
+    is_active = Column(Boolean, default=True, nullable=False, index=True)
     max_simultaneous_leads = Column(Integer, default=10, nullable=False)
-    unit_id = Column(UUID(as_uuid=True), ForeignKey("units.id", ondelete="SET NULL"), nullable=True)
+    unit_id = Column(UUID(as_uuid=True), ForeignKey("units.id", ondelete="SET NULL"), nullable=True, index=True)
     last_assigned_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 

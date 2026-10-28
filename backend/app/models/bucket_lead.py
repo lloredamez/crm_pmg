@@ -29,8 +29,8 @@ class BucketLead(Base):
     tabela = Column(String(100), nullable=True)
     custom_fields = Column(JSON, nullable=True, default=dict)
 
-    unit_id = Column(UUID(as_uuid=True), ForeignKey("units.id", ondelete="SET NULL"), nullable=True)
-    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    unit_id = Column(UUID(as_uuid=True), ForeignKey("units.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
 
     unit = relationship("Unit")
 

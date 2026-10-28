@@ -129,6 +129,7 @@ class UserService:
                 valor_liberado=lead.valor_liberado,
                 banco=lead.banco,
                 tabela=lead.tabela,
+                custom_fields=lead.custom_fields or {},
                 unit_id=lead.unit_id,
                 created_at=lead.created_at
             )
