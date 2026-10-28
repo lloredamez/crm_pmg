@@ -11,11 +11,8 @@ import {
 } from '@/features/channels/api';
 import { fetchUnits } from '@/features/units/api';
 import { fetchDispositions } from '@/features/dispositions/api';
-import { AVAILABLE_LEAD_FIELDS } from '@/features/channels/constants';
 import { ChannelFieldsEditorModal } from './channel-fields-editor-modal';
-import { Plus, Edit2, Trash2, Share2, Power, X, AlertCircle, Store, Check, Tag, Edit3, Sliders, Settings2 } from 'lucide-react';
-
-export { AVAILABLE_LEAD_FIELDS };
+import { Plus, Edit2, Trash2, Share2, Power, X, AlertCircle, Store, Check, Tag, Sliders } from 'lucide-react';
 
 export const ChannelManagement: React.FC = () => {
   const [channels, setChannels] = useState<Channel[]>([]);
@@ -34,7 +31,6 @@ export const ChannelManagement: React.FC = () => {
   const [code, setCode] = useState('');
   const [selectedUnitIds, setSelectedUnitIds] = useState<string[]>([]);
   const [selectedDispIds, setSelectedDispIds] = useState<string[]>([]);
-  const [selectedFields, setSelectedFields] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -64,10 +60,9 @@ export const ChannelManagement: React.FC = () => {
     setEditingChannel(null);
     setName('');
     setCode('');
-    // By default select all active units, dispositions, and editable fields
+    // By default select all active units and dispositions
     setSelectedUnitIds(units.map((u) => u.id));
     setSelectedDispIds(dispositions.map((d) => d.id));
-    setSelectedFields(AVAILABLE_LEAD_FIELDS.map((f) => f.key));
     setErrorMsg('');
     setIsModalOpen(true);
   };
@@ -78,11 +73,6 @@ export const ChannelManagement: React.FC = () => {
     setCode(channel.code);
     setSelectedUnitIds(channel.units ? channel.units.map((u) => u.id) : []);
     setSelectedDispIds(channel.dispositions ? channel.dispositions.map((d) => d.id) : []);
-    setSelectedFields(
-      channel.allowed_fields && channel.allowed_fields.length > 0
-        ? channel.allowed_fields
-        : AVAILABLE_LEAD_FIELDS.map((f) => f.key)
-    );
     setErrorMsg('');
     setIsModalOpen(true);
   };
@@ -96,12 +86,6 @@ export const ChannelManagement: React.FC = () => {
   const handleToggleDispSelection = (dispId: string) => {
     setSelectedDispIds((prev) =>
       prev.includes(dispId) ? prev.filter((id) => id !== dispId) : [...prev, dispId]
-    );
-  };
-
-  const handleToggleFieldSelection = (fieldKey: string) => {
-    setSelectedFields((prev) =>
-      prev.includes(fieldKey) ? prev.filter((k) => k !== fieldKey) : [...prev, fieldKey]
     );
   };
 
@@ -146,7 +130,6 @@ export const ChannelManagement: React.FC = () => {
           code: code.trim() || undefined,
           unit_ids: selectedUnitIds,
           disposition_ids: selectedDispIds,
-          allowed_fields: selectedFields,
         });
       } else {
         await createChannel({
@@ -155,7 +138,6 @@ export const ChannelManagement: React.FC = () => {
           is_active: true,
           unit_ids: selectedUnitIds,
           disposition_ids: selectedDispIds,
-          allowed_fields: selectedFields,
         });
       }
       setIsModalOpen(false);
@@ -463,45 +445,6 @@ export const ChannelManagement: React.FC = () => {
                     })}
                   </div>
                 )}
-              </div>
-
-              {/* Multi-select Editable Fields Selection */}
-              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 space-y-2">
-                <label className="block text-xs font-semibold text-slate-800 flex items-center gap-1.5">
-                  <Edit3 className="w-4 h-4 text-brand-600" />
-                  Campos Editáveis na Ficha do Lead
-                </label>
-                <p className="text-[11px] text-slate-500">
-                  Selecione os campos que estarão disponíveis para preenchimento/edição no atendimento dos leads deste canal:
-                </p>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 pt-1 max-h-48 overflow-y-auto">
-                  {AVAILABLE_LEAD_FIELDS.map((field) => {
-                    const isSelected = selectedFields.includes(field.key);
-                    return (
-                      <div
-                        key={field.key}
-                        onClick={() => handleToggleFieldSelection(field.key)}
-                        className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
-                          isSelected
-                            ? 'bg-blue-50/80 border-blue-300 text-blue-900 font-semibold shadow-xs'
-                            : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100/70'
-                        }`}
-                      >
-                        <div
-                          className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
-                            isSelected
-                              ? 'bg-blue-600 border-blue-600 text-white'
-                              : 'border-slate-300 bg-white'
-                          }`}
-                        >
-                          {isSelected && <Check className="w-3 h-3 stroke-3" />}
-                        </div>
-                        <span className="truncate">{field.label}</span>
-                      </div>
-                    );
-                  })}
-                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
