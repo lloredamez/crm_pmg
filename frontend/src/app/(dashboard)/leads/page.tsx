@@ -104,14 +104,19 @@ export default function LeadsDashboardPage() {
   }, [channels, user]);
 
   // Garante que o canal ativo seja sempre um canal específico válido das lojas do usuário (sem opção "todos")
-  useEffect(() => {
-    if (availableChannels.length > 0) {
-      const isValid = availableChannels.some((c) => c.code.toLowerCase() === channelFilter.toLowerCase());
-      if (!isValid) {
-        setChannelFilter(availableChannels[0].code);
-      }
-    }
+  const effectiveChannelFilter = React.useMemo(() => {
+    if (availableChannels.length === 0) return channelFilter;
+    const isValid = availableChannels.some(
+      (c) => c.code.toLowerCase() === channelFilter.toLowerCase()
+    );
+    return isValid ? channelFilter : availableChannels[0].code;
   }, [availableChannels, channelFilter]);
+
+  useEffect(() => {
+    if (effectiveChannelFilter && effectiveChannelFilter !== channelFilter) {
+      setChannelFilter(effectiveChannelFilter);
+    }
+  }, [effectiveChannelFilter, channelFilter]);
 
   // Fetch Leads with Role & Custom Header Filters
   const activeAttendantId = isAttendant
@@ -121,7 +126,7 @@ export default function LeadsDashboardPage() {
     : undefined;
 
   const { data: leadsData, refetch: refetchLeads } = useQuery({
-    queryKey: ['leads', page, statusFilter, searchQuery, activeAttendantId, bancoFilter, tabelaFilter, dispositionFilter, channelFilter, activeTab],
+    queryKey: ['leads', page, statusFilter, searchQuery, activeAttendantId, bancoFilter, tabelaFilter, dispositionFilter, effectiveChannelFilter, activeTab],
     queryFn: () =>
       fetchLeads({
         page,
@@ -132,9 +137,9 @@ export default function LeadsDashboardPage() {
         banco: activeTab === 'overview' ? undefined : bancoFilter,
         tabela: activeTab === 'overview' ? undefined : tabelaFilter,
         disposition: activeTab === 'overview' ? undefined : dispositionFilter,
-        channel: activeTab === 'overview' ? undefined : channelFilter,
+        channel: activeTab === 'overview' ? undefined : effectiveChannelFilter,
       }),
-    enabled: !!user,
+    enabled: !!user && (activeTab === 'overview' || !!effectiveChannelFilter),
     refetchInterval: 5000, // Automatic real-time polling fallback
   });
 
@@ -281,7 +286,7 @@ export default function LeadsDashboardPage() {
         onStatusChange={handleStatusChange}
         onOpenSimulateModal={() => setIsSimulateModalOpen(true)}
         channels={availableChannels}
-        selectedChannelCode={channelFilter}
+        selectedChannelCode={effectiveChannelFilter}
         onSelectChannel={(chCode) => {
           setChannelFilter(chCode);
           setActiveTab('leads');
@@ -354,7 +359,7 @@ export default function LeadsDashboardPage() {
                   setPage(1);
                 }}
                 channels={availableChannels}
-                channelFilter={channelFilter}
+                channelFilter={effectiveChannelFilter}
                 onChannelFilterChange={(ch) => {
                   setChannelFilter(ch);
                   setPage(1);

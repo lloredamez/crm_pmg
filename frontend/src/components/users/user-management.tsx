@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { User } from '@/features/leads/types';
 import { useAuth } from '@/features/auth/auth-provider';
-import { ShieldCheck, UserCheck, Headset, UserPlus, Building2, CheckCircle2, Pencil, X, Trash2, Power, AlertTriangle } from 'lucide-react';
+import { ShieldCheck, UserCheck, Headset, UserPlus, Building2, CheckCircle2, Pencil, X, Trash2, Power, AlertTriangle, Search, Filter, RotateCcw } from 'lucide-react';
 import { getApiUrl } from '@/lib/config';
 import { toggleUserActive, deleteUser } from '@/features/leads/api';
 
@@ -31,6 +31,11 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
   const [message, setMessage] = useState<string | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+
+  // Filters State
+  const [filterName, setFilterName] = useState('');
+  const [filterCpf, setFilterCpf] = useState('');
+  const [filterRole, setFilterRole] = useState('all');
 
   // Edit User State
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -266,6 +271,42 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
     );
   };
 
+  const hasActiveFilters = filterName.trim() !== '' || filterCpf.trim() !== '' || filterRole !== 'all';
+
+  const filteredUsers = useMemo(() => {
+    const cleanCpfFilter = filterCpf.replace(/\D/g, '');
+    const lowerCpfFilter = filterCpf.trim().toLowerCase();
+    const lowerNameFilter = filterName.trim().toLowerCase();
+
+    return users.filter((u) => {
+      if (lowerNameFilter) {
+        const matchesName = u.name?.toLowerCase().includes(lowerNameFilter);
+        const matchesEmail = u.email?.toLowerCase().includes(lowerNameFilter);
+        if (!matchesName && !matchesEmail) return false;
+      }
+
+      if (lowerCpfFilter) {
+        const rawUserCpf = (u.cpf || '').toLowerCase();
+        const digitsUserCpf = rawUserCpf.replace(/\D/g, '');
+        const matchesRaw = rawUserCpf.includes(lowerCpfFilter);
+        const matchesDigits = cleanCpfFilter !== '' && digitsUserCpf.includes(cleanCpfFilter);
+        if (!matchesRaw && !matchesDigits) return false;
+      }
+
+      if (filterRole !== 'all' && u.role !== filterRole) {
+        return false;
+      }
+
+      return true;
+    });
+  }, [users, filterName, filterCpf, filterRole]);
+
+  const handleResetFilters = () => {
+    setFilterName('');
+    setFilterCpf('');
+    setFilterRole('all');
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner */}
@@ -297,7 +338,66 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
 
       {/* List of Users */}
       <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-sm">
-        <h3 className="font-bold text-slate-900 text-sm mb-4">Integrantes Cadastrados na Plataforma ({users.length})</h3>
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-5">
+          <h3 className="font-bold text-slate-900 text-sm">
+            Integrantes Cadastrados na Plataforma ({filteredUsers.length}
+            {hasActiveFilters ? ` de ${users.length}` : ''})
+          </h3>
+
+          {/* Filter Bar: Nome, CPF, Perfil */}
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Filtro por Nome */}
+            <div className="relative min-w-52">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Filtrar por nome ou e-mail..."
+                value={filterName}
+                onChange={(e) => setFilterName(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200/80 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+              />
+            </div>
+
+            {/* Filtro por CPF */}
+            <div className="relative min-w-44">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder="Filtrar por CPF..."
+                value={filterCpf}
+                onChange={(e) => setFilterCpf(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200/80 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+              />
+            </div>
+
+            {/* Filtro por Perfil */}
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 text-xs">
+              <Filter className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={filterRole}
+                onChange={(e) => setFilterRole(e.target.value)}
+                className="bg-transparent font-medium text-slate-700 focus:outline-none cursor-pointer"
+              >
+                <option value="all">Todos os Perfis</option>
+                <option value="attendant">Atendente</option>
+                <option value="supervisor">Supervisor</option>
+                <option value="manager">Gerente</option>
+                <option value="admin">Administrador</option>
+              </select>
+            </div>
+
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={handleResetFilters}
+                className="flex items-center gap-1 text-xs font-semibold text-rose-600 hover:text-rose-700 bg-rose-50 hover:bg-rose-100/70 border border-rose-200/60 rounded-xl px-3 py-1.5 transition-all cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Limpar</span>
+              </button>
+            )}
+          </div>
+        </div>
 
         <div className="overflow-x-auto rounded-2xl border border-slate-100">
           <table className="w-full text-left border-collapse">
@@ -314,7 +414,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700 text-xs">
-              {users.map((u) => {
+              {filteredUsers.length > 0 ? (
+                filteredUsers.map((u) => {
                 let unitLabel = '-';
                 if (u.role === 'manager' && u.managed_unit_ids && u.managed_unit_ids.length > 0) {
                   const matched = units.filter((unit) => u.managed_unit_ids?.includes(unit.id));
@@ -403,7 +504,14 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                     </td>
                   </tr>
                 );
-              })}
+              })
+              ) : (
+                <tr>
+                  <td colSpan={8} className="py-8 text-center text-slate-400">
+                    Nenhum integrante encontrado para os filtros informados.
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

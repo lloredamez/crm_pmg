@@ -400,24 +400,16 @@ export const DispositionManagement: React.FC = () => {
                     <label className="block text-[11px] text-slate-500 mb-1 font-medium">
                       Tempo Limite Padrão (em horas)
                     </label>
-                    <select
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      required
+                      placeholder="Ex: 2"
                       value={timeoutHours}
                       onChange={(e) => setTimeoutHours(e.target.value)}
-                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none font-medium"
-                    >
-                      <option value="0.0083333">⚡ 30 Segundos (para testes)</option>
-                      <option value="0.0166667">⚡ 1 Minuto (para testes)</option>
-                      <option value="0.0833333">5 Minutos</option>
-                      <option value="0.25">15 Minutos</option>
-                      <option value="0.5">30 Minutos (0.5h)</option>
-                      <option value="1">1 Hora</option>
-                      <option value="2">2 Horas</option>
-                      <option value="4">4 Horas</option>
-                      <option value="8">8 Horas</option>
-                      <option value="12">12 Horas</option>
-                      <option value="24">24 Horas (1 dia)</option>
-                      <option value="48">48 Horas (2 dias)</option>
-                    </select>
+                      className="w-full bg-white border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
+                    />
                   </div>
                 )}
               </div>
