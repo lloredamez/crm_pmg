@@ -178,11 +178,10 @@ export const LeadTable: React.FC<LeadTableProps> = ({
             const isTrue = val === true || val === 'true' || val === 1 || val === 'sim';
             return (
               <span
-                className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
-                  isTrue
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                    : 'bg-slate-100 text-slate-600 border-slate-200'
-                }`}
+                className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${isTrue
+                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                  : 'bg-slate-100 text-slate-600 border-slate-200'
+                  }`}
               >
                 {isTrue ? 'Sim' : 'Não'}
               </span>
@@ -259,26 +258,26 @@ export const LeadTable: React.FC<LeadTableProps> = ({
   const columns: ColumnDef<Lead>[] = [
     ...(canBulkReassign
       ? [
-          {
-            id: 'select',
-            header: ({ table }: { table: any }) => (
-              <input
-                type="checkbox"
-                className="rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
-                checked={table.getIsAllPageRowsSelected()}
-                onChange={table.getToggleAllPageRowsSelectedHandler()}
-              />
-            ),
-            cell: ({ row }: { row: any }) => (
-              <input
-                type="checkbox"
-                className="rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
-                checked={row.getIsSelected()}
-                onChange={row.getToggleSelectedHandler()}
-              />
-            ),
-          },
-        ]
+        {
+          id: 'select',
+          header: ({ table }: { table: any }) => (
+            <input
+              type="checkbox"
+              className="rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+              checked={table.getIsAllPageRowsSelected()}
+              onChange={table.getToggleAllPageRowsSelectedHandler()}
+            />
+          ),
+          cell: ({ row }: { row: any }) => (
+            <input
+              type="checkbox"
+              className="rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer"
+              checked={row.getIsSelected()}
+              onChange={row.getToggleSelectedHandler()}
+            />
+          ),
+        },
+      ]
       : []),
     {
       accessorKey: 'created_at',
@@ -328,11 +327,10 @@ export const LeadTable: React.FC<LeadTableProps> = ({
         return (
           <div className="flex items-center gap-3">
             <div
-              className={`font-semibold text-xs ${
-                isRevealed
-                  ? 'text-slate-900 hover:text-brand-600 cursor-pointer'
-                  : 'text-slate-500 cursor-not-allowed opacity-60'
-              }`}
+              className={`font-semibold text-xs ${isRevealed
+                ? 'text-slate-900 hover:text-brand-600 cursor-pointer'
+                : 'text-slate-500 cursor-not-allowed opacity-60'
+                }`}
               onClick={() => isRevealed && onOpenDetailsModal?.(lead)}
               title={
                 isRevealed
@@ -383,47 +381,47 @@ export const LeadTable: React.FC<LeadTableProps> = ({
 
     ...(isSupervisorRole || isManagerOrAdminRole
       ? [
-          {
-            accessorKey: 'current_attendant',
-            header: 'Atendente',
-            cell: ({ row }: { row: any }) => {
-              const lead = row.original;
-              const rawName =
-                lead.current_attendant?.name ||
-                users.find((u) => u.id === lead.current_attendant_id)?.name ||
-                lead.attendant_name;
+        {
+          accessorKey: 'current_attendant',
+          header: 'Atendente',
+          cell: ({ row }: { row: any }) => {
+            const lead = row.original;
+            const rawName =
+              lead.current_attendant?.name ||
+              users.find((u) => u.id === lead.current_attendant_id)?.name ||
+              lead.attendant_name;
 
-              if (!rawName) {
-                return <span className="text-xs text-slate-400 italic">Na Fila</span>;
-              }
+            if (!rawName) {
+              return <span className="text-xs text-slate-400 italic">Na Fila</span>;
+            }
 
-              const cleanName = rawName.split('(')[0].trim();
+            const cleanName = rawName.split('(')[0].trim();
 
-              return (
-                <div className="flex items-center gap-2">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
-                  <span className="text-xs font-semibold text-slate-800">{cleanName}</span>
-                </div>
-              );
-            },
+            return (
+              <div className="flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                <span className="text-xs font-semibold text-slate-800">{cleanName}</span>
+              </div>
+            );
           },
-        ]
+        },
+      ]
       : []),
     ...(isManagerOrAdminRole
       ? [
-          {
-            accessorKey: 'unit',
-            header: 'Loja',
-            cell: ({ row }: { row: any }) => {
-              const storeName = row.original.unit?.name || row.original.unit_name || 'Loja Principal';
-              return (
-                <span className="text-xs font-medium text-slate-700 px-2.5 py-1 rounded-full">
-                  {storeName}
-                </span>
-              );
-            },
+        {
+          accessorKey: 'unit',
+          header: 'Loja',
+          cell: ({ row }: { row: any }) => {
+            const storeName = row.original.unit?.name || row.original.unit_name || 'Loja Principal';
+            return (
+              <span className="text-xs font-medium text-slate-700 px-2.5 py-1 rounded-full">
+                {storeName}
+              </span>
+            );
           },
-        ]
+        },
+      ]
       : []),
     {
       accessorKey: 'current_disposition_name',
@@ -538,19 +536,18 @@ export const LeadTable: React.FC<LeadTableProps> = ({
                 <button
                   onClick={() => !isRevealDisabled && onRevealLead?.(lead)}
                   disabled={isRevealDisabled}
-                  className={`p-1.5 rounded-lg transition-colors ${
-                    isManagerOrSupervisorRole
-                      ? 'text-slate-300 bg-slate-50 cursor-not-allowed opacity-40'
-                      : isRevealed
+                  className={`p-1.5 rounded-lg transition-colors ${isManagerOrSupervisorRole
+                    ? 'text-slate-300 bg-slate-50 cursor-not-allowed opacity-40'
+                    : isRevealed
                       ? 'text-emerald-600 bg-emerald-50 cursor-default'
                       : 'text-slate-500 hover:text-brand-600 hover:bg-brand-50'
-                  }`}
+                    }`}
                   title={
                     isManagerOrSupervisorRole
                       ? 'Ação de revelar dados restrita a atendentes'
                       : isRevealed
-                      ? 'Dados revelados (Em Contato)'
-                      : 'Ver Telefone & CPF (Tabular como Em Contato)'
+                        ? 'Dados revelados (Em Contato)'
+                        : 'Ver Telefone & CPF (Tabular como Em Contato)'
                   }
                 >
                   <Eye className={`w-4 h-4 ${isManagerOrSupervisorRole ? 'text-slate-300' : isRevealed ? 'text-emerald-600' : 'text-slate-500 hover:text-brand-600'}`} />
@@ -559,19 +556,18 @@ export const LeadTable: React.FC<LeadTableProps> = ({
                 <button
                   onClick={() => !isTabulateDisabled && onOpenTabulateModal?.(lead)}
                   disabled={isTabulateDisabled}
-                  className={`p-1.5 rounded-lg transition-colors ${
-                    isTabulateDisabled
-                      ? 'text-slate-300 bg-slate-50 cursor-not-allowed opacity-40'
-                      : 'text-slate-500 hover:text-brand-600 hover:bg-brand-50'
-                  }`}
+                  className={`p-1.5 rounded-lg transition-colors ${isTabulateDisabled
+                    ? 'text-slate-300 bg-slate-50 cursor-not-allowed opacity-40'
+                    : 'text-slate-500 hover:text-brand-600 hover:bg-brand-50'
+                    }`}
                   title={
                     isManagerOrSupervisorRole
                       ? 'Ação de tabulação restrita a atendentes'
                       : !isRevealed
-                      ? 'Clique no olho para revelar os dados do lead primeiro'
-                      : isTerminal
-                      ? 'Lead no final do fluxo (Venda/Perda) - Tabulação desabilitada'
-                      : 'Tabular Lead'
+                        ? 'Clique no olho para revelar os dados do lead primeiro'
+                        : isTerminal
+                          ? 'Lead no final do fluxo (Venda/Perda) - Tabulação desabilitada'
+                          : 'Tabular Lead'
                   }
                 >
                   <Tag className="w-4 h-4" />
@@ -580,11 +576,10 @@ export const LeadTable: React.FC<LeadTableProps> = ({
                 <button
                   onClick={() => isRevealed && onOpenDetailsModal?.(lead)}
                   disabled={!isRevealed}
-                  className={`p-1.5 rounded-lg transition-colors ${
-                    isRevealed
-                      ? 'text-slate-500 hover:text-brand-600 hover:bg-brand-50'
-                      : 'text-slate-300 bg-slate-50 cursor-not-allowed opacity-50'
-                  }`}
+                  className={`p-1.5 rounded-lg transition-colors ${isRevealed
+                    ? 'text-slate-500 hover:text-brand-600 hover:bg-brand-50'
+                    : 'text-slate-300 bg-slate-50 cursor-not-allowed opacity-50'
+                    }`}
                   title={
                     isRevealed
                       ? 'Ver Dados & Editar Proposta / Observações'
@@ -757,21 +752,21 @@ export const LeadTable: React.FC<LeadTableProps> = ({
               <option value="sem_tabulacao">Sem Tabulação</option>
               {dispositions.length > 0
                 ? dispositions.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.name} ({d.category})
-                    </option>
-                  ))
+                  <option key={d.id} value={d.id}>
+                    {d.name} ({d.category})
+                  </option>
+                ))
                 : Array.from(
-                    new Set(
-                      leads
-                        .map((l) => l.disposition?.name)
-                        .filter((d): d is string => !!d && d.trim() !== '')
-                    )
-                  ).map((dispName) => (
-                    <option key={dispName} value={dispName}>
-                      {dispName}
-                    </option>
-                  ))}
+                  new Set(
+                    leads
+                      .map((l) => l.disposition?.name)
+                      .filter((d): d is string => !!d && d.trim() !== '')
+                  )
+                ).map((dispName) => (
+                  <option key={dispName} value={dispName}>
+                    {dispName}
+                  </option>
+                ))}
             </select>
           </div>
 
@@ -806,39 +801,6 @@ export const LeadTable: React.FC<LeadTableProps> = ({
           )}
         </div>
       </div>
-
-      {/* Dynamic Channel Column Information Banner */}
-      {selectedChannel && (
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 bg-blue-50/80 border border-blue-200/80 rounded-2xl text-xs text-blue-900 animate-in fade-in duration-150 mb-4">
-          <div className="flex items-center gap-2">
-            <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
-            <span className="font-semibold flex items-center gap-1.5">
-              <Share2 className="w-3.5 h-3.5 text-blue-600" />
-              Filtro por Canal: {selectedChannel.name}
-            </span>
-            <span className="text-[11px] font-mono bg-blue-100/80 text-blue-800 px-2 py-0.5 rounded-md font-semibold">
-              {selectedChannel.code}
-            </span>
-          </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-blue-800">
-            {channelDynamicColumns.length > 0 ? (
-              <span>
-                ✨ Colunas personalizadas ativas: <strong>{channelDynamicColumns.length}</strong> (
-                {selectedChannel.allowed_fields
-                  ?.map(getFieldDefinition)
-                  .filter((def) => !['name', 'phone', 'cpf', 'product_name'].includes(def.key) && def.showInTable !== false)
-                  .map((def) => def.label)
-                  .join(', ')}
-                )
-              </span>
-            ) : (
-              <span className="text-slate-500 italic">
-                Utilizando colunas padrão do CRM para este canal
-              </span>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Bulk Action Bar */}
       {canBulkReassign && selectedLeadIds.length > 0 && (
