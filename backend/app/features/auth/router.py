@@ -3,7 +3,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
-from app.core.deps import get_current_user
+from app.core.deps import get_current_user, require_roles
 from app.schemas.auth import LoginRequest, Token, UserCreateWithPassword
 from app.schemas.user import UserResponse
 from app.models.user import User
@@ -76,6 +76,19 @@ async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def register_user(user_in: UserCreateWithPassword, db: AsyncSession = Depends(get_db)):
+async def register_user(
+    user_in: UserCreateWithPassword,
+    current_user: User = Depends(require_roles(["admin", "supervisor"])),
+    db: AsyncSession = Depends(get_db)
+):
+    if current_user.role == "supervisor":
+        if user_in.role not in ["attendant"]:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Supervisores só possuem permissão para cadastrar atendentes."
+            )
+        if current_user.unit_id:
+            user_in.unit_id = current_user.unit_id
+
     service = AuthService(db)
     return await service.create_user_with_password(user_in)
