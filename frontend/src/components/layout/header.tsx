@@ -112,7 +112,7 @@ export const Header: React.FC<HeaderProps> = ({
         <div className="flex items-center gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <span className="font-bold text-slate-900 tracking-tight text-lg">Lead CRM</span>
+              <span className="font-bold text-slate-900 tracking-tight text-lg">CRM PMG</span>
             </div>
           </div>
         </div>
