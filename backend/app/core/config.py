@@ -1,6 +1,7 @@
 import os
 import secrets
 import logging
+from typing import Optional
 from pydantic_settings import BaseSettings
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,8 @@ class Settings(BaseSettings):
     
     SECRET_KEY: str = get_jwt_secret()
     META_VERIFY_TOKEN: str = os.getenv("META_VERIFY_TOKEN", "lead_crm_meta_token_secret")
+    META_APP_SECRET: Optional[str] = os.getenv("META_APP_SECRET", None)
+    WEBHOOK_SECRET: Optional[str] = os.getenv("WEBHOOK_SECRET", None)
     SLA_TIMEOUT_MINUTES: int = int(os.getenv("SLA_TIMEOUT_MINUTES", "15"))
     ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "http://localhost:5051,http://localhost:3000,http://127.0.0.1:5051")
 
