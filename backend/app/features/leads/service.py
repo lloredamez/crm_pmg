@@ -72,6 +72,7 @@ class LeadService:
                 valor_liberado=lead_in.valor_liberado,
                 banco=lead_in.banco,
                 tabela=lead_in.tabela,
+                custom_fields=lead_in.custom_fields or {},
                 status="assigned",
                 current_attendant_id=assigned_user.id,
                 assigned_at=now,
@@ -102,6 +103,7 @@ class LeadService:
                     "created_at": lead.created_at.isoformat() if lead.created_at else None,
                     "assigned_at": lead.assigned_at.isoformat() if lead.assigned_at else None,
                     "attendant_name": assigned_user.name,
+                    "custom_fields": lead.custom_fields,
                 }
                 await emit_lead_assigned(str(assigned_user.id), lead_dict)
             except Exception:
@@ -126,6 +128,7 @@ class LeadService:
                 valor_liberado=lead_in.valor_liberado,
                 banco=lead_in.banco,
                 tabela=lead_in.tabela,
+                custom_fields=lead_in.custom_fields or {},
                 unit_id=primary_unit_id,
             )
             self.db.add(bucket_lead)
@@ -141,6 +144,7 @@ class LeadService:
                     "campaign_name": bucket_lead.campaign_name,
                     "status": "new",
                     "created_at": bucket_lead.created_at.isoformat() if bucket_lead.created_at else None,
+                    "custom_fields": bucket_lead.custom_fields,
                 }
                 await emit_lead_updated(lead_dict)
             except Exception:
@@ -488,6 +492,10 @@ class LeadService:
             lead.banco = details.banco
         if details.tabela is not None:
             lead.tabela = details.tabela
+        if hasattr(details, 'custom_fields') and details.custom_fields is not None:
+            current = dict(lead.custom_fields or {})
+            current.update(details.custom_fields)
+            lead.custom_fields = current
 
         lead.last_interaction_at = datetime.now(timezone.utc)
         await self.db.commit()

@@ -32,6 +32,7 @@ class LeadBase(BaseModel):
     banco: Optional[str] = None
     tabela: Optional[str] = None
     unit_id: Optional[UUID] = None
+    custom_fields: Optional[dict] = None
 
     status: str = Field(default="new", pattern="^(new|assigned|in_progress|converted|lost|expired)$")
 
@@ -52,6 +53,7 @@ class LeadUpdateDetails(BaseModel):
     valor_liberado: Optional[float] = None
     banco: Optional[str] = None
     tabela: Optional[str] = None
+    custom_fields: Optional[dict] = None
 
 class LeadReassign(BaseModel):
     attendant_id: UUID

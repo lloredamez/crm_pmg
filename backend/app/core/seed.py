@@ -70,6 +70,8 @@ async def apply_database_migrations_and_schema():
         """))
 
         await conn.execute(text("ALTER TABLE channels ADD COLUMN IF NOT EXISTS allowed_fields JSON;"))
+        await conn.execute(text("ALTER TABLE leads ADD COLUMN IF NOT EXISTS custom_fields JSON;"))
+        await conn.execute(text("ALTER TABLE bucket_leads ADD COLUMN IF NOT EXISTS custom_fields JSON;"))
 
 
 async def seed_initial_data():

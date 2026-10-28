@@ -192,6 +192,35 @@ def _extract_lead_data(payload: Dict[str, Any], default_channel_code: Optional[s
     banco = payload.get("banco") or payload.get("bank") or payload.get("instituicao")
     tabela = payload.get("tabela") or payload.get("table")
 
+    # Mapeamento automático de campos customizados adicionais
+    known_standard_keys = {
+        "name", "full_name", "nome", "nome_completo", "cliente", "lead_name",
+        "phone", "phone_number", "telefone", "celular", "whatsapp", "tel", "contato",
+        "email", "e_mail", "mail", "correio",
+        "cpf", "documento", "doc", "cpf_cnpj", "verified_cpf",
+        "campaign_name", "campaign", "campanha", "utm_campaign", "form_name",
+        "external_id", "meta_lead_id", "lead_id", "id",
+        "channel_code", "channel", "canal", "source", "origem", "utm_source",
+        "notes", "observacoes", "obs", "mensagem", "message",
+        "proposal_number", "proposta", "numero_proposta",
+        "unit_id", "loja_id",
+        "prazo", "meses", "parcelas",
+        "margem", "margem_consignavel", "margin",
+        "valor_liberado", "valor", "valor_emprestimo", "amount", "valor_solicitado",
+        "banco", "bank", "instituicao",
+        "tabela", "table",
+        "product_name", "produto", "product",
+        "status", "custom_fields"
+    }
+
+    custom_fields: Dict[str, Any] = {}
+    if isinstance(payload.get("custom_fields"), dict):
+        custom_fields.update(payload["custom_fields"])
+
+    for k, v in payload.items():
+        if k not in known_standard_keys and not k.startswith("_"):
+            custom_fields[k] = v
+
     return LeadCreate(
         name=str(lead_name).strip() if lead_name else "-",
         phone=str(phone).strip() if phone else "",
@@ -208,6 +237,7 @@ def _extract_lead_data(payload: Dict[str, Any], default_channel_code: Optional[s
         banco=str(banco).strip() if banco else None,
         tabela=str(tabela).strip() if tabela else None,
         unit_id=unit_id,
+        custom_fields=custom_fields or None,
         status="new"
     )
 

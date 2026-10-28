@@ -1,7 +1,7 @@
 import uuid
 from typing import Optional
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Integer, Float
+from sqlalchemy import Column, String, DateTime, ForeignKey, Text, Integer, Float, JSON
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 from app.core.database import Base
@@ -27,6 +27,7 @@ class BucketLead(Base):
     valor_liberado = Column(Float, nullable=True)
     banco = Column(String(100), nullable=True)
     tabela = Column(String(100), nullable=True)
+    custom_fields = Column(JSON, nullable=True, default=dict)
 
     unit_id = Column(UUID(as_uuid=True), ForeignKey("units.id", ondelete="SET NULL"), nullable=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
