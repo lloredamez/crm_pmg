@@ -277,10 +277,10 @@ async def seed_initial_data():
             all_units_res = await session.execute(select(Unit))
             all_units = list(all_units_res.scalars().all())
             default_channels = [
-                Channel(name="Meta Ads (Facebook / Instagram)", code="META_ADS", units=all_units),
-                Channel(name="Google Ads (Pesquisa)", code="GOOGLE_ADS", units=all_units),
-                Channel(name="WhatsApp Direct", code="WHATSAPP_DIRECT", units=all_units),
-                Channel(name="Site / Landing Page", code="WEBSITE", units=all_units),
+                Channel(name="Meta", code="META_ADS", units=all_units),
+                Channel(name="Google", code="GOOGLE_ADS", units=all_units),
+                Channel(name="WhatsApp", code="WHATSAPP_DIRECT", units=all_units),
+                Channel(name="Site", code="WEBSITE", units=all_units),
             ]
             session.add_all(default_channels)
             await session.commit()
