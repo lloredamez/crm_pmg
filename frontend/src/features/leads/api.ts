@@ -105,6 +105,7 @@ export async function updateLeadDetails(
     valor_liberado?: number | null;
     banco?: string | null;
     tabela?: string | null;
+    custom_fields?: Record<string, any>;
   }
 ): Promise<Lead> {
   const API_URL = getApiUrl();

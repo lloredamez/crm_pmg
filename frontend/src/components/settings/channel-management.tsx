@@ -12,7 +12,8 @@ import {
 import { fetchUnits } from '@/features/units/api';
 import { fetchDispositions } from '@/features/dispositions/api';
 import { AVAILABLE_LEAD_FIELDS } from '@/features/channels/constants';
-import { Plus, Edit2, Trash2, Share2, Power, X, AlertCircle, Store, Check, Tag, Edit3 } from 'lucide-react';
+import { ChannelFieldsEditorModal } from './channel-fields-editor-modal';
+import { Plus, Edit2, Trash2, Share2, Power, X, AlertCircle, Store, Check, Tag, Edit3, Sliders, Settings2 } from 'lucide-react';
 
 export { AVAILABLE_LEAD_FIELDS };
 
@@ -23,6 +24,10 @@ export const ChannelManagement: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingChannel, setEditingChannel] = useState<Channel | null>(null);
+
+  // Dedicated Fields Editor Modal State
+  const [isFieldsModalOpen, setIsFieldsModalOpen] = useState(false);
+  const [selectedChannelForFields, setSelectedChannelForFields] = useState<Channel | null>(null);
 
   // Form State
   const [name, setName] = useState('');
@@ -107,6 +112,11 @@ export const ChannelManagement: React.FC = () => {
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleOpenFieldsEditor = (channel: Channel) => {
+    setSelectedChannelForFields(channel);
+    setIsFieldsModalOpen(true);
   };
 
   const handleDelete = async (channel: Channel) => {
@@ -254,14 +264,18 @@ export const ChannelManagement: React.FC = () => {
                     </td>
 
                     <td className="py-3.5 px-4">
-                      {channel.allowed_fields && channel.allowed_fields.length > 0 ? (
-                        <span className="inline-flex items-center gap-1 bg-blue-50 text-blue-800 border border-blue-200/80 text-[11px] font-semibold px-2.5 py-0.5 rounded-full">
-                          <Edit3 className="w-3 h-3 text-blue-600" />
-                          {channel.allowed_fields.length} de {AVAILABLE_LEAD_FIELDS.length} campos
+                      <button
+                        type="button"
+                        onClick={() => handleOpenFieldsEditor(channel)}
+                        className="inline-flex items-center gap-1.5 bg-brand-50 hover:bg-brand-100/80 text-brand-900 border border-brand-200/90 text-[11px] font-semibold px-2.5 py-1 rounded-full transition-all cursor-pointer shadow-2xs group"
+                        title="Abrir editor visual de campos deste canal"
+                      >
+                        <Sliders className="w-3 h-3 text-brand-600 group-hover:rotate-45 transition-transform" />
+                        <span>
+                          {channel.allowed_fields?.length || 0} campos personalizados
                         </span>
-                      ) : (
-                        <span className="text-slate-400 italic text-[11px]">Todos os 10 campos</span>
-                      )}
+                        <span className="text-[10px] text-brand-600 font-bold underline ml-0.5">Editar</span>
+                      </button>
                     </td>
 
                     <td className="py-3.5 px-4">
@@ -280,6 +294,14 @@ export const ChannelManagement: React.FC = () => {
 
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenFieldsEditor(channel)}
+                          className="p-1.5 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-colors cursor-pointer"
+                          title="Editor de Campos do Canal"
+                        >
+                          <Sliders className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => handleOpenEdit(channel)}
                           className="p-1.5 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition-colors"
@@ -503,6 +525,17 @@ export const ChannelManagement: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Channel Fields Editor Modal */}
+      <ChannelFieldsEditorModal
+        channel={selectedChannelForFields}
+        isOpen={isFieldsModalOpen}
+        onClose={() => {
+          setIsFieldsModalOpen(false);
+          setSelectedChannelForFields(null);
+        }}
+        onSuccess={loadData}
+      />
     </div>
   );
 };

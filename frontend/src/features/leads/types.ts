@@ -29,7 +29,7 @@ export interface Channel {
   is_active: boolean;
   units?: Unit[];
   dispositions?: Disposition[];
-  allowed_fields?: string[] | null;
+  allowed_fields?: (string | any)[] | null;
   created_at: string;
 }
 
@@ -73,6 +73,7 @@ export interface Lead {
   valor_liberado?: number | null;
   banco?: string | null;
   tabela?: string | null;
+  custom_fields?: Record<string, any> | null;
   status: LeadStatus;
 
   is_revealed?: boolean;

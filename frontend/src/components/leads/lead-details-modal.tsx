@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Lead, LeadHistoryItem, Channel } from '@/features/leads/types';
 import { updateLeadDetails, fetchLeadHistory } from '@/features/leads/api';
 import { fetchChannels } from '@/features/channels/api';
+import { normalizeField, ChannelFieldDefinition } from '@/features/channels/constants';
 import { formatDate, formatPhone, formatCpf, formatCurrency } from '@/lib/utils';
 import { X, Lock, Edit3, Save, FileText, CheckCircle, History, Clock, User, AlertCircle, RefreshCw, Tag, MessageSquare, Landmark, Table, DollarSign, Calculator } from 'lucide-react';
 
@@ -32,6 +33,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
   const [prazo, setPrazo] = useState('');
   const [margem, setMargem] = useState('');
   const [valorLiberado, setValorLiberado] = useState('');
+  const [customFields, setCustomFields] = useState<Record<string, any>>({});
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
 
@@ -52,6 +54,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
       setPrazo(lead.prazo !== undefined && lead.prazo !== null ? String(lead.prazo) : '');
       setMargem(lead.margem !== undefined && lead.margem !== null ? String(lead.margem) : '');
       setValorLiberado(lead.valor_liberado !== undefined && lead.valor_liberado !== null ? String(lead.valor_liberado) : '');
+      setCustomFields(lead.custom_fields || {});
       setSavedSuccess(false);
     }
   }, [lead?.id]);
@@ -85,9 +88,44 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
     if (!channel || !channel.allowed_fields || channel.allowed_fields.length === 0) {
       return true; // Se o canal não tem restrições definidas, todos os campos ficam liberados
     }
-    return channel.allowed_fields.includes(fieldKey);
+    return channel.allowed_fields.some((f: any) => {
+      const k = typeof f === 'string' ? f : f?.key;
+      return k === fieldKey;
+    });
   };
 
+  const getFieldConfig = (fieldKey: string): ChannelFieldDefinition | undefined => {
+    if (!channel || !channel.allowed_fields) return undefined;
+    const raw = channel.allowed_fields.find((f: any) => {
+      const k = typeof f === 'string' ? f : f?.key;
+      return k === fieldKey;
+    });
+    return raw ? normalizeField(raw) : undefined;
+  };
+
+  const isFieldReadOnly = (fieldKey: string): boolean => {
+    const config = getFieldConfig(fieldKey);
+    return !!config?.isReadOnly;
+  };
+
+  const channelCustomFields: ChannelFieldDefinition[] = (channel?.allowed_fields || [])
+    .map(normalizeField)
+    .filter(
+      (f) =>
+        ![
+          'name',
+          'phone',
+          'cpf',
+          'verified_cpf',
+          'proposal_number',
+          'banco',
+          'tabela',
+          'prazo',
+          'margem',
+          'valor_liberado',
+          'notes',
+        ].includes(f.key)
+    );
 
   const loadHistory = async () => {
     if (!lead) return;
@@ -126,6 +164,7 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
         prazo: isNaN(parsedPrazo as number) ? null : parsedPrazo,
         margem: isNaN(parsedMargem as number) ? null : parsedMargem,
         valor_liberado: isNaN(parsedValorLiberado as number) ? null : parsedValorLiberado,
+        custom_fields: customFields,
       });
       setSavedSuccess(true);
       onRefresh();
@@ -303,6 +342,24 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                     <span className="text-slate-400 block font-medium">Valor Liberado</span>
                     <span className="font-semibold text-slate-800">{formatCurrency(lead.valor_liberado)}</span>
                   </div>
+
+                  {/* Campos do Canal na Visualização Geral */}
+                  {channelCustomFields.map((cf) => {
+                    const val = (lead.custom_fields as any)?.[cf.key] ?? customFields[cf.key];
+                    let valDisplay = String(val ?? '-');
+                    if (val === null || val === undefined || val === '') valDisplay = '-';
+                    else if (typeof val === 'boolean') valDisplay = val ? 'Sim' : 'Não';
+                    else if (cf.type === 'currency' && typeof val === 'number') valDisplay = formatCurrency(val);
+                    return (
+                      <div key={`ro_grid_${cf.key}`}>
+                        <span className="text-slate-400 block font-medium flex items-center gap-1">
+                          {cf.label}
+                          {cf.isReadOnly && <Lock className="w-2.5 h-2.5 text-amber-500" />}
+                        </span>
+                        <span className="font-semibold text-slate-800">{valDisplay}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -316,151 +373,365 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                   {isFieldAllowed('name') && (
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Nome do Lead / Cliente
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-slate-700">
+                          Nome do Lead / Cliente
+                        </label>
+                        {isFieldReadOnly('name') && (
+                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
+                            <Lock className="w-2.5 h-2.5" /> Somente leitura
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
+                        disabled={isFieldReadOnly('name')}
                         placeholder="Nome completo do lead"
                         value={name}
                         onChange={(e) => setName(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
+                          isFieldReadOnly('name')
+                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
+                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+                        }`}
                       />
                     </div>
                   )}
 
                   {isFieldAllowed('phone') && (
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Telefone / WhatsApp
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-slate-700">
+                          Telefone / WhatsApp
+                        </label>
+                        {isFieldReadOnly('phone') && (
+                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
+                            <Lock className="w-2.5 h-2.5" /> Somente leitura
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
+                        disabled={isFieldReadOnly('phone')}
                         placeholder="(00) 00000-0000"
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
+                          isFieldReadOnly('phone')
+                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
+                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+                        }`}
                       />
                     </div>
                   )}
 
                   {isFieldAllowed('verified_cpf') && (
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        CPF Correto / Verificado
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-slate-700">
+                          CPF Correto / Verificado
+                        </label>
+                        {isFieldReadOnly('verified_cpf') && (
+                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
+                            <Lock className="w-2.5 h-2.5" /> Somente leitura
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
+                        disabled={isFieldReadOnly('verified_cpf')}
                         placeholder="Ex: 000.000.000-00"
                         value={verifiedCpf}
                         onChange={(e) => setVerifiedCpf(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
+                          isFieldReadOnly('verified_cpf')
+                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
+                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+                        }`}
                       />
                     </div>
                   )}
 
                   {isFieldAllowed('proposal_number') && (
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Número da Proposta
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-slate-700">
+                          Número da Proposta
+                        </label>
+                        {isFieldReadOnly('proposal_number') && (
+                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
+                            <Lock className="w-2.5 h-2.5" /> Somente leitura
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
+                        disabled={isFieldReadOnly('proposal_number')}
                         placeholder="Ex: PROP-2026-889"
                         value={proposalNumber}
                         onChange={(e) => setProposalNumber(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
+                          isFieldReadOnly('proposal_number')
+                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
+                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+                        }`}
                       />
                     </div>
                   )}
 
                   {isFieldAllowed('banco') && (
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Banco
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-slate-700">
+                          Banco
+                        </label>
+                        {isFieldReadOnly('banco') && (
+                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
+                            <Lock className="w-2.5 h-2.5" /> Somente leitura
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
+                        disabled={isFieldReadOnly('banco')}
                         placeholder="Ex: Banco Itaú, Bradesco, C6..."
                         value={banco}
                         onChange={(e) => setBanco(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
+                          isFieldReadOnly('banco')
+                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
+                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+                        }`}
                       />
                     </div>
                   )}
 
                   {isFieldAllowed('tabela') && (
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Tabela
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-slate-700">
+                          Tabela
+                        </label>
+                        {isFieldReadOnly('tabela') && (
+                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
+                            <Lock className="w-2.5 h-2.5" /> Somente leitura
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
+                        disabled={isFieldReadOnly('tabela')}
                         placeholder="Ex: Tabela Normal, Flex..."
                         value={tabela}
                         onChange={(e) => setTabela(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
+                          isFieldReadOnly('tabela')
+                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
+                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+                        }`}
                       />
                     </div>
                   )}
 
                   {isFieldAllowed('prazo') && (
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Prazo (Parcelas)
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-slate-700">
+                          Prazo (Parcelas)
+                        </label>
+                        {isFieldReadOnly('prazo') && (
+                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
+                            <Lock className="w-2.5 h-2.5" /> Somente leitura
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="number"
+                        disabled={isFieldReadOnly('prazo')}
                         placeholder="Ex: 84"
                         value={prazo}
                         onChange={(e) => setPrazo(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
+                          isFieldReadOnly('prazo')
+                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
+                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+                        }`}
                       />
                     </div>
                   )}
 
                   {isFieldAllowed('margem') && (
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Margem (R$)
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-slate-700">
+                          Margem (R$)
+                        </label>
+                        {isFieldReadOnly('margem') && (
+                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
+                            <Lock className="w-2.5 h-2.5" /> Somente leitura
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
+                        disabled={isFieldReadOnly('margem')}
                         placeholder="Ex: 450.00"
                         value={margem}
                         onChange={(e) => setMargem(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
+                          isFieldReadOnly('margem')
+                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
+                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+                        }`}
                       />
                     </div>
                   )}
 
                   {isFieldAllowed('valor_liberado') && (
                     <div>
-                      <label className="block text-xs font-semibold text-slate-700 mb-1">
-                        Valor Liberado (R$)
-                      </label>
+                      <div className="flex items-center justify-between mb-1">
+                        <label className="text-xs font-semibold text-slate-700">
+                          Valor Liberado (R$)
+                        </label>
+                        {isFieldReadOnly('valor_liberado') && (
+                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
+                            <Lock className="w-2.5 h-2.5" /> Somente leitura
+                          </span>
+                        )}
+                      </div>
                       <input
                         type="text"
+                        disabled={isFieldReadOnly('valor_liberado')}
                         placeholder="Ex: 12500.00"
                         value={valorLiberado}
                         onChange={(e) => setValorLiberado(e.target.value)}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
+                          isFieldReadOnly('valor_liberado')
+                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
+                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+                        }`}
                       />
                     </div>
                   )}
                 </div>
 
+                {channelCustomFields.length > 0 && (
+                  <div className="space-y-3 pt-3 border-t border-slate-100">
+                    <div className="flex items-center gap-1.5 text-xs font-semibold text-brand-700 uppercase tracking-wider">
+                      <Tag className="w-3.5 h-3.5" />
+                      <span>Campos do Canal ({channel?.name || 'Personalizados'})</span>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                      {channelCustomFields.map((cf) => {
+                        const val = customFields[cf.key] ?? (lead.custom_fields as any)?.[cf.key];
+
+                        if (cf.isReadOnly) {
+                          let displayVal = String(val ?? '-');
+                          if (val === null || val === undefined || val === '') displayVal = '-';
+                          else if (typeof val === 'boolean') displayVal = val ? 'Sim' : 'Não';
+                          else if (cf.type === 'currency' && typeof val === 'number') displayVal = formatCurrency(val);
+
+                          return (
+                            <div key={cf.key}>
+                              <div className="flex items-center justify-between mb-1">
+                                <label className="text-xs font-semibold text-slate-700 truncate">
+                                  {cf.label}
+                                </label>
+                                <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium shrink-0">
+                                  <Lock className="w-2.5 h-2.5" /> Somente leitura
+                                </span>
+                              </div>
+                              <div className="w-full bg-slate-100/90 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-700 font-medium cursor-not-allowed select-text min-h-[34px] flex items-center">
+                                {displayVal}
+                              </div>
+                            </div>
+                          );
+                        }
+
+                        return (
+                          <div key={cf.key}>
+                            <div className="flex items-center justify-between mb-1">
+                              <label className="text-xs font-semibold text-slate-700 truncate">
+                                {cf.label} {cf.required && <span className="text-rose-500">*</span>}
+                              </label>
+                              <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium shrink-0">
+                                <Edit3 className="w-2.5 h-2.5" /> Editável
+                              </span>
+                            </div>
+                            {cf.type === 'select' ? (
+                              <select
+                                value={customFields[cf.key] ?? ''}
+                                onChange={(e) => setCustomFields({ ...customFields, [cf.key]: e.target.value })}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                              >
+                                <option value="">Selecione...</option>
+                                {(cf.options || []).map((opt) => (
+                                  <option key={opt} value={opt}>{opt}</option>
+                                ))}
+                              </select>
+                            ) : cf.type === 'boolean' ? (
+                              <div className="flex items-center gap-2 pt-2">
+                                <input
+                                  type="checkbox"
+                                  id={`cf_${cf.key}`}
+                                  checked={!!customFields[cf.key]}
+                                  onChange={(e) => setCustomFields({ ...customFields, [cf.key]: e.target.checked })}
+                                  className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300"
+                                />
+                                <label htmlFor={`cf_${cf.key}`} className="text-xs text-slate-700 cursor-pointer select-none">
+                                  {cf.placeholder || 'Ativado'}
+                                </label>
+                              </div>
+                            ) : cf.type === 'textarea' ? (
+                              <textarea
+                                rows={2}
+                                placeholder={cf.placeholder || `Informe ${cf.label.toLowerCase()}...`}
+                                value={customFields[cf.key] ?? ''}
+                                onChange={(e) => setCustomFields({ ...customFields, [cf.key]: e.target.value })}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium resize-none"
+                              />
+                            ) : (
+                              <input
+                                type={cf.type === 'number' ? 'number' : cf.type === 'date' ? 'date' : 'text'}
+                                placeholder={cf.placeholder || (cf.type === 'currency' ? 'R$ 0,00' : '')}
+                                value={customFields[cf.key] ?? ''}
+                                onChange={(e) => {
+                                  const val = cf.type === 'number' && e.target.value !== '' ? Number(e.target.value) : e.target.value;
+                                  setCustomFields({ ...customFields, [cf.key]: val });
+                                }}
+                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
+                              />
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {isFieldAllowed('notes') && (
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
-                      Observações
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-semibold text-slate-700">
+                        Observações
+                      </label>
+                      {isFieldReadOnly('notes') && (
+                        <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
+                          <Lock className="w-2.5 h-2.5" /> Somente leitura
+                        </span>
+                      )}
+                    </div>
                     <textarea
                       rows={3}
+                      disabled={isFieldReadOnly('notes')}
                       placeholder="Insira detalhes da proposta, negociação ou observações sobre o cliente..."
                       value={notes}
                       onChange={(e) => setNotes(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 resize-none font-normal"
+                      className={`w-full border rounded-xl p-3 text-xs resize-none font-normal ${
+                        isFieldReadOnly('notes')
+                          ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
+                          : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+                      }`}
                     />
                   </div>
                 )}

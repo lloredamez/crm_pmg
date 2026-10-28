@@ -141,12 +141,14 @@ export const LeadTable: React.FC<LeadTableProps> = ({
     const allowed = selectedChannel.allowed_fields || [];
     // Campos que já são colunas padrão mantidos como padrão sem duplicação
     const defaultColumnKeys = ['name', 'phone', 'cpf', 'product_name'];
-    const extraKeys = allowed.filter((k) => !defaultColumnKeys.includes(k));
+    const extraFieldDefs = allowed
+      .map(getFieldDefinition)
+      .filter((def) => !defaultColumnKeys.includes(def.key) && def.showInTable !== false);
 
-    if (extraKeys.length === 0) return [];
+    if (extraFieldDefs.length === 0) return [];
 
-    return extraKeys.map((key) => {
-      const def = getFieldDefinition(key);
+    return extraFieldDefs.map((def) => {
+      const key = def.key;
 
       return {
         id: `channel_field_${key}`,
@@ -164,10 +166,42 @@ export const LeadTable: React.FC<LeadTableProps> = ({
             return <span className="text-xs text-slate-300 italic">-</span>;
           }
 
-          if (def.type === 'currency' && typeof val === 'number') {
+          if (def.type === 'currency' && (typeof val === 'number' || !isNaN(Number(val)))) {
             return (
               <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60 inline-block">
-                {formatCurrency(val)}
+                {formatCurrency(Number(val))}
+              </span>
+            );
+          }
+
+          if (def.type === 'boolean') {
+            const isTrue = val === true || val === 'true' || val === 1 || val === 'sim';
+            return (
+              <span
+                className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${
+                  isTrue
+                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                    : 'bg-slate-100 text-slate-600 border-slate-200'
+                }`}
+              >
+                {isTrue ? 'Sim' : 'Não'}
+              </span>
+            );
+          }
+
+          if (def.type === 'date') {
+            return (
+              <span className="text-xs text-slate-700 font-medium">
+                {formatDate(String(val))}
+              </span>
+            );
+          }
+
+          if (def.type === 'select') {
+            return (
+              <span className="text-xs font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/60 inline-flex items-center gap-1">
+                <Tag className="w-3 h-3 text-slate-400" />
+                {String(val)}
               </span>
             );
           }
@@ -791,8 +825,9 @@ export const LeadTable: React.FC<LeadTableProps> = ({
               <span>
                 ✨ Colunas personalizadas ativas: <strong>{channelDynamicColumns.length}</strong> (
                 {selectedChannel.allowed_fields
-                  ?.filter((k) => !['name', 'phone', 'cpf', 'product_name'].includes(k))
-                  .map((k) => getFieldDefinition(k).label)
+                  ?.map(getFieldDefinition)
+                  .filter((def) => !['name', 'phone', 'cpf', 'product_name'].includes(def.key) && def.showInTable !== false)
+                  .map((def) => def.label)
                   .join(', ')}
                 )
               </span>
