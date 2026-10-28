@@ -472,33 +472,32 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                         <span className="text-slate-400 font-normal text-[11px]">N/A (Controle)</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-right space-x-1">
+                    <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
                       <button
                         onClick={() => startEditing(u)}
                         title="Editar Integrante"
-                        className="inline-flex items-center gap-1 text-slate-600 hover:text-brand-600 font-medium text-xs bg-slate-100 hover:bg-slate-200/80 px-2 py-1 rounded-lg transition-colors"
+                        className="inline-flex items-center justify-center text-slate-600 hover:text-brand-600 bg-slate-100 hover:bg-slate-200/80 p-1.5 rounded-lg transition-colors cursor-pointer"
                       >
-                        <Pencil className="w-3.5 h-3.5" /> Editar
+                        <Pencil className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleToggleActive(u)}
                         title={isActive ? "Inativar Usuário" : "Ativar Usuário"}
-                        className={`inline-flex items-center gap-1 font-medium text-xs px-2 py-1 rounded-lg transition-colors ${
+                        className={`inline-flex items-center justify-center p-1.5 rounded-lg transition-colors cursor-pointer ${
                           isActive
                             ? 'bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200'
                             : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200'
                         }`}
                       >
-                        <Power className="w-3.5 h-3.5" />
-                        {isActive ? 'Inativar' : 'Ativar'}
+                        <Power className="w-4 h-4" />
                       </button>
                       {currentUser?.id !== u.id && (
                         <button
                           onClick={() => setUserToDelete(u)}
                           title="Excluir Usuário"
-                          className="inline-flex items-center gap-1 text-red-600 hover:text-red-700 font-medium text-xs bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-1 rounded-lg transition-colors"
+                          className="inline-flex items-center justify-center text-red-600 hover:text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 p-1.5 rounded-lg transition-colors cursor-pointer"
                         >
-                          <Trash2 className="w-3.5 h-3.5" /> Excluir
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       )}
                     </td>
