@@ -290,7 +290,7 @@ export default function LeadsDashboardPage() {
       />
 
       {/* Main Body */}
-      <main className="max-w-7xl mx-auto px-6 py-8">
+      <main className="w-full max-w-full mx-auto px-2 sm:px-3 py-6">
         {/* Render Settings Page if activeTab is 'settings' and user is Admin */}
         {activeTab === 'settings' && isAdmin ? (
           <SettingsPage />

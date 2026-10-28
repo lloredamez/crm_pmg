@@ -352,9 +352,8 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                     else if (cf.type === 'currency' && typeof val === 'number') valDisplay = formatCurrency(val);
                     return (
                       <div key={`ro_grid_${cf.key}`}>
-                        <span className="text-slate-400 block font-medium flex items-center gap-1">
+                        <span className="text-slate-400 block font-medium">
                           {cf.label}
-                          {cf.isReadOnly && <Lock className="w-2.5 h-2.5 text-amber-500" />}
                         </span>
                         <span className="font-semibold text-slate-800">{valDisplay}</span>
                       </div>
@@ -613,101 +612,87 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                       />
                     </div>
                   )}
-                </div>
 
-                {channelCustomFields.length > 0 && (
-                  <div className="space-y-3 pt-3 border-t border-slate-100">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-brand-700 uppercase tracking-wider">
-                      <Tag className="w-3.5 h-3.5" />
-                      <span>Campos do Canal ({channel?.name || 'Personalizados'})</span>
-                    </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                      {channelCustomFields.map((cf) => {
-                        const val = customFields[cf.key] ?? (lead.custom_fields as any)?.[cf.key];
+                  {channelCustomFields.map((cf) => {
+                    const val = customFields[cf.key] ?? (lead.custom_fields as any)?.[cf.key];
+                    const readOnly = !!cf.isReadOnly;
 
-                        if (cf.isReadOnly) {
-                          let displayVal = String(val ?? '-');
-                          if (val === null || val === undefined || val === '') displayVal = '-';
-                          else if (typeof val === 'boolean') displayVal = val ? 'Sim' : 'Não';
-                          else if (cf.type === 'currency' && typeof val === 'number') displayVal = formatCurrency(val);
-
-                          return (
-                            <div key={cf.key}>
-                              <div className="flex items-center justify-between mb-1">
-                                <label className="text-xs font-semibold text-slate-700 truncate">
-                                  {cf.label}
-                                </label>
-                                <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium shrink-0">
-                                  <Lock className="w-2.5 h-2.5" /> Somente leitura
-                                </span>
-                              </div>
-                              <div className="w-full bg-slate-100/90 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-700 font-medium cursor-not-allowed select-text min-h-[34px] flex items-center">
-                                {displayVal}
-                              </div>
-                            </div>
-                          );
-                        }
-
-                        return (
-                          <div key={cf.key}>
-                            <div className="flex items-center justify-between mb-1">
-                              <label className="text-xs font-semibold text-slate-700 truncate">
-                                {cf.label} {cf.required && <span className="text-rose-500">*</span>}
-                              </label>
-                              <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium shrink-0">
-                                <Edit3 className="w-2.5 h-2.5" /> Editável
-                              </span>
-                            </div>
-                            {cf.type === 'select' ? (
-                              <select
-                                value={customFields[cf.key] ?? ''}
-                                onChange={(e) => setCustomFields({ ...customFields, [cf.key]: e.target.value })}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
-                              >
-                                <option value="">Selecione...</option>
-                                {(cf.options || []).map((opt) => (
-                                  <option key={opt} value={opt}>{opt}</option>
-                                ))}
-                              </select>
-                            ) : cf.type === 'boolean' ? (
-                              <div className="flex items-center gap-2 pt-2">
-                                <input
-                                  type="checkbox"
-                                  id={`cf_${cf.key}`}
-                                  checked={!!customFields[cf.key]}
-                                  onChange={(e) => setCustomFields({ ...customFields, [cf.key]: e.target.checked })}
-                                  className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300"
-                                />
-                                <label htmlFor={`cf_${cf.key}`} className="text-xs text-slate-700 cursor-pointer select-none">
-                                  {cf.placeholder || 'Ativado'}
-                                </label>
-                              </div>
-                            ) : cf.type === 'textarea' ? (
-                              <textarea
-                                rows={2}
-                                placeholder={cf.placeholder || `Informe ${cf.label.toLowerCase()}...`}
-                                value={customFields[cf.key] ?? ''}
-                                onChange={(e) => setCustomFields({ ...customFields, [cf.key]: e.target.value })}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium resize-none"
-                              />
-                            ) : (
-                              <input
-                                type={cf.type === 'number' ? 'number' : cf.type === 'date' ? 'date' : 'text'}
-                                placeholder={cf.placeholder || (cf.type === 'currency' ? 'R$ 0,00' : '')}
-                                value={customFields[cf.key] ?? ''}
-                                onChange={(e) => {
-                                  const val = cf.type === 'number' && e.target.value !== '' ? Number(e.target.value) : e.target.value;
-                                  setCustomFields({ ...customFields, [cf.key]: val });
-                                }}
-                                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 font-medium"
-                              />
-                            )}
+                    return (
+                      <div key={cf.key}>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="text-xs font-semibold text-slate-700 truncate">
+                            {cf.label} {!readOnly && cf.required && <span className="text-rose-500">*</span>}
+                          </label>
+                          {readOnly && (
+                            <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium shrink-0">
+                              <Lock className="w-2.5 h-2.5" /> Somente leitura
+                            </span>
+                          )}
+                        </div>
+                        {cf.type === 'select' ? (
+                          <select
+                            disabled={readOnly}
+                            value={val ?? ''}
+                            onChange={(e) => setCustomFields({ ...customFields, [cf.key]: e.target.value })}
+                            className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
+                              readOnly
+                                ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
+                                : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+                            }`}
+                          >
+                            <option value="">Selecione...</option>
+                            {(cf.options || []).map((opt) => (
+                              <option key={opt} value={opt}>{opt}</option>
+                            ))}
+                          </select>
+                        ) : cf.type === 'boolean' ? (
+                          <div className="flex items-center gap-2 pt-2">
+                            <input
+                              type="checkbox"
+                              id={`cf_${cf.key}`}
+                              disabled={readOnly}
+                              checked={!!val}
+                              onChange={(e) => setCustomFields({ ...customFields, [cf.key]: e.target.checked })}
+                              className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300 disabled:opacity-50"
+                            />
+                            <label htmlFor={`cf_${cf.key}`} className="text-xs text-slate-700 cursor-pointer select-none">
+                              {cf.placeholder || 'Ativado'}
+                            </label>
                           </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
+                        ) : cf.type === 'textarea' ? (
+                          <textarea
+                            rows={2}
+                            disabled={readOnly}
+                            placeholder={cf.placeholder || `Informe ${cf.label.toLowerCase()}...`}
+                            value={val ?? ''}
+                            onChange={(e) => setCustomFields({ ...customFields, [cf.key]: e.target.value })}
+                            className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium resize-none ${
+                              readOnly
+                                ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
+                                : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+                            }`}
+                          />
+                        ) : (
+                          <input
+                            type={cf.type === 'number' ? 'number' : cf.type === 'date' ? 'date' : 'text'}
+                            disabled={readOnly}
+                            placeholder={cf.placeholder || (cf.type === 'currency' ? 'Ex: 0.00' : '')}
+                            value={val ?? ''}
+                            onChange={(e) => {
+                              const nextVal = cf.type === 'number' && e.target.value !== '' ? Number(e.target.value) : e.target.value;
+                              setCustomFields({ ...customFields, [cf.key]: nextVal });
+                            }}
+                            className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
+                              readOnly
+                                ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
+                                : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
+                            }`}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
 
                 {isFieldAllowed('notes') && (
                   <div>

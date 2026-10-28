@@ -190,7 +190,6 @@ export const ChannelManagement: React.FC = () => {
                   <th className="py-3 px-4">Código / Chave</th>
                   <th className="py-3 px-4">Lojas Participantes</th>
                   <th className="py-3 px-4">Tabulações Disponíveis</th>
-                  <th className="py-3 px-4">Campos Editáveis</th>
                   <th className="py-3 px-4">Status</th>
                   <th className="py-3 px-4 text-right">Ações</th>
                 </tr>
@@ -247,27 +246,11 @@ export const ChannelManagement: React.FC = () => {
 
                     <td className="py-3.5 px-4">
                       <button
-                        type="button"
-                        onClick={() => handleOpenFieldsEditor(channel)}
-                        className="inline-flex items-center gap-1.5 bg-brand-50 hover:bg-brand-100/80 text-brand-900 border border-brand-200/90 text-[11px] font-semibold px-2.5 py-1 rounded-full transition-all cursor-pointer shadow-2xs group"
-                        title="Abrir editor visual de campos deste canal"
-                      >
-                        <Sliders className="w-3 h-3 text-brand-600 group-hover:rotate-45 transition-transform" />
-                        <span>
-                          {channel.allowed_fields?.length || 0} campos personalizados
-                        </span>
-                        <span className="text-[10px] text-brand-600 font-bold underline ml-0.5">Editar</span>
-                      </button>
-                    </td>
-
-                    <td className="py-3.5 px-4">
-                      <button
                         onClick={() => handleToggleActive(channel)}
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all ${
-                          channel.is_active !== false
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all ${channel.is_active !== false
                             ? 'bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100'
                             : 'bg-slate-100 text-slate-500 border border-slate-200 hover:bg-slate-200'
-                        }`}
+                          }`}
                       >
                         <Power className="w-3 h-3" />
                         {channel.is_active !== false ? 'Ativo' : 'Inativo'}
@@ -380,18 +363,16 @@ export const ChannelManagement: React.FC = () => {
                         <div
                           key={unit.id}
                           onClick={() => handleToggleUnitSelection(unit.id)}
-                          className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
-                            isSelected
+                          className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${isSelected
                               ? 'bg-brand-50/80 border-brand-300 text-brand-900 font-semibold shadow-xs'
                               : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100/70'
-                          }`}
+                            }`}
                         >
                           <div
-                            className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
-                              isSelected
+                            className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${isSelected
                                 ? 'bg-brand-600 border-brand-600 text-black'
                                 : 'border-slate-300 bg-white'
-                            }`}
+                              }`}
                           >
                             {isSelected && <Check className="w-3 h-3 stroke-3" />}
                           </div>
@@ -424,18 +405,16 @@ export const ChannelManagement: React.FC = () => {
                         <div
                           key={disp.id}
                           onClick={() => handleToggleDispSelection(disp.id)}
-                          className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
-                            isSelected
+                          className={`flex items-center gap-2 p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${isSelected
                               ? 'bg-amber-50/80 border-amber-300 text-amber-900 font-semibold shadow-xs'
                               : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-100/70'
-                          }`}
+                            }`}
                         >
                           <div
-                            className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${
-                              isSelected
+                            className={`w-4 h-4 rounded flex items-center justify-center border transition-colors ${isSelected
                                 ? 'bg-amber-600 border-amber-600 text-white'
                                 : 'border-slate-300 bg-white'
-                            }`}
+                              }`}
                           >
                             {isSelected && <Check className="w-3 h-3 stroke-3" />}
                           </div>

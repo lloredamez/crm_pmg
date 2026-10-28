@@ -106,8 +106,8 @@ export const Header: React.FC<HeaderProps> = ({
   const currentStatusInfo = statusConfig[currentUserStatus as keyof typeof statusConfig] || statusConfig.offline;
 
   return (
-    <header className="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-slate-100 px-6 py-3.5">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+    <header className="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-slate-100 px-3 sm:px-4 py-3.5">
+      <div className="w-full max-w-full mx-auto flex items-center justify-between gap-4">
         {/* Logo & Brand Badge */}
         <div className="flex items-center gap-3">
           <div>

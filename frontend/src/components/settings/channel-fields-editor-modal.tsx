@@ -28,7 +28,24 @@ import {
   EyeOff,
   Lock,
   Unlock,
+  Type,
+  Hash,
+  DollarSign,
+  Calendar,
+  ToggleLeft,
+  List,
+  FileText,
 } from 'lucide-react';
+
+const FIELD_TYPE_ICONS: Record<FieldType, React.ElementType> = {
+  text: Type,
+  number: Hash,
+  currency: DollarSign,
+  date: Calendar,
+  boolean: ToggleLeft,
+  select: List,
+  textarea: FileText,
+};
 
 interface ChannelFieldsEditorModalProps {
   channel: Channel | null;
@@ -144,9 +161,9 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
     const optionsList =
       fieldType === 'select'
         ? fieldOptions
-            .split(',')
-            .map((opt) => opt.trim())
-            .filter(Boolean)
+          .split(',')
+          .map((opt) => opt.trim())
+          .filter(Boolean)
         : undefined;
 
     const newField: ChannelFieldDefinition = {
@@ -247,7 +264,7 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
                   Editor de Campos do Canal
                 </h3>
                 <span className="font-mono text-[11px] font-semibold bg-brand-100 text-brand-800 px-2.5 py-0.5 rounded-full border border-brand-200">
-                  {channel.name} ({channel.code})
+                  {channel.name}
                 </span>
               </div>
               <p className="text-xs text-slate-500">
@@ -327,17 +344,23 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
                     Tipo do Dado
                   </label>
-                  <select
-                    value={fieldType}
-                    onChange={(e) => setFieldType(e.target.value as FieldType)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 cursor-pointer"
-                  >
-                    {Object.entries(FIELD_TYPE_LABELS).map(([t, info]) => (
-                      <option key={t} value={t}>
-                        {info.icon} {info.label}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative flex items-center">
+                    {(() => {
+                      const SelectedTypeIcon = FIELD_TYPE_ICONS[fieldType] || FileText;
+                      return <SelectedTypeIcon className="w-3.5 h-3.5 text-slate-400 absolute left-3 pointer-events-none" />;
+                    })()}
+                    <select
+                      value={fieldType}
+                      onChange={(e) => setFieldType(e.target.value as FieldType)}
+                      className="w-full bg-white border border-slate-200 rounded-xl pl-8 pr-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 cursor-pointer"
+                    >
+                      {Object.entries(FIELD_TYPE_LABELS).map(([t, info]) => (
+                        <option key={t} value={t}>
+                          {info.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 {/* Options if Select */}
@@ -391,7 +414,7 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
                         Exibir como coluna na tabela de leads
                       </span>
                       <span className="text-[10px] text-slate-500 block leading-tight mt-0.5">
-                        Se desmarcado, o campo aparecerá na ficha do lead mas não ocupará coluna na tabela.
+                        O campo aparecerá na ficha do lead mas não ocupará coluna na tabela.
                       </span>
                     </div>
                   </label>
@@ -408,10 +431,10 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
                     <div>
                       <span className="text-xs font-semibold text-slate-800 flex items-center gap-1.5">
                         <Lock className="w-3.5 h-3.5 text-amber-600" />
-                        Campo Somente Leitura (Read-Only)
+                        Campo Somente Leitura
                       </span>
                       <span className="text-[10px] text-slate-500 block leading-tight mt-0.5">
-                        Se marcado, o atendente poderá visualizar na ficha do lead mas não poderá alterá-lo.
+                        O atendente poderá visualizar na ficha do lead mas não poderá alterá-lo.
                       </span>
                     </div>
                   </label>
@@ -525,18 +548,17 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
                   {fields.map((field, idx) => {
                     const typeInfo = FIELD_TYPE_LABELS[field.type] || {
                       label: field.type,
-                      icon: '📝',
                     };
+                    const TypeIcon = FIELD_TYPE_ICONS[field.type] || FileText;
                     const isEditing = editingIndex === idx;
 
                     return (
                       <div
                         key={`${field.key}-${idx}`}
-                        className={`flex items-center justify-between p-3 rounded-xl border transition-all ${
-                          isEditing
-                            ? 'bg-amber-50/80 border-amber-300 shadow-xs ring-2 ring-amber-400/20'
-                            : 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-2xs'
-                        }`}
+                        className={`flex items-center justify-between p-3 rounded-xl border transition-all ${isEditing
+                          ? 'bg-amber-50/80 border-amber-300 shadow-xs ring-2 ring-amber-400/20'
+                          : 'bg-white border-slate-200/80 hover:border-slate-300 hover:shadow-2xs'
+                          }`}
                       >
                         <div className="flex items-center gap-3 truncate">
                           {/* Order Badges & Move Controls */}
@@ -578,7 +600,7 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
 
                             <div className="flex flex-wrap items-center gap-1.5 mt-1">
                               <span className="text-[10px] text-slate-500 flex items-center gap-1 font-medium">
-                                <span>{typeInfo.icon}</span>
+                                <TypeIcon className="w-3 h-3 text-slate-400" />
                                 <span>{typeInfo.label}</span>
                               </span>
 
@@ -636,36 +658,6 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
                   })}
                 </div>
               )}
-            </div>
-
-            {/* Live Preview Bar */}
-            <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200/60">
-              <span className="text-[11px] font-bold text-slate-700 flex items-center gap-1 mb-1.5">
-                <Eye className="w-3.5 h-3.5 text-brand-600" />
-                Pré-visualização das colunas na tabela deste canal:
-              </span>
-              <div className="flex flex-wrap gap-1.5 overflow-x-auto max-h-24">
-                <span className="text-[10px] font-medium bg-slate-200/70 text-slate-600 px-2 py-0.5 rounded-md">
-                  Nome (padrão)
-                </span>
-                <span className="text-[10px] font-medium bg-slate-200/70 text-slate-600 px-2 py-0.5 rounded-md">
-                  Telefone (padrão)
-                </span>
-                <span className="text-[10px] font-medium bg-slate-200/70 text-slate-600 px-2 py-0.5 rounded-md">
-                  Produto (padrão)
-                </span>
-                {fields
-                  .filter((f) => f.showInTable !== false && !['name', 'phone', 'cpf', 'product_name'].includes(f.key))
-                  .map((f) => (
-                    <span
-                      key={f.key}
-                      className="text-[10px] font-semibold bg-brand-50 text-brand-800 border border-brand-300 px-2 py-0.5 rounded-md flex items-center gap-1"
-                    >
-                      {f.label}
-                      {f.isReadOnly && <Lock className="w-2.5 h-2.5 text-amber-600" />}
-                    </span>
-                  ))}
-              </div>
             </div>
           </div>
         </div>

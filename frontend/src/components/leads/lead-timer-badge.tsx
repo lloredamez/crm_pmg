@@ -23,8 +23,8 @@ export const LeadTimerBadge: React.FC<LeadTimerBadgeProps> = ({ lead }) => {
   // Status terminais não exibem timer de estresse
   if (lead.status === 'converted' || lead.status === 'lost') {
     return (
-      <span className="text-xs text-slate-400 font-medium px-2 py-0.5 rounded-full bg-slate-100/60 border border-slate-200/50 inline-flex items-center gap-1">
-        <CheckCircle2 className="w-3 h-3 text-slate-400" />
+      <span className="text-xs text-slate-400 font-medium px-2 py-0.5 rounded-full bg-slate-100/60 border border-slate-200/50 inline-flex items-center gap-1 whitespace-nowrap">
+        <CheckCircle2 className="w-3 h-3 text-slate-400 shrink-0" />
         Concluído
       </span>
     );
@@ -32,7 +32,7 @@ export const LeadTimerBadge: React.FC<LeadTimerBadgeProps> = ({ lead }) => {
 
   if (lead.status === 'expired') {
     return (
-      <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-100 text-rose-800 border-rose-300 inline-flex items-center gap-1.5">
+      <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-100 text-rose-800 border-rose-300 inline-flex items-center gap-1.5 whitespace-nowrap">
         <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
         Estourado
       </span>
@@ -77,7 +77,7 @@ export const LeadTimerBadge: React.FC<LeadTimerBadgeProps> = ({ lead }) => {
   // Se já estourou o tempo
   if (remainingMs <= 0) {
     return (
-      <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-100 text-rose-800 border-rose-300 inline-flex items-center gap-1 shrink-0">
+      <span className="text-xs font-semibold px-2.5 py-1 rounded-full border bg-rose-100 text-rose-800 border-rose-300 inline-flex items-center gap-1 shrink-0 whitespace-nowrap">
         <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
         00:00 (Estourado)
       </span>
@@ -124,7 +124,7 @@ export const LeadTimerBadge: React.FC<LeadTimerBadgeProps> = ({ lead }) => {
 
   return (
     <span
-      className={`text-xs px-2.5 py-1 rounded-full border inline-flex items-center gap-1.5 transition-all ${badgeStyle}`}
+      className={`text-xs px-2.5 py-1 rounded-full border inline-flex items-center gap-1.5 whitespace-nowrap transition-all ${badgeStyle}`}
       title={`Tempo restante de SLA: ${formattedTime}`}
     >
       <IconComponent className={`w-3.5 h-3.5 shrink-0 ${iconStyle}`} />
