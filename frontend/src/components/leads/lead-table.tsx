@@ -11,11 +11,12 @@ import {
   ColumnDef,
   SortingState,
 } from '@tanstack/react-table';
-import { Lead, User, Disposition } from '@/features/leads/types';
+import { Lead, User, Disposition, Channel } from '@/features/leads/types';
 import { formatDate, formatPhone, formatCpf, formatCurrency, cn } from '@/lib/utils';
 import { useAuth } from '@/features/auth/auth-provider';
+import { getFieldDefinition } from '@/features/channels/constants';
 import { LeadTimerBadge } from './lead-timer-badge';
-import { Search, ArrowUpDown, UserCheck, Clock, FileText, Tag, Eye, EyeOff, Package, Landmark, Table, DollarSign, Calculator, Filter, RotateCcw, X, ShoppingBag, UserPlus } from 'lucide-react';
+import { Search, ArrowUpDown, UserCheck, Clock, FileText, Tag, Eye, EyeOff, Package, Landmark, Table, DollarSign, Calculator, Filter, RotateCcw, X, ShoppingBag, UserPlus, Share2 } from 'lucide-react';
 
 
 interface LeadTableProps {
@@ -33,6 +34,9 @@ interface LeadTableProps {
   onTabelaFilterChange?: (tabela: string) => void;
   dispositionFilter?: string;
   onDispositionFilterChange?: (disposition: string) => void;
+  channels?: Channel[];
+  channelFilter?: string;
+  onChannelFilterChange?: (channel: string) => void;
   dispositions?: Disposition[];
   attendantFilter?: string;
   onAttendantFilterChange?: (attendantId: string) => void;
@@ -62,6 +66,9 @@ export const LeadTable: React.FC<LeadTableProps> = ({
   onTabelaFilterChange,
   dispositionFilter = 'all',
   onDispositionFilterChange,
+  channels = [],
+  channelFilter = 'all',
+  onChannelFilterChange,
   dispositions = [],
   attendantFilter = 'all',
   onAttendantFilterChange,
@@ -122,6 +129,98 @@ export const LeadTable: React.FC<LeadTableProps> = ({
   }, [users, user]);
 
   const canBulkReassign = isSupervisorRole || isManagerOrAdminRole;
+
+  const selectedChannel = useMemo(() => {
+    if (!channels || channelFilter === 'all') return null;
+    return channels.find((c) => c.code.toLowerCase() === channelFilter.toLowerCase()) || null;
+  }, [channels, channelFilter]);
+
+  const channelDynamicColumns = useMemo<ColumnDef<Lead>[]>(() => {
+    if (!selectedChannel) return [];
+
+    const allowed = selectedChannel.allowed_fields || [];
+    // Campos que já são colunas padrão mantidos como padrão sem duplicação
+    const defaultColumnKeys = ['name', 'phone', 'cpf', 'product_name'];
+    const extraKeys = allowed.filter((k) => !defaultColumnKeys.includes(k));
+
+    if (extraKeys.length === 0) return [];
+
+    return extraKeys.map((key) => {
+      const def = getFieldDefinition(key);
+
+      return {
+        id: `channel_field_${key}`,
+        accessorKey: key as any,
+        header: () => (
+          <span className="flex items-center gap-1 text-xs font-semibold text-brand-700 bg-brand-50/80 px-2 py-0.5 rounded-md border border-brand-200/50">
+            {def.label}
+          </span>
+        ),
+        cell: ({ row }: { row: any }) => {
+          const lead = row.original;
+          const val = (lead as any)[key] ?? (lead as any).custom_fields?.[key];
+
+          if (val === null || val === undefined || val === '') {
+            return <span className="text-xs text-slate-300 italic">-</span>;
+          }
+
+          if (def.type === 'currency' && typeof val === 'number') {
+            return (
+              <span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200/60 inline-block">
+                {formatCurrency(val)}
+              </span>
+            );
+          }
+
+          if (key === 'prazo') {
+            return (
+              <span className="text-xs font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md">
+                {val}x parcelas
+              </span>
+            );
+          }
+
+          if (key === 'verified_cpf') {
+            return (
+              <span className="text-xs font-mono font-medium text-slate-800">
+                {lead.is_revealed ? formatCpf(val) : '***.***.***-**'}
+              </span>
+            );
+          }
+
+          if (key === 'banco') {
+            return (
+              <span className="text-xs font-semibold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md">
+                {val}
+              </span>
+            );
+          }
+
+          if (key === 'tabela') {
+            return (
+              <span className="text-xs font-medium text-slate-700 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-200/60">
+                {val}
+              </span>
+            );
+          }
+
+          if (key === 'proposal_number') {
+            return (
+              <span className="text-xs font-mono font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-md border border-brand-200/50">
+                #{val}
+              </span>
+            );
+          }
+
+          return (
+            <span className="text-xs text-slate-700 max-w-40 truncate block" title={String(val)}>
+              {String(val)}
+            </span>
+          );
+        },
+      };
+    });
+  }, [selectedChannel]);
 
   const columns: ColumnDef<Lead>[] = [
     ...(canBulkReassign
@@ -244,6 +343,9 @@ export const LeadTable: React.FC<LeadTableProps> = ({
         );
       },
     },
+
+    // Injeção dinâmica de colunas personalizadas do canal ativo
+    ...channelDynamicColumns,
 
     ...(isSupervisorRole || isManagerOrAdminRole
       ? [
@@ -670,6 +772,38 @@ export const LeadTable: React.FC<LeadTableProps> = ({
           )}
         </div>
       </div>
+
+      {/* Dynamic Channel Column Information Banner */}
+      {selectedChannel && (
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2.5 bg-blue-50/80 border border-blue-200/80 rounded-2xl text-xs text-blue-900 animate-in fade-in duration-150 mb-4">
+          <div className="flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse"></span>
+            <span className="font-semibold flex items-center gap-1.5">
+              <Share2 className="w-3.5 h-3.5 text-blue-600" />
+              Filtro por Canal: {selectedChannel.name}
+            </span>
+            <span className="text-[11px] font-mono bg-blue-100/80 text-blue-800 px-2 py-0.5 rounded-md font-semibold">
+              {selectedChannel.code}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px] text-blue-800">
+            {channelDynamicColumns.length > 0 ? (
+              <span>
+                ✨ Colunas personalizadas ativas: <strong>{channelDynamicColumns.length}</strong> (
+                {selectedChannel.allowed_fields
+                  ?.filter((k) => !['name', 'phone', 'cpf', 'product_name'].includes(k))
+                  .map((k) => getFieldDefinition(k).label)
+                  .join(', ')}
+                )
+              </span>
+            ) : (
+              <span className="text-slate-500 italic">
+                Utilizando colunas padrão do CRM para este canal
+              </span>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Bulk Action Bar */}
       {canBulkReassign && selectedLeadIds.length > 0 && (

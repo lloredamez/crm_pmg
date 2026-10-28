@@ -34,6 +34,7 @@ export async function fetchLeads(params: {
   banco?: string;
   tabela?: string;
   disposition?: string;
+  channel?: string;
 }): Promise<LeadPaginationResponse> {
   const API_URL = getApiUrl();
   const query = new URLSearchParams();
@@ -45,6 +46,7 @@ export async function fetchLeads(params: {
   if (params.banco && params.banco !== 'all') query.append('banco', params.banco);
   if (params.tabela && params.tabela !== 'all') query.append('tabela', params.tabela);
   if (params.disposition && params.disposition !== 'all') query.append('disposition', params.disposition);
+  if (params.channel && params.channel !== 'all') query.append('channel', params.channel);
 
   const res = await fetch(`${API_URL}/api/v1/leads?${query.toString()}`, {
     headers: {

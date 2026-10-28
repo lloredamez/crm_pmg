@@ -3,7 +3,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSocket } from '@/features/socket/socket-provider';
 import { useAuth } from '@/features/auth/auth-provider';
-import { Zap, Users, UserCog, LogOut, Check, Settings } from 'lucide-react';
+import { Zap, Users, UserCog, LogOut, Check, Settings, ChevronDown, Share2 } from 'lucide-react';
+import { Channel } from '@/features/leads/types';
 import { cn } from '@/lib/utils';
 
 interface HeaderProps {
@@ -12,6 +13,9 @@ interface HeaderProps {
   currentUserStatus: string;
   onStatusChange: (status: string) => void;
   onOpenSimulateModal: () => void;
+  channels?: Channel[];
+  selectedChannelCode?: string;
+  onSelectChannel?: (channelCode: string) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -20,11 +24,27 @@ export const Header: React.FC<HeaderProps> = ({
   currentUserStatus,
   onStatusChange,
   onOpenSimulateModal,
+  channels = [],
+  selectedChannelCode,
+  onSelectChannel,
 }) => {
   const { isConnected } = useSocket();
   const { user, logout, isAdmin, isManager } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isChannelHovered, setIsChannelHovered] = useState(false);
+  const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  const handleMouseEnterChannel = () => {
+    if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    setIsChannelHovered(true);
+  };
+
+  const handleMouseLeaveChannel = () => {
+    hoverTimeoutRef.current = setTimeout(() => {
+      setIsChannelHovered(false);
+    }, 180);
+  };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -33,12 +53,15 @@ export const Header: React.FC<HeaderProps> = ({
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    };
   }, []);
 
   const navItems = [
     { id: 'overview', label: 'Dashboard', icon: Zap },
-    { id: 'leads', label: 'Leads/Clientes', icon: Users },
+    { id: 'leads', label: 'Leads / Clientes', icon: Users },
   ];
 
   if (isAdmin || isManager) {
@@ -48,6 +71,10 @@ export const Header: React.FC<HeaderProps> = ({
   if (isAdmin) {
     navItems.push({ id: 'settings', label: 'Configurações', icon: Settings });
   }
+
+  const selectedChannelObj = channels.find(
+    (c) => c.code.toLowerCase() === selectedChannelCode?.toLowerCase()
+  );
 
   const getRoleBadge = (role?: string) => {
     if (role === 'admin') return <span className="bg-purple-100 text-purple-800 text-[10px] font-bold px-2 py-0.5 rounded-full">👑 Admin</span>;
@@ -95,6 +122,104 @@ export const Header: React.FC<HeaderProps> = ({
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
+            const isLeadsItem = item.id === 'leads';
+
+            if (isLeadsItem) {
+              return (
+                <div
+                  key={item.id}
+                  className="relative"
+                  onMouseEnter={handleMouseEnterChannel}
+                  onMouseLeave={handleMouseLeaveChannel}
+                >
+                  <button
+                    onClick={() => setActiveTab('leads')}
+                    className={cn(
+                      'pill-tab flex items-center gap-1.5 text-[10px] transition-all cursor-pointer',
+                      isActive ? 'pill-tab-active' : 'pill-tab-inactive'
+                    )}
+                  >
+                    <Icon className={cn('w-4 h-4', isActive ? 'text-brand-600' : 'text-slate-400')} />
+                    <span>{item.label}</span>
+                    {selectedChannelObj && (
+                      <span className="font-semibold px-2 py-0.5 rounded-full text-[9px] bg-brand-100/90 text-brand-800 border border-brand-200/70 max-w-28 truncate">
+                        {selectedChannelObj.name}
+                      </span>
+                    )}
+                    <ChevronDown
+                      className={cn(
+                        'w-3 h-3 text-slate-400 transition-transform duration-200',
+                        isChannelHovered ? 'rotate-180 text-brand-600' : ''
+                      )}
+                    />
+                  </button>
+
+                  {/* Channel Dropdown Menu on Hover */}
+                  {isChannelHovered && (
+                    <div className="absolute top-full left-0 mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200/90 p-2.5 z-50 animate-in fade-in slide-in-from-top-1 duration-150">
+                      <div className="px-2.5 py-1.5 border-b border-slate-100 mb-1.5 flex items-center justify-between">
+                        <div>
+                          <p className="text-[11px] font-bold text-slate-800 uppercase tracking-wider">
+                            Canais da Loja
+                          </p>
+                          <p className="text-[10px] text-slate-400">
+                            Selecione o canal para filtrar os leads
+                          </p>
+                        </div>
+                      </div>
+
+                      {channels.length === 0 ? (
+                        <div className="px-3 py-4 text-center text-xs text-slate-400">
+                          Nenhum canal ativo associado à sua unidade
+                        </div>
+                      ) : (
+                        <div className="max-h-60 overflow-y-auto space-y-1">
+                          {channels.map((chan) => {
+                            const isSelected =
+                              chan.code.toLowerCase() === selectedChannelCode?.toLowerCase();
+                            return (
+                              <button
+                                key={chan.id}
+                                onClick={() => {
+                                  onSelectChannel?.(chan.code);
+                                  setActiveTab('leads');
+                                  setIsChannelHovered(false);
+                                }}
+                                className={cn(
+                                  'w-full text-left px-3 py-2 rounded-xl text-xs flex items-center justify-between gap-2 transition-all cursor-pointer',
+                                  isSelected
+                                    ? 'bg-brand-50 text-brand-900 font-semibold border border-brand-200 shadow-xs'
+                                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                )}
+                              >
+                                <div className="flex items-center gap-2 truncate">
+                                  <Share2
+                                    className={cn(
+                                      'w-3.5 h-3.5 shrink-0',
+                                      isSelected ? 'text-brand-600' : 'text-slate-400'
+                                    )}
+                                  />
+                                  <div className="truncate">
+                                    <span className="block truncate font-medium">{chan.name}</span>
+                                    <span className="block text-[10px] text-slate-400 font-mono">
+                                      {chan.code}
+                                    </span>
+                                  </div>
+                                </div>
+                                {isSelected && (
+                                  <Check className="w-3.5 h-3.5 text-brand-600 stroke-2 shrink-0" />
+                                )}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
             return (
               <button
                 key={item.id}

@@ -17,7 +17,8 @@ import { UserManagement } from '@/components/users/user-management';
 import { SettingsPage } from '@/components/settings/settings-page';
 import { fetchLeads, fetchUsers, updateUserStatus, reassignLead, bulkReassignLeads, revealLead, claimLead } from '@/features/leads/api';
 import { fetchDispositions } from '@/features/dispositions/api';
-import { Lead, User, Disposition } from '@/features/leads/types';
+import { fetchChannels } from '@/features/channels/api';
+import { Lead, User, Disposition, Channel } from '@/features/leads/types';
 import { useSocket } from '@/features/socket/socket-provider';
 
 export default function LeadsDashboardPage() {
@@ -33,6 +34,7 @@ export default function LeadsDashboardPage() {
   const [bancoFilter, setBancoFilter] = useState('all');
   const [tabelaFilter, setTabelaFilter] = useState('all');
   const [dispositionFilter, setDispositionFilter] = useState('all');
+  const [channelFilter, setChannelFilter] = useState('');
   const [selectedAttendantFilter, setSelectedAttendantFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -69,6 +71,48 @@ export default function LeadsDashboardPage() {
     enabled: !!user,
   });
 
+  // Fetch Channels
+  const { data: channels = [] } = useQuery<Channel[]>({
+    queryKey: ['channels'],
+    queryFn: () => fetchChannels(false),
+    enabled: !!user,
+  });
+
+  // Filter channels according to the user's unit/store participation
+  // "não todas as lojas participam de todos os canais"
+  const availableChannels = React.useMemo(() => {
+    if (!channels || channels.length === 0) return [];
+    if (user?.role === 'admin') {
+      return channels.filter((c) => c.is_active !== false);
+    }
+    if (user?.role === 'manager') {
+      const managedIds = user.managed_unit_ids || (user.unit_id ? [user.unit_id] : []);
+      return channels.filter((c) => {
+        if (c.is_active === false) return false;
+        if (!c.units || c.units.length === 0) return true;
+        return c.units.some((u) => managedIds.includes(u.id));
+      });
+    }
+    if (user?.unit_id) {
+      return channels.filter((c) => {
+        if (c.is_active === false) return false;
+        if (!c.units || c.units.length === 0) return true;
+        return c.units.some((u) => u.id === user.unit_id);
+      });
+    }
+    return channels.filter((c) => c.is_active !== false);
+  }, [channels, user]);
+
+  // Garante que o canal ativo seja sempre um canal específico válido das lojas do usuário (sem opção "todos")
+  useEffect(() => {
+    if (availableChannels.length > 0) {
+      const isValid = availableChannels.some((c) => c.code.toLowerCase() === channelFilter.toLowerCase());
+      if (!isValid) {
+        setChannelFilter(availableChannels[0].code);
+      }
+    }
+  }, [availableChannels, channelFilter]);
+
   // Fetch Leads with Role & Custom Header Filters
   const activeAttendantId = isAttendant
     ? (statusFilter === 'new' ? undefined : user?.id)
@@ -77,7 +121,7 @@ export default function LeadsDashboardPage() {
     : undefined;
 
   const { data: leadsData, refetch: refetchLeads } = useQuery({
-    queryKey: ['leads', page, statusFilter, searchQuery, activeAttendantId, bancoFilter, tabelaFilter, dispositionFilter, activeTab],
+    queryKey: ['leads', page, statusFilter, searchQuery, activeAttendantId, bancoFilter, tabelaFilter, dispositionFilter, channelFilter, activeTab],
     queryFn: () =>
       fetchLeads({
         page,
@@ -88,6 +132,7 @@ export default function LeadsDashboardPage() {
         banco: activeTab === 'overview' ? undefined : bancoFilter,
         tabela: activeTab === 'overview' ? undefined : tabelaFilter,
         disposition: activeTab === 'overview' ? undefined : dispositionFilter,
+        channel: activeTab === 'overview' ? undefined : channelFilter,
       }),
     enabled: !!user,
     refetchInterval: 5000, // Automatic real-time polling fallback
@@ -235,6 +280,13 @@ export default function LeadsDashboardPage() {
         currentUserStatus={currentUserStatus}
         onStatusChange={handleStatusChange}
         onOpenSimulateModal={() => setIsSimulateModalOpen(true)}
+        channels={availableChannels}
+        selectedChannelCode={channelFilter}
+        onSelectChannel={(chCode) => {
+          setChannelFilter(chCode);
+          setActiveTab('leads');
+          setPage(1);
+        }}
       />
 
       {/* Main Body */}
@@ -299,6 +351,12 @@ export default function LeadsDashboardPage() {
                 dispositionFilter={dispositionFilter}
                 onDispositionFilterChange={(d) => {
                   setDispositionFilter(d);
+                  setPage(1);
+                }}
+                channels={availableChannels}
+                channelFilter={channelFilter}
+                onChannelFilterChange={(ch) => {
+                  setChannelFilter(ch);
                   setPage(1);
                 }}
                 dispositions={dispositions}

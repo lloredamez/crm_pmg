@@ -11,20 +11,10 @@ import {
 } from '@/features/channels/api';
 import { fetchUnits } from '@/features/units/api';
 import { fetchDispositions } from '@/features/dispositions/api';
+import { AVAILABLE_LEAD_FIELDS } from '@/features/channels/constants';
 import { Plus, Edit2, Trash2, Share2, Power, X, AlertCircle, Store, Check, Tag, Edit3 } from 'lucide-react';
 
-export const AVAILABLE_LEAD_FIELDS = [
-  { key: 'name', label: 'Nome do Lead / Cliente' },
-  { key: 'phone', label: 'Telefone / WhatsApp' },
-  { key: 'verified_cpf', label: 'CPF Verificado' },
-  { key: 'proposal_number', label: 'Número da Proposta' },
-  { key: 'banco', label: 'Banco' },
-  { key: 'tabela', label: 'Tabela' },
-  { key: 'prazo', label: 'Prazo (Parcelas)' },
-  { key: 'margem', label: 'Margem (R$)' },
-  { key: 'valor_liberado', label: 'Valor Liberado (R$)' },
-  { key: 'notes', label: 'Observações' },
-];
+export { AVAILABLE_LEAD_FIELDS };
 
 export const ChannelManagement: React.FC = () => {
   const [channels, setChannels] = useState<Channel[]>([]);
