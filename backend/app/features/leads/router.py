@@ -27,7 +27,7 @@ router = APIRouter(prefix="/leads", tags=["Leads"])
 async def get_attendant_performance(
     year: Optional[int] = Query(None),
     month: Optional[int] = Query(None),
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     service = LeadService(db)
@@ -48,8 +48,15 @@ async def list_sla_breaches(
     attendant_id: Optional[UUID] = Query(None),
     unit_id: Optional[UUID] = Query(None),
     breach_type: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
+    # Se atendente, restringe a visualização apenas às suas próprias quebras de SLA
+    if current_user.role == "attendant":
+        attendant_id = current_user.id
+    elif current_user.role == "supervisor" and current_user.unit_id:
+        unit_id = current_user.unit_id
+
     service = LeadService(db)
     items, total = await service.list_sla_breaches(
         page=page,
@@ -68,7 +75,11 @@ async def list_sla_breaches(
     )
 
 @router.post("", response_model=LeadResponse, status_code=status.HTTP_201_CREATED)
-async def create_lead(lead_in: LeadCreate, db: AsyncSession = Depends(get_db)):
+async def create_lead(
+    lead_in: LeadCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
     service = LeadService(db)
     return await service.create_and_assign_lead(lead_in)
 
@@ -83,7 +94,7 @@ async def list_leads(
     banco: Optional[str] = Query(None),
     tabela: Optional[str] = Query(None),
     disposition: Optional[str] = Query(None),
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     service = LeadService(db)
@@ -110,7 +121,7 @@ async def list_leads(
 @router.get("/{lead_id}", response_model=LeadResponse)
 async def get_lead(
     lead_id: UUID,
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
     service = LeadService(db)

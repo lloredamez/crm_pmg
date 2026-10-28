@@ -41,6 +41,11 @@ async def get_current_user(
     user = result.scalar_one_or_none()
     if user is None:
         raise credentials_exception
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Conta de usuário inativa. Entre em contato com o suporte ou administrador."
+        )
     return user
 
 def require_roles(allowed_roles: List[str]):
