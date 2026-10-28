@@ -292,6 +292,7 @@ class LeadService:
         banco_filter: Optional[str] = None,
         tabela_filter: Optional[str] = None,
         disposition_filter: Optional[str] = None,
+        channel_filter: Optional[str] = None,
         current_user: Optional[User] = None
     ) -> Tuple[List, int]:
         from app.features.dispositions.service import DispositionService
@@ -312,6 +313,9 @@ class LeadService:
                 elif current_user.role == "supervisor":
                     if current_user.unit_id:
                         b_query = b_query.where(or_(BucketLead.unit_id.is_(None), BucketLead.unit_id == current_user.unit_id))
+
+            if channel_filter and channel_filter.lower() != "all":
+                b_query = b_query.where(func.lower(BucketLead.channel_code) == channel_filter.lower())
 
             if banco_filter and banco_filter.lower() != "all":
                 b_query = b_query.where(BucketLead.banco.ilike(f"%{banco_filter}%"))
@@ -381,6 +385,9 @@ class LeadService:
 
         if status_filter and status_filter.lower() != "all":
             query = query.where(Lead.status == status_filter.lower())
+
+        if channel_filter and channel_filter.lower() != "all":
+            query = query.where(func.lower(Lead.channel_code) == channel_filter.lower())
 
         if attendant_id:
             query = query.where(Lead.current_attendant_id == attendant_id)

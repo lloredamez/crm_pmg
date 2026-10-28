@@ -94,6 +94,7 @@ async def list_leads(
     banco: Optional[str] = Query(None),
     tabela: Optional[str] = Query(None),
     disposition: Optional[str] = Query(None),
+    channel: Optional[str] = Query(None),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -107,6 +108,7 @@ async def list_leads(
         banco_filter=banco,
         tabela_filter=tabela,
         disposition_filter=disposition,
+        channel_filter=channel,
         current_user=current_user
     )
     pages = math.ceil(total / limit) if total > 0 else 1
