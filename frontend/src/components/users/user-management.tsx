@@ -52,17 +52,22 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
 
   useEffect(() => {
     fetchUnits();
-  }, []);
+  }, [token]);
 
   const fetchUnits = async () => {
     try {
-      const res = await fetch(`${API_URL}/api/v1/users/units/all`);
+      const authToken = token || (typeof window !== 'undefined' ? sessionStorage.getItem('access_token') : null);
+      const res = await fetch(`${API_URL}/api/v1/users/units/all`, {
+        headers: {
+          ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+        },
+      });
       if (res.ok) {
         const data = await res.json();
         setUnits(data);
         if (data.length > 0) {
-          setUnitId(data[0].id);
-          setSelectedManagedUnits(data.map((u: UnitItem) => u.id));
+          setUnitId((prev) => prev || data[0].id);
+          setSelectedManagedUnits((prev) => (prev.length > 0 ? prev : data.map((u: UnitItem) => u.id)));
         }
       }
     } catch (e) {
@@ -375,11 +380,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                   onChange={(e) => setUnitId(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                 >
-                  {units.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.name} ({u.code})
-                    </option>
-                  ))}
+                  {units.length === 0 ? (
+                    <option value="">Nenhuma unidade encontrada</option>
+                  ) : (
+                    units.map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} ({u.code})
+                      </option>
+                    ))
+                  )}
                 </select>
               </div>
             )}
@@ -651,11 +660,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                     onChange={(e) => setEditUnitId(e.target.value)}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                   >
-                    {units.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} ({u.code})
-                      </option>
-                    ))}
+                    {units.length === 0 ? (
+                      <option value="">Nenhuma unidade encontrada</option>
+                    ) : (
+                      units.map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.name} ({u.code})
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
               )}
