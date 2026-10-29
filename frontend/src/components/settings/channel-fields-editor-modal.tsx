@@ -8,6 +8,8 @@ import {
   FIELD_TYPE_LABELS,
   AVAILABLE_LEAD_FIELDS,
   normalizeField,
+  isStandardField,
+  getEffectiveChannelFields,
 } from '@/features/channels/constants';
 import { updateChannel } from '@/features/channels/api';
 import {
@@ -79,9 +81,7 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
   // Load existing channel fields when channel changes
   useEffect(() => {
     if (channel) {
-      const raw = channel.allowed_fields || [];
-      const normalized = raw.map(normalizeField);
-      setFields(normalized);
+      setFields(getEffectiveChannelFields(channel.allowed_fields));
       resetForm();
     }
   }, [channel]);
@@ -221,10 +221,57 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
       ...prev,
       {
         ...preset,
-        isReadOnly: false,
+        isReadOnly: preset.isReadOnly !== undefined ? preset.isReadOnly : false,
         showInTable: preset.showInTable !== undefined ? preset.showInTable : true,
       },
     ]);
+  };
+
+  const handleAddAllPresets = () => {
+    setFields((prev) => {
+      const existingKeys = new Set(prev.map((f) => f.key));
+      const missing = AVAILABLE_LEAD_FIELDS.filter((p) => !existingKeys.has(p.key)).map((p) => ({
+        ...p,
+        isReadOnly: p.isReadOnly !== undefined ? p.isReadOnly : false,
+        showInTable: p.showInTable !== undefined ? p.showInTable : true,
+      }));
+      return [...prev, ...missing];
+    });
+  };
+
+  const handleToggleReadOnly = (index: number) => {
+    setFields((prev) => {
+      const copy = [...prev];
+      const nextReadOnly = !copy[index].isReadOnly;
+      copy[index] = {
+        ...copy[index],
+        isReadOnly: nextReadOnly,
+        required: nextReadOnly ? false : copy[index].required,
+      };
+      return copy;
+    });
+    if (editingIndex === index) {
+      setFieldReadOnly((prev) => {
+        const next = !prev;
+        if (next) setFieldRequired(false);
+        return next;
+      });
+    }
+  };
+
+  const handleToggleShowInTable = (index: number) => {
+    setFields((prev) => {
+      const copy = [...prev];
+      const nextShow = copy[index].showInTable === false ? true : false;
+      copy[index] = {
+        ...copy[index],
+        showInTable: nextShow,
+      };
+      return copy;
+    });
+    if (editingIndex === index) {
+      setFieldShowInTable((prev) => !prev);
+    }
   };
 
   const handleSaveAll = async () => {
@@ -246,8 +293,9 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
 
   // Preset fields not yet added
   const availablePresets = AVAILABLE_LEAD_FIELDS.filter(
-    (preset) => !preset.isDefaultColumn && !fields.some((f) => f.key === preset.key)
+    (preset) => !fields.some((f) => f.key === preset.key)
   );
+  const isEditingStandardField = editingIndex !== null && isStandardField(fieldKey);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
@@ -329,13 +377,20 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
                   </label>
                   <input
                     type="text"
+                    disabled={isEditingStandardField}
                     placeholder="ex: score_credito"
                     value={fieldKey}
                     onChange={(e) => setFieldKey(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                    className={`w-full border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono ${
+                      isEditingStandardField
+                        ? 'bg-slate-100 text-slate-500 cursor-not-allowed'
+                        : 'bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500'
+                    }`}
                   />
                   <span className="text-[10px] text-slate-400 mt-0.5 block">
-                    Usado para guardar no banco e mapear colunas.
+                    {isEditingStandardField
+                      ? 'Chave padrão do sistema (fixa para vincular com a coluna do banco).'
+                      : 'Usado para guardar no banco e mapear colunas.'}
                   </span>
                 </div>
 
@@ -494,12 +549,27 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
             </div>
 
             {/* Quick Presets Section */}
-            {availablePresets.length > 0 && (
-              <div className="bg-slate-50/60 rounded-2xl p-3.5 border border-slate-200/60">
-                <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-2 flex items-center gap-1">
+            <div className="bg-slate-50/60 rounded-2xl p-3.5 border border-slate-200/60">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1">
                   <Sparkles className="w-3 h-3 text-amber-500" />
-                  Campos Padrão Disponíveis para Adicionar:
+                  Campos Padrão do Sistema:
                 </p>
+                {availablePresets.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handleAddAllPresets}
+                    className="text-[10px] font-semibold text-brand-600 hover:text-brand-700 underline cursor-pointer"
+                  >
+                    Incluir Todos ({availablePresets.length})
+                  </button>
+                )}
+              </div>
+              {availablePresets.length === 0 ? (
+                <p className="text-[11px] text-slate-400">
+                  Todos os campos padrão do sistema já estão ativos neste canal. Você pode remover os que não deseja usar na lista ao lado.
+                </p>
+              ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {availablePresets.map((preset) => (
                     <button
@@ -514,8 +584,8 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
                     </button>
                   ))}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {/* Right Column: Active Fields List & Preview (7 cols) */}
@@ -529,7 +599,7 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
                   </span>
                 </div>
                 <span className="text-[11px] text-slate-500">
-                  Estes campos serão colunas na tabela deste canal
+                  Clique nos selos abaixo para alternar visibilidade ou edição
                 </span>
               </div>
 
@@ -537,7 +607,7 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
                 <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
                   <Sliders className="w-8 h-8 text-slate-300 mb-2" />
                   <p className="text-xs font-semibold text-slate-700">
-                    Nenhum campo personalizado cadastrado
+                    Nenhum campo configurado neste canal
                   </p>
                   <p className="text-[11px] text-slate-400 max-w-xs mt-1">
                     Adicione campos padrão ao lado ou crie novos campos personalizados para este canal.
@@ -551,6 +621,7 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
                     };
                     const TypeIcon = FIELD_TYPE_ICONS[field.type] || FileText;
                     const isEditing = editingIndex === idx;
+                    const isSystemStandard = isStandardField(field.key);
 
                     return (
                       <div
@@ -591,6 +662,11 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
                               <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
                                 {field.key}
                               </span>
+                              {isSystemStandard && (
+                                <span className="text-[9px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200/60 px-1.5 py-0.2 rounded-full">
+                                  Padrão
+                                </span>
+                              )}
                               {field.required && (
                                 <span className="text-[9px] font-bold bg-rose-50 text-rose-600 border border-rose-200/60 px-1.5 py-0.2 rounded-full">
                                   Obrigatório
@@ -604,25 +680,47 @@ export const ChannelFieldsEditorModal: React.FC<ChannelFieldsEditorModalProps> =
                                 <span>{typeInfo.label}</span>
                               </span>
 
-                              {field.showInTable !== false ? (
-                                <span className="text-[9px] font-semibold bg-blue-50 text-blue-700 border border-blue-200/60 px-1.5 py-0.2 rounded-md flex items-center gap-0.5">
-                                  <Eye className="w-2.5 h-2.5" /> Coluna na Tabela
-                                </span>
-                              ) : (
-                                <span className="text-[9px] font-semibold bg-slate-100 text-slate-500 border border-slate-200/60 px-1.5 py-0.2 rounded-md flex items-center gap-0.5">
-                                  <EyeOff className="w-2.5 h-2.5" /> Oculto na Tabela
-                                </span>
-                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleShowInTable(idx)}
+                                title="Clique para alternar exibição na tabela de leads"
+                                className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 border transition-colors cursor-pointer ${
+                                  field.showInTable !== false
+                                    ? 'bg-blue-50 text-blue-700 border-blue-200/60 hover:bg-blue-100'
+                                    : 'bg-slate-100 text-slate-500 border-slate-200/60 hover:bg-slate-200'
+                                }`}
+                              >
+                                {field.showInTable !== false ? (
+                                  <>
+                                    <Eye className="w-2.5 h-2.5" /> Coluna na Tabela
+                                  </>
+                                ) : (
+                                  <>
+                                    <EyeOff className="w-2.5 h-2.5" /> Oculto na Tabela
+                                  </>
+                                )}
+                              </button>
 
-                              {field.isReadOnly ? (
-                                <span className="text-[9px] font-semibold bg-amber-50 text-amber-700 border border-amber-200/60 px-1.5 py-0.2 rounded-md flex items-center gap-0.5">
-                                  <Lock className="w-2.5 h-2.5" /> Somente Leitura
-                                </span>
-                              ) : (
-                                <span className="text-[9px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200/60 px-1.5 py-0.2 rounded-md flex items-center gap-0.5">
-                                  <Edit2 className="w-2.5 h-2.5" /> Editável
-                                </span>
-                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleToggleReadOnly(idx)}
+                                title="Clique para alternar entre Editável e Somente Leitura neste canal"
+                                className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-md flex items-center gap-0.5 border transition-colors cursor-pointer ${
+                                  field.isReadOnly
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200/60 hover:bg-amber-100'
+                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200/60 hover:bg-emerald-100'
+                                }`}
+                              >
+                                {field.isReadOnly ? (
+                                  <>
+                                    <Lock className="w-2.5 h-2.5" /> Somente Leitura
+                                  </>
+                                ) : (
+                                  <>
+                                    <Edit2 className="w-2.5 h-2.5" /> Editável
+                                  </>
+                                )}
+                              </button>
 
                               {field.options && field.options.length > 0 && (
                                 <span className="text-[10px] text-slate-400">

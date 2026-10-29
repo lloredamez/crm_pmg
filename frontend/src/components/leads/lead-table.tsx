@@ -14,7 +14,7 @@ import {
 import { Lead, User, Disposition, Channel } from '@/features/leads/types';
 import { formatDate, formatPhone, formatCpf, formatCurrency, cn } from '@/lib/utils';
 import { useAuth } from '@/features/auth/auth-provider';
-import { getFieldDefinition } from '@/features/channels/constants';
+import { getEffectiveChannelFields } from '@/features/channels/constants';
 import { LeadTimerBadge } from './lead-timer-badge';
 import { Search, ArrowUpDown, UserCheck, Clock, FileText, Tag, Eye, EyeOff, Package, Landmark, Table, DollarSign, Calculator, Filter, RotateCcw, X, ShoppingBag, UserPlus, Share2 } from 'lucide-react';
 
@@ -135,19 +135,25 @@ export const LeadTable: React.FC<LeadTableProps> = ({
     return channels.find((c) => c.code.toLowerCase() === channelFilter.toLowerCase()) || null;
   }, [channels, channelFilter]);
 
+  const effectiveChannelFields = useMemo(() => {
+    return getEffectiveChannelFields(selectedChannel?.allowed_fields);
+  }, [selectedChannel]);
+
+  const hasBancoField = useMemo(
+    () => effectiveChannelFields.some((f) => f.key === 'banco'),
+    [effectiveChannelFields]
+  );
+  const hasTabelaField = useMemo(
+    () => effectiveChannelFields.some((f) => f.key === 'tabela'),
+    [effectiveChannelFields]
+  );
+
   const channelDynamicColumns = useMemo<ColumnDef<Lead>[]>(() => {
-    if (!selectedChannel) return [];
+    const tableFieldDefs = effectiveChannelFields.filter((def) => def.showInTable !== false);
 
-    const allowed = selectedChannel.allowed_fields || [];
-    // Campos que já são colunas padrão mantidos como padrão sem duplicação
-    const defaultColumnKeys = ['name', 'phone', 'cpf', 'product_name'];
-    const extraFieldDefs = allowed
-      .map(getFieldDefinition)
-      .filter((def) => !defaultColumnKeys.includes(def.key) && def.showInTable !== false);
+    if (tableFieldDefs.length === 0) return [];
 
-    if (extraFieldDefs.length === 0) return [];
-
-    return extraFieldDefs.map((def) => {
+    return tableFieldDefs.map((def) => {
       const key = def.key;
 
       return {
@@ -156,6 +162,74 @@ export const LeadTable: React.FC<LeadTableProps> = ({
         header: def.label,
         cell: ({ row }: { row: any }) => {
           const lead = row.original;
+          const isRevealed = lead.is_revealed;
+
+          if (key === 'name') {
+            return (
+              <div className="flex items-center gap-2 min-w-36">
+                <div
+                  className={`font-semibold text-xs ${
+                    isRevealed
+                      ? 'text-slate-900 hover:text-brand-600 cursor-pointer'
+                      : 'text-slate-500 cursor-not-allowed opacity-60'
+                  }`}
+                  onClick={() => isRevealed && onOpenDetailsModal?.(lead)}
+                  title={
+                    isRevealed
+                      ? 'Ver dados do lead'
+                      : 'Clique no olho para revelar os dados do lead primeiro'
+                  }
+                >
+                  {lead.name || '-'}
+                </div>
+              </div>
+            );
+          }
+
+          if (key === 'phone') {
+            return (
+              <div className="text-xs font-medium whitespace-nowrap">
+                {isRevealed ? (
+                  <span className="text-slate-800 font-semibold">{formatPhone(lead.phone)}</span>
+                ) : (
+                  <span className="text-slate-400 font-mono tracking-wider select-none">
+                    (***) *****-****
+                  </span>
+                )}
+              </div>
+            );
+          }
+
+          if (key === 'cpf' || key === 'verified_cpf') {
+            const cpfVal = (lead as any)[key] ?? (lead as any).custom_fields?.[key];
+            return (
+              <div className="text-xs font-medium whitespace-nowrap">
+                {isRevealed ? (
+                  <span className="text-slate-800 font-semibold">{formatCpf(cpfVal)}</span>
+                ) : (
+                  <span className="text-slate-400 font-mono tracking-widest select-none">
+                    ***.***.***-**
+                  </span>
+                )}
+              </div>
+            );
+          }
+
+          if (key === 'product_name') {
+            const productName =
+              lead.product_name ||
+              lead.product ||
+              (lead as any).custom_fields?.product_name ||
+              lead.campaign_name ||
+              '-';
+            return (
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 whitespace-nowrap">
+                <Package className="w-3.5 h-3.5 text-brand-600 shrink-0" />
+                <span>{productName}</span>
+              </div>
+            );
+          }
+
           const val = (lead as any)[key] ?? (lead as any).custom_fields?.[key];
 
           if (val === null || val === undefined || val === '') {
@@ -203,18 +277,6 @@ export const LeadTable: React.FC<LeadTableProps> = ({
             );
           }
 
-          if (key === 'verified_cpf') {
-            return (
-              <div className="text-xs font-medium whitespace-nowrap">
-                {lead.is_revealed ? (
-                  <span className="text-slate-800 font-semibold">{formatCpf(val)}</span>
-                ) : (
-                  <span className="text-slate-400 font-mono tracking-widest select-none">***.***.***-**</span>
-                )}
-              </div>
-            );
-          }
-
           if (key === 'banco' || key === 'tabela' || key === 'proposal_number') {
             return (
               <span className="text-xs font-medium text-slate-700 whitespace-nowrap">
@@ -231,7 +293,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
         },
       };
     });
-  }, [selectedChannel]);
+  }, [effectiveChannelFields, onOpenDetailsModal]);
 
   const columns: ColumnDef<Lead>[] = [
     ...(canBulkReassign
@@ -279,82 +341,8 @@ export const LeadTable: React.FC<LeadTableProps> = ({
       header: 'Timer SLA',
       cell: ({ row }) => <LeadTimerBadge lead={row.original} />,
     },
-    {
-      accessorKey: 'cpf',
-      header: 'CPF',
-      cell: ({ row }) => {
-        const lead = row.original;
-        const isRevealed = lead.is_revealed;
-        return (
-          <div className="text-xs font-medium whitespace-nowrap">
-            {isRevealed ? (
-              <span className="text-slate-800 font-semibold">{formatCpf(lead.cpf)}</span>
-            ) : (
-              <span className="text-slate-400 font-mono tracking-widest select-none">***.***.***-**</span>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      accessorKey: 'name',
-      header: 'Nome',
-      cell: ({ row }) => {
-        const lead = row.original;
-        const isRevealed = lead.is_revealed;
-        return (
-          <div className="flex items-center gap-2 min-w-36">
-            <div
-              className={`font-semibold text-xs ${isRevealed
-                ? 'text-slate-900 hover:text-brand-600 cursor-pointer'
-                : 'text-slate-500 cursor-not-allowed opacity-60'
-                }`}
-              onClick={() => isRevealed && onOpenDetailsModal?.(lead)}
-              title={
-                isRevealed
-                  ? 'Ver dados do lead'
-                  : 'Clique no olho para revelar os dados do lead primeiro'
-              }
-            >
-              {lead.name}
-            </div>
-          </div>
-        );
-      },
-    },
-    {
-      accessorKey: 'phone',
-      header: 'Telefone',
-      cell: ({ row }) => {
-        const lead = row.original;
-        const isRevealed = lead.is_revealed;
-        return (
-          <div className="text-xs font-medium whitespace-nowrap">
-            {isRevealed ? (
-              <span className="text-slate-800 font-semibold">{formatPhone(lead.phone)}</span>
-            ) : (
-              <span className="text-slate-400 font-mono tracking-wider select-none">(***) *****-****</span>
-            )}
-          </div>
-        );
-      },
-    },
-    {
-      accessorKey: 'product_name',
-      header: 'Produto',
-      cell: ({ row }) => {
-        const lead = row.original;
-        const productName = lead.product_name || lead.product || lead.campaign_name || '-';
-        return (
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 whitespace-nowrap">
-            <Package className="w-3.5 h-3.5 text-brand-600 shrink-0" />
-            <span>{productName}</span>
-          </div>
-        );
-      },
-    },
 
-    // Injeção dinâmica de colunas personalizadas do canal ativo
+    // Injeção dinâmica de todas as colunas configuradas no canal ativo (padrão e personalizadas)
     ...channelDynamicColumns,
 
     ...(isSupervisorRole || isManagerOrAdminRole
@@ -689,34 +677,38 @@ export const LeadTable: React.FC<LeadTableProps> = ({
           </div>
 
           {/* Banco Filter Dropdown */}
-          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 text-xs">
-            <Landmark className="w-3.5 h-3.5 text-slate-400" />
-            <select
-              value={bancoFilter}
-              onChange={(e) => onBancoFilterChange?.(e.target.value)}
-              className="bg-transparent font-medium text-slate-700 focus:outline-none cursor-pointer"
-            >
-              <option value="all">Todos os Bancos</option>
-              {availableBancos.map((b) => (
-                <option key={b} value={b}>{b}</option>
-              ))}
-            </select>
-          </div>
+          {hasBancoField && (
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 text-xs">
+              <Landmark className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={bancoFilter}
+                onChange={(e) => onBancoFilterChange?.(e.target.value)}
+                className="bg-transparent font-medium text-slate-700 focus:outline-none cursor-pointer"
+              >
+                <option value="all">Todos os Bancos</option>
+                {availableBancos.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Tabela Filter Dropdown */}
-          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 text-xs">
-            <Table className="w-3.5 h-3.5 text-slate-400" />
-            <select
-              value={tabelaFilter}
-              onChange={(e) => onTabelaFilterChange?.(e.target.value)}
-              className="bg-transparent font-medium text-slate-700 focus:outline-none cursor-pointer"
-            >
-              <option value="all">Todas as Tabelas</option>
-              {availableTabelas.map((t) => (
-                <option key={t} value={t}>{t}</option>
-              ))}
-            </select>
-          </div>
+          {hasTabelaField && (
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 text-xs">
+              <Table className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={tabelaFilter}
+                onChange={(e) => onTabelaFilterChange?.(e.target.value)}
+                className="bg-transparent font-medium text-slate-700 focus:outline-none cursor-pointer"
+              >
+                <option value="all">Todas as Tabelas</option>
+                {availableTabelas.map((t) => (
+                  <option key={t} value={t}>{t}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Tabulação Filter Dropdown */}
           <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 text-xs">

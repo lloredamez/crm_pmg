@@ -97,9 +97,13 @@ export async function updateLeadDetails(
   details: {
     name?: string;
     phone?: string;
-    notes?: string;
-    verified_cpf?: string;
-    proposal_number?: string;
+    cpf?: string | null;
+    email?: string | null;
+    product_name?: string | null;
+    campaign_name?: string | null;
+    notes?: string | null;
+    verified_cpf?: string | null;
+    proposal_number?: string | null;
     prazo?: number | null;
     margem?: number | null;
     valor_liberado?: number | null;

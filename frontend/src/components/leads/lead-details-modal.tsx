@@ -4,7 +4,11 @@ import React, { useState, useEffect } from 'react';
 import { Lead, LeadHistoryItem, Channel } from '@/features/leads/types';
 import { updateLeadDetails, fetchLeadHistory } from '@/features/leads/api';
 import { fetchChannels } from '@/features/channels/api';
-import { normalizeField, ChannelFieldDefinition } from '@/features/channels/constants';
+import {
+  ChannelFieldDefinition,
+  getEffectiveChannelFields,
+  isStandardField,
+} from '@/features/channels/constants';
 import { formatDate, formatPhone, formatCpf, formatCurrency } from '@/lib/utils';
 import { X, Lock, Edit3, Save, FileText, CheckCircle, History, Clock, User, AlertCircle, RefreshCw, Tag, MessageSquare, Landmark, Table, DollarSign, Calculator } from 'lucide-react';
 
@@ -25,7 +29,11 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
   const [channel, setChannel] = useState<Channel | null>(null);
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
+  const [cpf, setCpf] = useState('');
   const [verifiedCpf, setVerifiedCpf] = useState('');
+  const [email, setEmail] = useState('');
+  const [productName, setProductName] = useState('');
+  const [campaignName, setCampaignName] = useState('');
   const [proposalNumber, setProposalNumber] = useState('');
   const [notes, setNotes] = useState('');
   const [banco, setBanco] = useState('');
@@ -46,7 +54,11 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
     if (lead) {
       setName(lead.name || '');
       setPhone(lead.phone || '');
+      setCpf(lead.cpf || '');
       setVerifiedCpf(lead.verified_cpf || '');
+      setEmail(lead.email || '');
+      setProductName(lead.product_name || lead.product || '');
+      setCampaignName(lead.campaign_name || '');
       setProposalNumber(lead.proposal_number || '');
       setNotes(lead.notes || '');
       setBanco(lead.banco || '');
@@ -84,48 +96,128 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
     }
   };
 
-  const isFieldAllowed = (fieldKey: string): boolean => {
-    if (!channel || !channel.allowed_fields || channel.allowed_fields.length === 0) {
-      return true; // Se o canal não tem restrições definidas, todos os campos ficam liberados
+  const effectiveChannelFields = React.useMemo(() => {
+    return getEffectiveChannelFields(channel?.allowed_fields);
+  }, [channel]);
+
+  const readOnlyChannelFields = React.useMemo(
+    () => effectiveChannelFields.filter((f) => f.isReadOnly),
+    [effectiveChannelFields]
+  );
+
+  const editableChannelFields = React.useMemo(
+    () => effectiveChannelFields.filter((f) => !f.isReadOnly),
+    [effectiveChannelFields]
+  );
+
+  const getFieldValue = (key: string): any => {
+    switch (key) {
+      case 'name':
+        return name;
+      case 'phone':
+        return phone;
+      case 'cpf':
+        return cpf;
+      case 'verified_cpf':
+        return verifiedCpf;
+      case 'email':
+        return email;
+      case 'product_name':
+        return productName;
+      case 'campaign_name':
+        return campaignName;
+      case 'proposal_number':
+        return proposalNumber;
+      case 'banco':
+        return banco;
+      case 'tabela':
+        return tabela;
+      case 'prazo':
+        return prazo;
+      case 'margem':
+        return margem;
+      case 'valor_liberado':
+        return valorLiberado;
+      case 'notes':
+        return notes;
+      default:
+        return customFields[key] ?? (lead?.custom_fields as any)?.[key] ?? '';
     }
-    return channel.allowed_fields.some((f: any) => {
-      const k = typeof f === 'string' ? f : f?.key;
-      return k === fieldKey;
-    });
   };
 
-  const getFieldConfig = (fieldKey: string): ChannelFieldDefinition | undefined => {
-    if (!channel || !channel.allowed_fields) return undefined;
-    const raw = channel.allowed_fields.find((f: any) => {
-      const k = typeof f === 'string' ? f : f?.key;
-      return k === fieldKey;
-    });
-    return raw ? normalizeField(raw) : undefined;
+  const setFieldValue = (key: string, val: any) => {
+    switch (key) {
+      case 'name':
+        setName(String(val));
+        break;
+      case 'phone':
+        setPhone(String(val));
+        break;
+      case 'cpf':
+        setCpf(String(val));
+        break;
+      case 'verified_cpf':
+        setVerifiedCpf(String(val));
+        break;
+      case 'email':
+        setEmail(String(val));
+        break;
+      case 'product_name':
+        setProductName(String(val));
+        break;
+      case 'campaign_name':
+        setCampaignName(String(val));
+        break;
+      case 'proposal_number':
+        setProposalNumber(String(val));
+        break;
+      case 'banco':
+        setBanco(String(val));
+        break;
+      case 'tabela':
+        setTabela(String(val));
+        break;
+      case 'prazo':
+        setPrazo(String(val));
+        break;
+      case 'margem':
+        setMargem(String(val));
+        break;
+      case 'valor_liberado':
+        setValorLiberado(String(val));
+        break;
+      case 'notes':
+        setNotes(String(val));
+        break;
+      default:
+        setCustomFields((prev) => ({ ...prev, [key]: val }));
+        break;
+    }
   };
 
-  const isFieldReadOnly = (fieldKey: string): boolean => {
-    const config = getFieldConfig(fieldKey);
-    return !!config?.isReadOnly;
-  };
+  const formatReadOnlyValue = (def: ChannelFieldDefinition): string => {
+    if (!lead) return '-';
+    const key = def.key;
+    const rawVal = isStandardField(key)
+      ? (lead as any)[key] ?? (key === 'product_name' ? lead.product : undefined)
+      : (lead.custom_fields as any)?.[key] ?? customFields[key];
 
-  const channelCustomFields: ChannelFieldDefinition[] = (channel?.allowed_fields || [])
-    .map(normalizeField)
-    .filter(
-      (f) =>
-        ![
-          'name',
-          'phone',
-          'cpf',
-          'verified_cpf',
-          'proposal_number',
-          'banco',
-          'tabela',
-          'prazo',
-          'margem',
-          'valor_liberado',
-          'notes',
-        ].includes(f.key)
-    );
+    if (rawVal === null || rawVal === undefined || rawVal === '') return '-';
+    if (key === 'phone') return formatPhone(String(rawVal));
+    if (key === 'cpf' || key === 'verified_cpf') return formatCpf(String(rawVal));
+    if (key === 'prazo') return `${rawVal}x`;
+    if (def.type === 'currency' && (typeof rawVal === 'number' || !isNaN(Number(rawVal)))) {
+      return formatCurrency(Number(rawVal));
+    }
+    if (def.type === 'boolean') {
+      const isTrue = rawVal === true || rawVal === 'true' || rawVal === 1 || rawVal === 'sim';
+      return isTrue ? 'Sim' : 'Não';
+    }
+    if (def.type === 'date') {
+      return formatDate(String(rawVal));
+    }
+    return String(rawVal);
+  };
 
   const loadHistory = async () => {
     if (!lead) return;
@@ -156,8 +248,12 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
       await updateLeadDetails(lead.id, {
         name: name.trim() || lead.name,
         phone: phone.trim() || lead.phone,
-        verified_cpf: verifiedCpf,
-        proposal_number: proposalNumber,
+        cpf: cpf.trim() || null,
+        verified_cpf: verifiedCpf.trim() || null,
+        email: email.trim() || null,
+        product_name: productName.trim() || null,
+        campaign_name: campaignName.trim() || null,
+        proposal_number: proposalNumber.trim() || null,
         notes: notes,
         banco: banco.trim() || null,
         tabela: tabela.trim() || null,
@@ -274,30 +370,14 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3 bg-slate-50/80 rounded-2xl p-4 border border-slate-100 text-xs">
-                  <div>
-                    <span className="text-slate-400 block font-medium">Nome do Lead</span>
-                    <span className="font-semibold text-slate-800">{lead.name}</span>
-                  </div>
-
-                  <div>
-                    <span className="text-slate-400 block font-medium">Telefone / WhatsApp</span>
-                    <span className="font-semibold text-slate-800">{formatPhone(lead.phone)}</span>
-                  </div>
-
-                  <div>
-                    <span className="text-slate-400 block font-medium">CPF Cadastrado (Origem)</span>
-                    <span className="font-semibold text-slate-800">{formatCpf(lead.cpf)}</span>
-                  </div>
-
-                  <div>
-                    <span className="text-slate-400 block font-medium">E-mail</span>
-                    <span className="font-semibold text-slate-800">{lead.email || '-'}</span>
-                  </div>
-
-                  <div>
-                    <span className="text-slate-400 block font-medium">Campanha / Origem</span>
-                    <span className="font-semibold text-slate-800">{lead.campaign_name || 'Meta Ads Direct'}</span>
-                  </div>
+                  {readOnlyChannelFields.map((roField) => (
+                    <div key={`ro_field_${roField.key}`}>
+                      <span className="text-slate-400 block font-medium">{roField.label}</span>
+                      <span className="font-semibold text-slate-800">
+                        {formatReadOnlyValue(roField)}
+                      </span>
+                    </div>
+                  ))}
 
                   <div>
                     <span className="text-slate-400 block font-medium">Data de Cadastro</span>
@@ -317,48 +397,6 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                       {lead.unit?.name || lead.unit_name || 'Loja Principal'}
                     </span>
                   </div>
-
-                  <div>
-                    <span className="text-slate-400 block font-medium">Banco</span>
-                    <span className="font-semibold text-slate-800">{lead.banco || '-'}</span>
-                  </div>
-
-                  <div>
-                    <span className="text-slate-400 block font-medium">Tabela</span>
-                    <span className="font-semibold text-slate-800">{lead.tabela || '-'}</span>
-                  </div>
-
-                  <div>
-                    <span className="text-slate-400 block font-medium">Prazo</span>
-                    <span className="font-semibold text-slate-800">{lead.prazo ? `${lead.prazo}x` : '-'}</span>
-                  </div>
-
-                  <div>
-                    <span className="text-slate-400 block font-medium">Margem</span>
-                    <span className="font-semibold text-slate-800">{formatCurrency(lead.margem)}</span>
-                  </div>
-
-                  <div>
-                    <span className="text-slate-400 block font-medium">Valor Liberado</span>
-                    <span className="font-semibold text-slate-800">{formatCurrency(lead.valor_liberado)}</span>
-                  </div>
-
-                  {/* Campos do Canal na Visualização Geral */}
-                  {channelCustomFields.map((cf) => {
-                    const val = (lead.custom_fields as any)?.[cf.key] ?? customFields[cf.key];
-                    let valDisplay = String(val ?? '-');
-                    if (val === null || val === undefined || val === '') valDisplay = '-';
-                    else if (typeof val === 'boolean') valDisplay = val ? 'Sim' : 'Não';
-                    else if (cf.type === 'currency' && typeof val === 'number') valDisplay = formatCurrency(val);
-                    return (
-                      <div key={`ro_grid_${cf.key}`}>
-                        <span className="text-slate-400 block font-medium">
-                          {cf.label}
-                        </span>
-                        <span className="font-semibold text-slate-800">{valDisplay}</span>
-                      </div>
-                    );
-                  })}
                 </div>
               </div>
 
@@ -369,355 +407,100 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                   <span>Campos Editáveis (Dados do Lead & Proposta)</span>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-                  {isFieldAllowed('name') && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-semibold text-slate-700">
-                          Nome do Lead / Cliente
-                        </label>
-                        {isFieldReadOnly('name') && (
-                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
-                            <Lock className="w-2.5 h-2.5" /> Somente leitura
-                          </span>
-                        )}
-                      </div>
-                      <input
-                        type="text"
-                        disabled={isFieldReadOnly('name')}
-                        placeholder="Nome completo do lead"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
-                          isFieldReadOnly('name')
-                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
-                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
-                        }`}
-                      />
-                    </div>
-                  )}
+                {editableChannelFields.length === 0 ? (
+                  <div className="p-4 rounded-2xl bg-slate-50 border border-slate-100 text-xs text-slate-500">
+                    Todos os campos deste canal estão configurados como somente leitura.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                    {editableChannelFields.map((field) => {
+                      const val = getFieldValue(field.key);
+                      const isWideTextarea = field.type === 'textarea';
 
-                  {isFieldAllowed('phone') && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-semibold text-slate-700">
-                          Telefone / WhatsApp
-                        </label>
-                        {isFieldReadOnly('phone') && (
-                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
-                            <Lock className="w-2.5 h-2.5" /> Somente leitura
-                          </span>
-                        )}
-                      </div>
-                      <input
-                        type="text"
-                        disabled={isFieldReadOnly('phone')}
-                        placeholder="(00) 00000-0000"
-                        value={phone}
-                        onChange={(e) => setPhone(e.target.value)}
-                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
-                          isFieldReadOnly('phone')
-                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
-                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
-                        }`}
-                      />
-                    </div>
-                  )}
-
-                  {isFieldAllowed('verified_cpf') && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-semibold text-slate-700">
-                          CPF Correto / Verificado
-                        </label>
-                        {isFieldReadOnly('verified_cpf') && (
-                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
-                            <Lock className="w-2.5 h-2.5" /> Somente leitura
-                          </span>
-                        )}
-                      </div>
-                      <input
-                        type="text"
-                        disabled={isFieldReadOnly('verified_cpf')}
-                        placeholder="Ex: 000.000.000-00"
-                        value={verifiedCpf}
-                        onChange={(e) => setVerifiedCpf(e.target.value)}
-                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
-                          isFieldReadOnly('verified_cpf')
-                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
-                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
-                        }`}
-                      />
-                    </div>
-                  )}
-
-                  {isFieldAllowed('proposal_number') && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-semibold text-slate-700">
-                          Número da Proposta
-                        </label>
-                        {isFieldReadOnly('proposal_number') && (
-                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
-                            <Lock className="w-2.5 h-2.5" /> Somente leitura
-                          </span>
-                        )}
-                      </div>
-                      <input
-                        type="text"
-                        disabled={isFieldReadOnly('proposal_number')}
-                        placeholder="Ex: PROP-2026-889"
-                        value={proposalNumber}
-                        onChange={(e) => setProposalNumber(e.target.value)}
-                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
-                          isFieldReadOnly('proposal_number')
-                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
-                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
-                        }`}
-                      />
-                    </div>
-                  )}
-
-                  {isFieldAllowed('banco') && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-semibold text-slate-700">
-                          Banco
-                        </label>
-                        {isFieldReadOnly('banco') && (
-                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
-                            <Lock className="w-2.5 h-2.5" /> Somente leitura
-                          </span>
-                        )}
-                      </div>
-                      <input
-                        type="text"
-                        disabled={isFieldReadOnly('banco')}
-                        placeholder="Ex: Banco Itaú, Bradesco, C6..."
-                        value={banco}
-                        onChange={(e) => setBanco(e.target.value)}
-                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
-                          isFieldReadOnly('banco')
-                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
-                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
-                        }`}
-                      />
-                    </div>
-                  )}
-
-                  {isFieldAllowed('tabela') && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-semibold text-slate-700">
-                          Tabela
-                        </label>
-                        {isFieldReadOnly('tabela') && (
-                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
-                            <Lock className="w-2.5 h-2.5" /> Somente leitura
-                          </span>
-                        )}
-                      </div>
-                      <input
-                        type="text"
-                        disabled={isFieldReadOnly('tabela')}
-                        placeholder="Ex: Tabela Normal, Flex..."
-                        value={tabela}
-                        onChange={(e) => setTabela(e.target.value)}
-                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
-                          isFieldReadOnly('tabela')
-                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
-                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
-                        }`}
-                      />
-                    </div>
-                  )}
-
-                  {isFieldAllowed('prazo') && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-semibold text-slate-700">
-                          Prazo (Parcelas)
-                        </label>
-                        {isFieldReadOnly('prazo') && (
-                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
-                            <Lock className="w-2.5 h-2.5" /> Somente leitura
-                          </span>
-                        )}
-                      </div>
-                      <input
-                        type="number"
-                        disabled={isFieldReadOnly('prazo')}
-                        placeholder="Ex: 84"
-                        value={prazo}
-                        onChange={(e) => setPrazo(e.target.value)}
-                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
-                          isFieldReadOnly('prazo')
-                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
-                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
-                        }`}
-                      />
-                    </div>
-                  )}
-
-                  {isFieldAllowed('margem') && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-semibold text-slate-700">
-                          Margem (R$)
-                        </label>
-                        {isFieldReadOnly('margem') && (
-                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
-                            <Lock className="w-2.5 h-2.5" /> Somente leitura
-                          </span>
-                        )}
-                      </div>
-                      <input
-                        type="text"
-                        disabled={isFieldReadOnly('margem')}
-                        placeholder="Ex: 450.00"
-                        value={margem}
-                        onChange={(e) => setMargem(e.target.value)}
-                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
-                          isFieldReadOnly('margem')
-                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
-                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
-                        }`}
-                      />
-                    </div>
-                  )}
-
-                  {isFieldAllowed('valor_liberado') && (
-                    <div>
-                      <div className="flex items-center justify-between mb-1">
-                        <label className="text-xs font-semibold text-slate-700">
-                          Valor Liberado (R$)
-                        </label>
-                        {isFieldReadOnly('valor_liberado') && (
-                          <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
-                            <Lock className="w-2.5 h-2.5" /> Somente leitura
-                          </span>
-                        )}
-                      </div>
-                      <input
-                        type="text"
-                        disabled={isFieldReadOnly('valor_liberado')}
-                        placeholder="Ex: 12500.00"
-                        value={valorLiberado}
-                        onChange={(e) => setValorLiberado(e.target.value)}
-                        className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
-                          isFieldReadOnly('valor_liberado')
-                            ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
-                            : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
-                        }`}
-                      />
-                    </div>
-                  )}
-
-                  {channelCustomFields.map((cf) => {
-                    const val = customFields[cf.key] ?? (lead.custom_fields as any)?.[cf.key];
-                    const readOnly = !!cf.isReadOnly;
-
-                    return (
-                      <div key={cf.key}>
-                        <div className="flex items-center justify-between mb-1">
-                          <label className="text-xs font-semibold text-slate-700 truncate">
-                            {cf.label} {!readOnly && cf.required && <span className="text-rose-500">*</span>}
-                          </label>
-                          {readOnly && (
-                            <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium shrink-0">
-                              <Lock className="w-2.5 h-2.5" /> Somente leitura
-                            </span>
-                          )}
-                        </div>
-                        {cf.type === 'select' ? (
-                          <select
-                            disabled={readOnly}
-                            value={val ?? ''}
-                            onChange={(e) => setCustomFields({ ...customFields, [cf.key]: e.target.value })}
-                            className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
-                              readOnly
-                                ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
-                                : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
-                            }`}
-                          >
-                            <option value="">Selecione...</option>
-                            {(cf.options || []).map((opt) => (
-                              <option key={opt} value={opt}>{opt}</option>
-                            ))}
-                          </select>
-                        ) : cf.type === 'boolean' ? (
-                          <div className="flex items-center gap-2 pt-2">
-                            <input
-                              type="checkbox"
-                              id={`cf_${cf.key}`}
-                              disabled={readOnly}
-                              checked={!!val}
-                              onChange={(e) => setCustomFields({ ...customFields, [cf.key]: e.target.checked })}
-                              className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300 disabled:opacity-50"
-                            />
-                            <label htmlFor={`cf_${cf.key}`} className="text-xs text-slate-700 cursor-pointer select-none">
-                              {cf.placeholder || 'Ativado'}
+                      return (
+                        <div
+                          key={field.key}
+                          className={isWideTextarea ? 'sm:col-span-2 md:col-span-3' : ''}
+                        >
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="text-xs font-semibold text-slate-700 truncate">
+                              {field.label}{' '}
+                              {field.required && <span className="text-rose-500">*</span>}
                             </label>
                           </div>
-                        ) : cf.type === 'textarea' ? (
-                          <textarea
-                            rows={2}
-                            disabled={readOnly}
-                            placeholder={cf.placeholder || `Informe ${cf.label.toLowerCase()}...`}
-                            value={val ?? ''}
-                            onChange={(e) => setCustomFields({ ...customFields, [cf.key]: e.target.value })}
-                            className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium resize-none ${
-                              readOnly
-                                ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
-                                : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
-                            }`}
-                          />
-                        ) : (
-                          <input
-                            type={cf.type === 'number' ? 'number' : cf.type === 'date' ? 'date' : 'text'}
-                            disabled={readOnly}
-                            placeholder={cf.placeholder || (cf.type === 'currency' ? 'Ex: 0.00' : '')}
-                            value={val ?? ''}
-                            onChange={(e) => {
-                              const nextVal = cf.type === 'number' && e.target.value !== '' ? Number(e.target.value) : e.target.value;
-                              setCustomFields({ ...customFields, [cf.key]: nextVal });
-                            }}
-                            className={`w-full border rounded-xl px-3.5 py-2 text-xs font-medium ${
-                              readOnly
-                                ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
-                                : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
-                            }`}
-                          />
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
 
-                {isFieldAllowed('notes') && (
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <label className="text-xs font-semibold text-slate-700">
-                        Observações
-                      </label>
-                      {isFieldReadOnly('notes') && (
-                        <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded flex items-center gap-0.5 font-medium">
-                          <Lock className="w-2.5 h-2.5" /> Somente leitura
-                        </span>
-                      )}
-                    </div>
-                    <textarea
-                      rows={3}
-                      disabled={isFieldReadOnly('notes')}
-                      placeholder="Insira detalhes da proposta, negociação ou observações sobre o cliente..."
-                      value={notes}
-                      onChange={(e) => setNotes(e.target.value)}
-                      className={`w-full border rounded-xl p-3 text-xs resize-none font-normal ${
-                        isFieldReadOnly('notes')
-                          ? 'bg-slate-100/90 border-slate-200 text-slate-600 cursor-not-allowed'
-                          : 'bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20'
-                      }`}
-                    />
+                          {field.type === 'select' ? (
+                            <select
+                              required={field.required}
+                              value={val ?? ''}
+                              onChange={(e) => setFieldValue(field.key, e.target.value)}
+                              className="w-full border rounded-xl px-3.5 py-2 text-xs font-medium bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                            >
+                              <option value="">Selecione...</option>
+                              {(field.options || []).map((opt) => (
+                                <option key={opt} value={opt}>
+                                  {opt}
+                                </option>
+                              ))}
+                            </select>
+                          ) : field.type === 'boolean' ? (
+                            <div className="flex items-center gap-2 pt-2">
+                              <input
+                                type="checkbox"
+                                id={`field_${field.key}`}
+                                checked={!!val}
+                                onChange={(e) => setFieldValue(field.key, e.target.checked)}
+                                className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300"
+                              />
+                              <label
+                                htmlFor={`field_${field.key}`}
+                                className="text-xs text-slate-700 cursor-pointer select-none"
+                              >
+                                {field.placeholder || 'Ativado'}
+                              </label>
+                            </div>
+                          ) : field.type === 'textarea' ? (
+                            <textarea
+                              rows={3}
+                              required={field.required}
+                              placeholder={
+                                field.placeholder ||
+                                `Insira detalhes para ${field.label.toLowerCase()}...`
+                              }
+                              value={val ?? ''}
+                              onChange={(e) => setFieldValue(field.key, e.target.value)}
+                              className="w-full border rounded-xl p-3 text-xs resize-none font-normal bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                            />
+                          ) : (
+                            <input
+                              type={
+                                field.type === 'number'
+                                  ? 'number'
+                                  : field.type === 'date'
+                                  ? 'date'
+                                  : 'text'
+                              }
+                              required={field.required}
+                              placeholder={
+                                field.placeholder ||
+                                (field.type === 'currency' ? 'Ex: 0.00' : '')
+                              }
+                              value={val ?? ''}
+                              onChange={(e) => {
+                                const nextVal =
+                                  !isStandardField(field.key) &&
+                                  field.type === 'number' &&
+                                  e.target.value !== ''
+                                    ? Number(e.target.value)
+                                    : e.target.value;
+                                setFieldValue(field.key, nextVal);
+                              }}
+                              className="w-full border rounded-xl px-3.5 py-2 text-xs font-medium bg-slate-50 border-slate-200 text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20"
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
 
@@ -730,21 +513,23 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                     Cancelar
                   </button>
 
-                  <button
-                    type="submit"
-                    disabled={isSaving}
-                    className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs font-semibold shadow-sm shadow-brand-500/20 flex items-center gap-1.5 transition-all"
-                  >
-                    {savedSuccess ? (
-                      <>
-                        <CheckCircle className="w-4 h-4 text-white" /> Salvo!
-                      </>
-                    ) : (
-                      <>
-                        <Save className="w-4 h-4" /> {isSaving ? 'Salvando...' : 'Salvar Alterações'}
-                      </>
-                    )}
-                  </button>
+                  {editableChannelFields.length > 0 && (
+                    <button
+                      type="submit"
+                      disabled={isSaving}
+                      className="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-700 disabled:opacity-50 text-white text-xs font-semibold shadow-sm shadow-brand-500/20 flex items-center gap-1.5 transition-all"
+                    >
+                      {savedSuccess ? (
+                        <>
+                          <CheckCircle className="w-4 h-4 text-white" /> Salvo!
+                        </>
+                      ) : (
+                        <>
+                          <Save className="w-4 h-4" /> {isSaving ? 'Salvando...' : 'Salvar Alterações'}
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
               </form>
             </>
