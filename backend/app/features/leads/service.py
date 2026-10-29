@@ -480,29 +480,50 @@ class LeadService:
         if not lead:
             return None
 
-        if hasattr(details, 'name') and details.name is not None:
-            lead.name = details.name
-        if hasattr(details, 'phone') and details.phone is not None:
-            lead.phone = details.phone
-        if details.notes is not None:
-            lead.notes = details.notes
-        if details.verified_cpf is not None:
-            lead.verified_cpf = details.verified_cpf
-        if details.proposal_number is not None:
-            lead.proposal_number = details.proposal_number
-        if details.prazo is not None:
-            lead.prazo = details.prazo
-        if details.margem is not None:
-            lead.margem = details.margem
-        if details.valor_liberado is not None:
-            lead.valor_liberado = details.valor_liberado
-        if details.banco is not None:
-            lead.banco = details.banco
-        if details.tabela is not None:
-            lead.tabela = details.tabela
-        if hasattr(details, 'custom_fields') and details.custom_fields is not None:
+        readonly_keys: set[str] = set()
+        if getattr(lead, "channel_code", None):
+            chan_res = await self.db.execute(
+                select(Channel).where(func.lower(Channel.code) == func.lower(lead.channel_code.strip()))
+            )
+            chan = chan_res.scalar_one_or_none()
+            if chan and isinstance(chan.allowed_fields, list):
+                for item in chan.allowed_fields:
+                    if isinstance(item, dict) and item.get("isReadOnly") is True and item.get("key"):
+                        readonly_keys.add(str(item["key"]))
+
+        fields_set = getattr(details, "model_fields_set", set())
+
+        standard_updatable = [
+            "name",
+            "phone",
+            "cpf",
+            "verified_cpf",
+            "email",
+            "product_name",
+            "campaign_name",
+            "proposal_number",
+            "notes",
+            "prazo",
+            "margem",
+            "valor_liberado",
+            "banco",
+            "tabela",
+        ]
+
+        for field_name in standard_updatable:
+            if field_name in readonly_keys:
+                continue
+            if field_name in fields_set or getattr(details, field_name, None) is not None:
+                val = getattr(details, field_name, None)
+                if field_name == "name" and not val:
+                    continue
+                setattr(lead, field_name, val)
+
+        if hasattr(details, "custom_fields") and details.custom_fields is not None:
             current = dict(lead.custom_fields or {})
-            current.update(details.custom_fields)
+            for k, v in details.custom_fields.items():
+                if k not in readonly_keys:
+                    current[k] = v
             lead.custom_fields = current
 
         lead.last_interaction_at = datetime.now(timezone.utc)

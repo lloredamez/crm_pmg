@@ -15,6 +15,10 @@ logger = logging.getLogger(__name__)
 async def apply_database_migrations_and_schema():
     """Garante a integridade do schema e colunas essenciais."""
     async with engine.begin() as conn:
+        # Lock transacional no PostgreSQL para evitar condição de corrida (UniqueViolationError em pg_type)
+        # caso múltiplos workers/containers iniciem simultaneamente
+        await conn.execute(text("SELECT pg_advisory_xact_lock(74839201);"))
+
         # Garante a criação de novas tabelas
         await conn.run_sync(Base.metadata.create_all)
         

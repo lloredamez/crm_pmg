@@ -45,9 +45,13 @@ class LeadUpdateStatus(BaseModel):
 class LeadUpdateDetails(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
-    notes: Optional[str] = None
+    cpf: Optional[str] = None
     verified_cpf: Optional[str] = None
+    email: Optional[str] = None
+    product_name: Optional[str] = None
+    campaign_name: Optional[str] = None
     proposal_number: Optional[str] = None
+    notes: Optional[str] = None
     prazo: Optional[int] = None
     margem: Optional[float] = None
     valor_liberado: Optional[float] = None
