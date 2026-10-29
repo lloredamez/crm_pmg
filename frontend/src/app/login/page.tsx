@@ -103,6 +103,7 @@ export default function LoginPage() {
           </form>
 
           {/* Quick Demo Login Section */}
+          {/*
           <div className="mt-8 pt-6 border-t border-slate-100">
             <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block text-center mb-3">
               Acesso Rápido por Perfil (Demo)
@@ -169,6 +170,7 @@ export default function LoginPage() {
               </button>
             </div>
           </div>
+          */}
         </div>
       </div>
     </div>
