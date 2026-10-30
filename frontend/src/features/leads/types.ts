@@ -9,10 +9,39 @@ export interface User {
   role: UserRole;
   status: UserStatus;
   is_active?: boolean;
+  can_access_simulations?: boolean;
   max_simultaneous_leads: number;
   unit_id?: string | null;
   managed_unit_ids?: string[];
   created_at: string;
+}
+
+export interface Simulation {
+  id: string;
+  name: string;
+  cpf?: string | null;
+  valor_liberado?: number | null;
+  quantidade_parcelas?: number | null;
+  valor_parcela?: number | null;
+  banco?: string | null;
+  tabela?: string | null;
+  simulation_status: string;
+  status: string;
+  current_attendant_id?: string | null;
+  attendant_name?: string | null;
+  unit_id?: string | null;
+  unit_name?: string | null;
+  webhook_sent_at?: string | null;
+  created_at: string;
+  custom_fields?: Record<string, any> | null;
+}
+
+export interface SimulationPaginationResponse {
+  items: Simulation[];
+  total: number;
+  page: number;
+  limit: number;
+  pages: number;
 }
 
 export interface Unit {

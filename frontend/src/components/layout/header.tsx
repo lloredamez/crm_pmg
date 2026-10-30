@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSocket } from '@/features/socket/socket-provider';
 import { useAuth } from '@/features/auth/auth-provider';
-import { Zap, Users, UserCog, LogOut, Check, Settings, ChevronDown, Share2 } from 'lucide-react';
+import { Zap, Users, UserCog, LogOut, Check, Settings, ChevronDown, Share2, Calculator } from 'lucide-react';
 import { Channel } from '@/features/leads/types';
 import { cn } from '@/lib/utils';
 
@@ -63,6 +63,10 @@ export const Header: React.FC<HeaderProps> = ({
     { id: 'overview', label: 'Dashboard', icon: Zap },
     { id: 'leads', label: 'Leads / Clientes', icon: Users },
   ];
+
+  if (user?.can_access_simulations || isAdmin) {
+    navItems.push({ id: 'simulations', label: 'Simulações', icon: Calculator });
+  }
 
   if (isAdmin || isManager) {
     navItems.push({ id: 'users', label: 'Gestão de Usuários', icon: UserCog });

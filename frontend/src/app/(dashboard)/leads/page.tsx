@@ -15,6 +15,7 @@ import { TabulateLeadModal } from '@/components/leads/tabulate-lead-modal';
 import { SimulateLeadModal } from '@/components/leads/simulate-lead-modal';
 import { UserManagement } from '@/components/users/user-management';
 import { SettingsPage } from '@/components/settings/settings-page';
+import { SimulationsManagement } from '@/components/simulations/simulations-management';
 import { fetchLeads, fetchUsers, updateUserStatus, reassignLead, bulkReassignLeads, revealLead, claimLead } from '@/features/leads/api';
 import { fetchDispositions } from '@/features/dispositions/api';
 import { fetchChannels } from '@/features/channels/api';
@@ -301,6 +302,8 @@ export default function LeadsDashboardPage() {
           <SettingsPage />
         ) : activeTab === 'users' && (isAdmin || isSupervisor) ? (
           <UserManagement users={users} onRefresh={refetchUsers} />
+        ) : activeTab === 'simulations' && (user?.can_access_simulations || isAdmin) ? (
+          <SimulationsManagement />
         ) : (
           <>
             {/* KPI Summary Cards */}
