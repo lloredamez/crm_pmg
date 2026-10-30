@@ -17,6 +17,7 @@ from app.features.channels.router import router as channels_router
 from app.features.categories.router import router as categories_router
 from app.features.webhooks.router import router as webhooks_router
 from app.features.messages.router import router as messages_router
+from app.features.simulations.router import router as simulations_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -72,6 +73,7 @@ app.include_router(channels_router, prefix=settings.API_V1_STR)
 app.include_router(categories_router, prefix=settings.API_V1_STR)
 app.include_router(webhooks_router, prefix=settings.API_V1_STR)
 app.include_router(messages_router, prefix=settings.API_V1_STR)
+app.include_router(simulations_router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 async def health_check():
