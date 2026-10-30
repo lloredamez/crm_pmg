@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { User } from '@/features/leads/types';
 import { useAuth } from '@/features/auth/auth-provider';
-import { ShieldCheck, UserCheck, Headset, UserPlus, Building2, CheckCircle2, Pencil, X, Trash2, Power, AlertTriangle, Search, Filter, RotateCcw } from 'lucide-react';
+import { ShieldCheck, UserCheck, Headset, UserPlus, Building2, CheckCircle2, Pencil, X, Trash2, Power, AlertTriangle, Search, Filter, RotateCcw, Calculator } from 'lucide-react';
 import { getApiUrl } from '@/lib/config';
 import { toggleUserActive, deleteUser } from '@/features/leads/api';
 
@@ -23,6 +23,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
   const [cpf, setCpf] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('attendant');
+  const [canAccessSimulations, setCanAccessSimulations] = useState(false);
   const [maxLeads, setMaxLeads] = useState(10);
   const [unitId, setUnitId] = useState<string>('');
   const [selectedManagedUnits, setSelectedManagedUnits] = useState<string[]>([]);
@@ -45,6 +46,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
   const [editPassword, setEditPassword] = useState('');
   const [editRole, setEditRole] = useState('attendant');
   const [editIsActive, setEditIsActive] = useState(true);
+  const [editCanAccessSimulations, setEditCanAccessSimulations] = useState(false);
   const [editMaxLeads, setEditMaxLeads] = useState(10);
   const [editUnitId, setEditUnitId] = useState<string>('');
   const [editSelectedManagedUnits, setEditSelectedManagedUnits] = useState<string[]>([]);
@@ -106,6 +108,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
     setEditPassword('');
     setEditRole(user.role);
     setEditIsActive(user.is_active !== false);
+    setEditCanAccessSimulations(user.can_access_simulations ?? false);
     setEditMaxLeads(user.max_simultaneous_leads);
     setEditUnitId(user.unit_id || (units.length > 0 ? units[0].id : ''));
     setEditSelectedManagedUnits(user.managed_unit_ids || []);
@@ -150,6 +153,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
         cpf: cpf.trim() || null,
         password,
         role,
+        can_access_simulations: canAccessSimulations,
         max_simultaneous_leads: Number(maxLeads),
       };
 
@@ -178,6 +182,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
       setEmail('');
       setCpf('');
       setPassword('');
+      setCanAccessSimulations(false);
       setIsCreateModalOpen(false);
       onRefresh();
     } catch (err: any) {
@@ -200,6 +205,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
         cpf: editCpf.trim() || null,
         role: editRole,
         is_active: editIsActive,
+        can_access_simulations: editCanAccessSimulations,
         max_simultaneous_leads: Number(editMaxLeads),
       };
 
@@ -410,6 +416,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                 <th className="py-3 px-4">Conta</th>
                 <th className="py-3 px-4">Presença</th>
                 <th className="py-3 px-4">Capacidade SLA</th>
+                <th className="py-3 px-4 text-center">Simulações</th>
                 <th className="py-3 px-4 text-right">Ações</th>
               </tr>
             </thead>
@@ -470,6 +477,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                         `${u.max_simultaneous_leads} leads`
                       ) : (
                         <span className="text-slate-400 font-normal text-[11px]">N/A (Controle)</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-center">
+                      {u.can_access_simulations || u.role === 'admin' ? (
+                        <span className="inline-flex items-center gap-1 bg-brand-50 text-brand-700 border border-brand-200/60 text-[10px] font-bold px-2 py-0.5 rounded-full" title="Acesso liberado ao módulo de simulações">
+                          <Calculator className="w-2.5 h-2.5" /> Liberado
+                        </span>
+                      ) : (
+                        <span className="text-slate-300 text-[11px] font-medium">-</span>
                       )}
                     </td>
                     <td className="py-3 px-4 text-right space-x-1 whitespace-nowrap">
@@ -658,6 +674,27 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                 </div>
               )}
 
+              {/* Permissão Módulo de Simulações */}
+              <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 transition-all hover:border-slate-300">
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={canAccessSimulations}
+                    onChange={(e) => setCanAccessSimulations(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 h-4 w-4"
+                  />
+                  <div>
+                    <span className="block text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                      <Calculator className="w-3.5 h-3.5 text-brand-600" />
+                      Acesso ao Módulo de Simulações
+                    </span>
+                    <span className="block text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                      Permite ao consultor realizar consultas de CPF e visualizar a tabela de simulações.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
               <div className="flex gap-2 pt-2">
                 <button
                   type="button"
@@ -833,6 +870,27 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                   />
                 </div>
               )}
+
+              {/* Permissão Módulo de Simulações */}
+              <div className="bg-slate-50 border border-slate-200/90 rounded-2xl p-3.5 transition-all hover:border-slate-300">
+                <label className="flex items-start gap-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={editCanAccessSimulations}
+                    onChange={(e) => setEditCanAccessSimulations(e.target.checked)}
+                    className="mt-0.5 rounded border-slate-300 text-brand-600 focus:ring-brand-500 h-4 w-4"
+                  />
+                  <div>
+                    <span className="block text-xs font-semibold text-slate-800 flex items-center gap-1.5">
+                      <Calculator className="w-3.5 h-3.5 text-brand-600" />
+                      Acesso ao Módulo de Simulações
+                    </span>
+                    <span className="block text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                      Permite ao consultor realizar consultas de CPF e visualizar a tabela de simulações.
+                    </span>
+                  </div>
+                </label>
+              </div>
 
               <div className="flex gap-2 pt-2">
                 <button
