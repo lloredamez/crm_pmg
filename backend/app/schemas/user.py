@@ -10,6 +10,7 @@ class UserBase(BaseModel):
     role: str = Field(default="attendant", pattern="^(admin|manager|supervisor|attendant)$")
     status: str = Field(default="offline", pattern="^(online|offline|busy)$")
     is_active: bool = True
+    can_access_simulations: bool = False
     max_simultaneous_leads: int = Field(default=10, ge=1, le=100)
     unit_id: Optional[UUID] = None
     managed_unit_ids: Optional[List[UUID]] = Field(default_factory=list)
@@ -24,6 +25,7 @@ class UserUpdate(BaseModel):
     password: Optional[str] = Field(None, min_length=4)
     role: Optional[str] = Field(None, pattern="^(admin|manager|supervisor|attendant)$")
     is_active: Optional[bool] = None
+    can_access_simulations: Optional[bool] = None
     max_simultaneous_leads: Optional[int] = Field(None, ge=1, le=100)
     unit_id: Optional[UUID] = None
     managed_unit_ids: Optional[List[UUID]] = None

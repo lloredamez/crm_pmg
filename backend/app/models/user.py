@@ -23,6 +23,7 @@ class User(Base):
     role = Column(String(50), default="attendant", nullable=False, index=True)  # 'admin', 'manager', 'supervisor', 'attendant'
     status = Column(String(50), default="offline", nullable=False, index=True) # 'online', 'offline', 'busy'
     is_active = Column(Boolean, default=True, nullable=False, index=True)
+    can_access_simulations = Column(Boolean, default=False, nullable=False)
     max_simultaneous_leads = Column(Integer, default=10, nullable=False)
     unit_id = Column(UUID(as_uuid=True), ForeignKey("units.id", ondelete="SET NULL"), nullable=True, index=True)
     last_assigned_at = Column(DateTime(timezone=True), nullable=True)

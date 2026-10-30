@@ -2,7 +2,13 @@ import os
 import secrets
 import logging
 from typing import Optional
-from pydantic_settings import BaseSettings
+from dotenv import load_dotenv
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Procura e carrega arquivo .env onde quer que o container ou processo esteja rodando
+for env_path in [".env", "../.env", "/app/.env", "/home/raul/project/crm_leads/.env"]:
+    if os.path.exists(env_path):
+        load_dotenv(env_path, override=False)
 
 logger = logging.getLogger(__name__)
 
@@ -14,6 +20,8 @@ def get_jwt_secret() -> str:
     return secrets.token_hex(32)
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=(".env", "../.env"), extra="ignore")
+
     PROJECT_NAME: str = "Lead CRM"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
@@ -31,6 +39,7 @@ class Settings(BaseSettings):
     META_VERIFY_TOKEN: str = os.getenv("META_VERIFY_TOKEN", "lead_crm_meta_token_secret")
     META_APP_SECRET: Optional[str] = os.getenv("META_APP_SECRET", None)
     WEBHOOK_SECRET: Optional[str] = os.getenv("WEBHOOK_SECRET", None)
+    SIMULATION_WEBHOOK_URL: Optional[str] = os.getenv("SIMULATION_WEBHOOK_URL", None)
     SLA_TIMEOUT_MINUTES: int = int(os.getenv("SLA_TIMEOUT_MINUTES", "15"))
     ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "http://localhost:5051,http://localhost:3000,http://127.0.0.1:5051")
 

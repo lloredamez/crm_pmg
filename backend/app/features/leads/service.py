@@ -368,7 +368,7 @@ class LeadService:
             selectinload(Lead.unit),
             selectinload(Lead.disposition),
             selectinload(Lead.assignments)
-        )
+        ).where(Lead.is_simulation.is_(False))
 
         # Role-based filtering
         if current_user:

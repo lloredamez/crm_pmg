@@ -26,9 +26,14 @@ class Lead(Base):
     prazo = Column(Integer, nullable=True)
     margem = Column(Float, nullable=True)
     valor_liberado = Column(Float, nullable=True)
+    valor_parcela = Column(Float, nullable=True)
     banco = Column(String(100), nullable=True)
     tabela = Column(String(100), nullable=True)
     custom_fields = Column(JSON, nullable=True, default=dict)
+
+    is_simulation = Column(Boolean, default=False, nullable=False, index=True)
+    simulation_status = Column(String(50), nullable=True, default="pending")
+    webhook_sent_at = Column(DateTime(timezone=True), nullable=True)
 
     status = Column(String(50), default="new", nullable=False, index=True) # 'new', 'assigned', 'in_progress', 'converted', 'lost', 'expired'
     is_revealed = Column(Boolean, default=False, nullable=False)

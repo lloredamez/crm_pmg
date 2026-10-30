@@ -25,7 +25,12 @@ async def _process_expired_leads_in_session(session: AsyncSession):
     from app.core.socket_manager import emit_lead_reassigned
 
     # 1. Checagem de Estouros de SLA de 1º Contato (lead com status 'assigned' que excedeu tempo de atendimento sem interação)
-    result = await session.execute(select(Lead).where(Lead.status == "assigned"))
+    result = await session.execute(
+        select(Lead).where(
+            Lead.status == "assigned",
+            Lead.is_simulation.is_(False)
+        )
+    )
     assigned_leads = list(result.scalars().all())
 
     expired_first_contact_leads = []
@@ -44,7 +49,8 @@ async def _process_expired_leads_in_session(session: AsyncSession):
         select(Lead).where(
             Lead.disposition_timeout_at.is_not(None),
             Lead.disposition_timeout_at <= now,
-            Lead.status.not_in(["converted", "lost"])
+            Lead.status.not_in(["converted", "lost"]),
+            Lead.is_simulation.is_(False)
         )
     )
     expired_disp_leads = list(disp_result.scalars().all())
