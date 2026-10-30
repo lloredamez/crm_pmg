@@ -54,6 +54,7 @@ class AuthService:
             hashed_password=hashed_password,
             role=user_in.role,
             status=user_in.status,
+            can_access_simulations=getattr(user_in, "can_access_simulations", False),
             max_simultaneous_leads=user_in.max_simultaneous_leads,
             unit_id=user_in.unit_id
         )

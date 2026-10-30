@@ -29,6 +29,7 @@ class UserCreateWithPassword(BaseModel):
     password: str = Field(..., min_length=4)
     role: str = Field(default="attendant", pattern="^(admin|manager|supervisor|attendant)$")
     status: str = Field(default="offline", pattern="^(online|offline|busy)$")
+    can_access_simulations: bool = False
     max_simultaneous_leads: int = Field(default=10, ge=1, le=100)
     unit_id: Optional[UUID] = None
     managed_unit_ids: Optional[List[UUID]] = Field(default_factory=list)
