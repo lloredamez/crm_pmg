@@ -11,8 +11,9 @@ from app.models.lead_tabulation import LeadTabulation
 from app.models.bucket_lead import BucketLead
 
 from app.models.category import Category
+from app.models.calendar import CalendarConfig, Holiday
 
-__all__ = ["Unit", "User", "Lead", "BucketLead", "LeadAssignment", "Message", "Channel", "unit_channels", "Disposition", "SlaBreach", "ChannelDispositionSla", "LeadTabulation", "Category"]
+__all__ = ["Unit", "User", "Lead", "BucketLead", "LeadAssignment", "Message", "Channel", "unit_channels", "Disposition", "SlaBreach", "ChannelDispositionSla", "LeadTabulation", "Category", "CalendarConfig", "Holiday"]
 
 
 
