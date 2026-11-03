@@ -50,7 +50,10 @@ services:
       - SECRET_KEY=${SECRET_KEY:-default_secret_key_development}
       - META_VERIFY_TOKEN=${META_VERIFY_TOKEN:-lead_crm_meta_token_secret}
       - WEBHOOK_SECRET=${WEBHOOK_SECRET:-}
+      - SIMULATION_WEBHOOK_URL=${SIMULATION_WEBHOOK_URL:-}
       - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+    env_file:
+      - .env
     ports:
       - "${BACKEND_PORT:-5052}:5052"
     volumes:
