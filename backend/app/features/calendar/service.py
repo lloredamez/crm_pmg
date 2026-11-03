@@ -80,7 +80,45 @@ class CalendarService:
         self.db.add(holiday)
         await self.db.commit()
         await self.db.refresh(holiday)
+
+        # Ajusta leads caso algum já estivesse agendado para vencer neste dia
+        try:
+            await self.adjust_leads_affected_by_holiday(holiday_in.date)
+        except Exception as e:
+            logger.warning(f"Erro ao ajustar leads após criar feriado: {e}")
+
         return holiday
+
+    async def adjust_leads_affected_by_holiday(self, holiday_date: date):
+        """
+        Ao cadastrar um novo feriado, adia os leads com disposition_timeout_at
+        que estavam previstos para vencer na data deste feriado.
+        """
+        from app.models.lead import Lead
+        from app.core.business_hours import calculate_smart_business_deadline
+
+        res = await self.db.execute(
+            select(Lead).where(
+                Lead.disposition_timeout_at.is_not(None),
+                Lead.status.not_in(["converted", "lost"])
+            )
+        )
+        leads = res.scalars().all()
+        config = await self.get_or_create_config()
+        tz = ZoneInfo(config.timezone or "America/Sao_Paulo")
+
+        updated_count = 0
+        for lead in leads:
+            if lead.disposition_timeout_at:
+                local_dt = lead.disposition_timeout_at.astimezone(tz)
+                if local_dt.date() == holiday_date:
+                    lead.disposition_timeout_at = await calculate_smart_business_deadline(
+                        self.db, lead.disposition_timeout_at, 0
+                    )
+                    updated_count += 1
+        if updated_count > 0:
+            await self.db.commit()
+            logger.info(f"Ajustados {updated_count} leads que estavam agendados no feriado {holiday_date}.")
 
     async def update_holiday(self, holiday_id: UUID, holiday_in: HolidayUpdate) -> Optional[Holiday]:
         res = await self.db.execute(select(Holiday).where(Holiday.id == holiday_id))
