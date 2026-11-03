@@ -5,7 +5,8 @@ import { DispositionManagement } from '@/components/settings/disposition-managem
 import { UnitManagement } from '@/components/settings/unit-management';
 import { ChannelManagement } from '@/components/settings/channel-management';
 import { CategoryManagement } from '@/components/settings/category-management';
-import { Settings, Tag, Store, Share2, FolderKanban, ShieldAlert } from 'lucide-react';
+import { CalendarManagement } from '@/components/settings/calendar-management';
+import { Settings, Tag, Store, Share2, FolderKanban, ShieldAlert, Calendar } from 'lucide-react';
 import { useAuth } from '@/features/auth/auth-provider';
 
 export const SettingsPage: React.FC = () => {
@@ -31,6 +32,7 @@ export const SettingsPage: React.FC = () => {
     { id: 'categories', label: 'Categorias', icon: FolderKanban },
     { id: 'units', label: 'Lojas & Unidades', icon: Store },
     { id: 'channels', label: 'Canais de Leads', icon: Share2 },
+    { id: 'calendar', label: 'Calendário & Expediente', icon: Calendar },
   ];
 
   return (
@@ -62,6 +64,7 @@ export const SettingsPage: React.FC = () => {
       {activeSubTab === 'categories' && <CategoryManagement />}
       {activeSubTab === 'units' && <UnitManagement />}
       {activeSubTab === 'channels' && <ChannelManagement />}
+      {activeSubTab === 'calendar' && <CalendarManagement />}
     </div>
   );
 };
