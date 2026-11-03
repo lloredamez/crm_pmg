@@ -8,7 +8,12 @@ from app.features.leads.service import LeadService
 logger = logging.getLogger(__name__)
 
 async def _async_process_unassigned_leads(limit: int = 50):
+    from app.core.business_hours import is_worker_paused_now
     async with get_worker_session() as session:
+        is_paused, pause_reason = await is_worker_paused_now(session=session)
+        if is_paused:
+            logger.info(f"Redistribution worker paused ({pause_reason}).")
+            return
         service = LeadService(session)
         assigned_count = await service.process_pending_unassigned_leads(limit=limit)
         if assigned_count > 0:
@@ -29,9 +34,9 @@ def _run_async(coro):
 
 @celery_app.task(name="process_unassigned_leads")
 def process_unassigned_leads(limit: int = 50):
-    from app.core.business_hours import is_night_shift
-    if is_night_shift():
-        logger.info("Night shift active (19:00 - 07:00). Redistribution worker execution paused.")
+    from app.core.business_hours import is_weekend, is_night_shift
+    if is_weekend() or is_night_shift():
+        logger.info("Worker paused (weekend/night). Redistribution execution paused.")
         return
     logger.info("Executing Celery task to process unassigned leads.")
     _run_async(_async_process_unassigned_leads(limit))

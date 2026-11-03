@@ -17,11 +17,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 async def _process_expired_leads_in_session(session: AsyncSession):
-    from app.core.business_hours import is_night_shift, get_effective_elapsed_sla_minutes
+    from app.core.business_hours import is_worker_paused_now, get_effective_elapsed_sla_minutes
 
-    # Se estiver no horário noturno (19:00 às 07:00), o processamento do worker é pausado
-    if is_night_shift():
-        logger.info("Night shift active (19:00 - 07:00). SLA worker execution paused.")
+    # Verifica se o worker deve pausar por final de semana, feriado ou horário noturno
+    is_paused, pause_reason = await is_worker_paused_now(session=session)
+    if is_paused:
+        logger.info(f"SLA worker execution paused due to calendar ({pause_reason}).")
         return
 
     now = datetime.now(timezone.utc)
@@ -233,9 +234,9 @@ def _run_async(coro):
 
 @celery_app.task(name="check_lead_sla_timeout")
 def check_lead_sla_timeout(lead_id: str):
-    from app.core.business_hours import is_night_shift
-    if is_night_shift():
-        logger.info(f"Night shift active (19:00 - 07:00). Skipping SLA check for lead {lead_id}.")
+    from app.core.business_hours import is_weekend, is_night_shift
+    if is_weekend() or is_night_shift():
+        logger.info(f"Worker paused (weekend/night). Skipping SLA check for lead {lead_id}.")
         return
     logger.info(f"Executing Celery task SLA timeout check for lead {lead_id}")
     _run_async(_async_check_lead_sla(lead_id))
@@ -245,9 +246,9 @@ async def _async_check_disposition_timeouts():
 
 @celery_app.task(name="check_disposition_timeouts")
 def check_disposition_timeouts():
-    from app.core.business_hours import is_night_shift
-    if is_night_shift():
-        logger.info("Night shift active (19:00 - 07:00). Skipping disposition timeout check.")
+    from app.core.business_hours import is_weekend, is_night_shift
+    if is_weekend() or is_night_shift():
+        logger.info("Worker paused (weekend/night). Skipping disposition timeout check.")
         return
     logger.info("Executing Celery task to check disposition timeouts.")
     _run_async(_async_check_disposition_timeouts())
