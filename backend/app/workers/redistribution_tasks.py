@@ -29,5 +29,9 @@ def _run_async(coro):
 
 @celery_app.task(name="process_unassigned_leads")
 def process_unassigned_leads(limit: int = 50):
+    from app.core.business_hours import is_night_shift
+    if is_night_shift():
+        logger.info("Night shift active (19:00 - 07:00). Redistribution worker execution paused.")
+        return
     logger.info("Executing Celery task to process unassigned leads.")
     _run_async(_async_process_unassigned_leads(limit))

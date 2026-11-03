@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     WEBHOOK_SECRET: Optional[str] = os.getenv("WEBHOOK_SECRET", None)
     SIMULATION_WEBHOOK_URL: Optional[str] = os.getenv("SIMULATION_WEBHOOK_URL", None)
     SLA_TIMEOUT_MINUTES: int = int(os.getenv("SLA_TIMEOUT_MINUTES", "15"))
+    NIGHT_SHIFT_START_HOUR: int = int(os.getenv("NIGHT_SHIFT_START_HOUR", "19"))
+    NIGHT_SHIFT_END_HOUR: int = int(os.getenv("NIGHT_SHIFT_END_HOUR", "7"))
+    BUSINESS_TIMEZONE: str = os.getenv("BUSINESS_TIMEZONE", "America/Sao_Paulo")
     ALLOWED_ORIGINS: str = os.getenv("ALLOWED_ORIGINS", "http://localhost:5051,http://localhost:3000,http://127.0.0.1:5051")
 
     @property

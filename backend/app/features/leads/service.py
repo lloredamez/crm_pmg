@@ -153,11 +153,17 @@ class LeadService:
             return await self.get_lead_by_id(bucket_lead.id)
 
     async def _find_eligible_attendant_for_units(self, unit_ids: Optional[List[UUID]] = None, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
-        query = select(User).where(
+        from app.core.business_hours import is_night_shift
+
+        conditions = [
             User.is_active.is_(True),
-            User.status == "online",
             User.role.in_(["attendant"])
-        ).order_by(User.created_at.asc(), User.id.asc())
+        ]
+        # No período noturno (19:00 às 07:00), distribui mesmo offline; durante o dia, exige status 'online'
+        if not is_night_shift():
+            conditions.append(User.status == "online")
+
+        query = select(User).where(*conditions).order_by(User.created_at.asc(), User.id.asc())
 
         if unit_ids:
             query = query.where(User.unit_id.in_(unit_ids))
@@ -165,17 +171,17 @@ class LeadService:
             query = query.where(User.id != exclude_user_id)
 
         result = await self.db.execute(query)
-        online_users = list(result.scalars().all())
-        if not online_users:
+        candidate_users = list(result.scalars().all())
+        if not candidate_users:
             return None
 
         from app.models.disposition import Disposition
-        online_user_ids = [u.id for u in online_users]
+        candidate_user_ids = [u.id for u in candidate_users]
         counts_res = await self.db.execute(
             select(Lead.current_attendant_id, func.count(Lead.id))
             .outerjoin(Disposition, Lead.disposition_id == Disposition.id)
             .where(
-                Lead.current_attendant_id.in_(online_user_ids),
+                Lead.current_attendant_id.in_(candidate_user_ids),
                 Lead.status.in_(["assigned", "in_progress"]),
                 or_(
                     Lead.disposition_id.is_(None),
@@ -188,7 +194,7 @@ class LeadService:
         active_counts = dict(counts_res.all())
 
         eligible_users = []
-        for user in online_users:
+        for user in candidate_users:
             count = active_counts.get(user.id, 0)
             if count < user.max_simultaneous_leads:
                 last_assigned = user.last_assigned_at or datetime.min.replace(tzinfo=timezone.utc)
