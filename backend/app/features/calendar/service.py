@@ -163,13 +163,8 @@ class CalendarService:
 
         # 3. Checagem de Horário Noturno
         if config.pause_night_shift:
-            start_hour = config.work_start_hour
-            end_hour = config.work_end_hour
-            is_night = False
-            if end_hour > start_hour:
-                is_night = (now_local.hour >= end_hour or now_local.hour < start_hour)
-            else:
-                is_night = (start_hour <= now_local.hour < end_hour)
+            from app.core.business_hours import is_night_shift_now
+            is_night = await is_night_shift_now(session=self.db, now_dt=now_local)
 
             if is_night:
                 return True, f"Horário Noturno ({now_local.strftime('%H:%M')})"
@@ -203,14 +198,22 @@ class CalendarService:
         is_holiday = holiday is not None
         holiday_name = holiday.name if holiday else None
 
-        # Checar noturno
-        start_hour = config.work_start_hour
-        end_hour = config.work_end_hour
-        is_night = False
-        if end_hour > start_hour:
-            is_night = (now_local.hour >= end_hour or now_local.hour < start_hour)
+        # Checar noturno e horários efetivos (Banco + .env)
+        from app.core.business_hours import is_night_shift_now, _get_env_business_hours, get_active_holidays_set
+        is_night = await is_night_shift_now(session=self.db, now_dt=now_local)
+
+        env_night_start, env_night_end, _ = _get_env_business_hours()
+        if config.work_end_hour != 19 or config.work_start_hour != 7:
+            eff_work_end_hour = config.work_end_hour
+            eff_work_start_hour = config.work_start_hour
         else:
-            is_night = (start_hour <= now_local.hour < end_hour)
+            eff_work_end_hour = env_night_start
+            eff_work_start_hour = env_night_end
+
+        holiday_dates_set = await get_active_holidays_set(
+            self.db, start_year=now_local.year - 1, end_year=now_local.year + 1
+        )
+        active_holiday_strs = sorted(d.isoformat() for d in holiday_dates_set)
 
         is_paused, reason = await self.is_worker_paused(now_local)
 
@@ -221,6 +224,12 @@ class CalendarService:
             is_weekend=is_weekend,
             is_holiday=is_holiday,
             holiday_name=holiday_name,
-            is_night_shift=is_night
+            is_night_shift=is_night,
+            work_start_hour=eff_work_start_hour,
+            work_end_hour=eff_work_end_hour,
+            pause_on_weekends=config.pause_on_weekends,
+            pause_on_holidays=config.pause_on_holidays,
+            pause_night_shift=config.pause_night_shift,
+            active_holiday_dates=active_holiday_strs,
         )
 

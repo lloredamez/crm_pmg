@@ -161,7 +161,10 @@ class DispositionService:
                 effective_timeout = disposition.timeout_minutes
 
         if effective_timeout:
-            lead.disposition_timeout_at = now + timedelta(minutes=effective_timeout)
+            from app.core.business_hours import calculate_smart_business_deadline
+            lead.disposition_timeout_at = await calculate_smart_business_deadline(
+                self.db, now, effective_timeout
+            )
         else:
             lead.disposition_timeout_at = None
 

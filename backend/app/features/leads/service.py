@@ -153,14 +153,17 @@ class LeadService:
             return await self.get_lead_by_id(bucket_lead.id)
 
     async def _find_eligible_attendant_for_units(self, unit_ids: Optional[List[UUID]] = None, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
-        from app.core.business_hours import is_night_shift
+        from app.core.business_hours import is_night_shift_now
+
+        night_shift = await is_night_shift_now(session=self.db)
 
         conditions = [
             User.is_active.is_(True),
             User.role.in_(["attendant"])
         ]
-        # No período noturno (19:00 às 07:00), distribui mesmo offline; durante o dia, exige status 'online'
-        if not is_night_shift():
+        # No horário noturno, distribui para todos os atendentes ativos independentemente de estar online;
+        # durante o expediente diurno, exige status 'online'
+        if not night_shift:
             conditions.append(User.status == "online")
 
         query = select(User).where(*conditions).order_by(User.created_at.asc(), User.id.asc())
@@ -182,6 +185,7 @@ class LeadService:
             .outerjoin(Disposition, Lead.disposition_id == Disposition.id)
             .where(
                 Lead.current_attendant_id.in_(candidate_user_ids),
+                Lead.is_simulation.is_(False),
                 Lead.status.in_(["assigned", "in_progress"]),
                 or_(
                     Lead.disposition_id.is_(None),
@@ -575,7 +579,10 @@ class LeadService:
                 lead.disposition_id = disp.id
                 lead.dispositioned_at = now
                 if disp.has_timeout and disp.timeout_minutes and disp.timeout_minutes > 0:
-                    lead.disposition_timeout_at = now + timedelta(minutes=disp.timeout_minutes)
+                    from app.core.business_hours import calculate_smart_business_deadline
+                    lead.disposition_timeout_at = await calculate_smart_business_deadline(
+                        self.db, now, disp.timeout_minutes
+                    )
 
                 # Registrar evento no histórico de tabulações
                 tabulation_entry = LeadTabulation(
@@ -697,6 +704,7 @@ class LeadService:
                     .outerjoin(Disposition, Lead.disposition_id == Disposition.id)
                     .where(
                         Lead.current_attendant_id == current_user.id,
+                        Lead.is_simulation.is_(False),
                         Lead.status.in_(["assigned", "in_progress"]),
                         or_(
                             Lead.disposition_id.is_(None),

@@ -60,4 +60,11 @@ class CalendarStatusResponse(BaseModel):
     is_holiday: bool
     holiday_name: Optional[str] = None
     is_night_shift: bool
+    work_start_hour: int = 7
+    work_end_hour: int = 19
+    pause_on_weekends: bool = True
+    pause_on_holidays: bool = True
+    pause_night_shift: bool = True
+    active_holiday_dates: List[str] = Field(default_factory=list)
+
 

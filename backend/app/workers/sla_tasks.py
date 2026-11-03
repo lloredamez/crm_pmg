@@ -234,10 +234,6 @@ def _run_async(coro):
 
 @celery_app.task(name="check_lead_sla_timeout")
 def check_lead_sla_timeout(lead_id: str):
-    from app.core.business_hours import is_weekend, is_night_shift
-    if is_weekend() or is_night_shift():
-        logger.info(f"Worker paused (weekend/night). Skipping SLA check for lead {lead_id}.")
-        return
     logger.info(f"Executing Celery task SLA timeout check for lead {lead_id}")
     _run_async(_async_check_lead_sla(lead_id))
 
@@ -246,10 +242,6 @@ async def _async_check_disposition_timeouts():
 
 @celery_app.task(name="check_disposition_timeouts")
 def check_disposition_timeouts():
-    from app.core.business_hours import is_weekend, is_night_shift
-    if is_weekend() or is_night_shift():
-        logger.info("Worker paused (weekend/night). Skipping disposition timeout check.")
-        return
     logger.info("Executing Celery task to check disposition timeouts.")
     _run_async(_async_check_disposition_timeouts())
 
