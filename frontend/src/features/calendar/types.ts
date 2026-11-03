@@ -54,5 +54,11 @@ export interface CalendarStatus {
   is_holiday: boolean;
   holiday_name?: string | null;
   is_night_shift: boolean;
+  work_start_hour?: number;
+  work_end_hour?: number;
+  pause_on_weekends?: boolean;
+  pause_on_holidays?: boolean;
+  pause_night_shift?: boolean;
+  active_holiday_dates?: string[];
 }
 
