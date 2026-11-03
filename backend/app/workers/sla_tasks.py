@@ -17,7 +17,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 logger = logging.getLogger(__name__)
 
 async def _process_expired_leads_in_session(session: AsyncSession):
-    from app.core.business_hours import is_worker_paused_now, get_effective_elapsed_sla_minutes
+    from app.core.business_hours import (
+        is_worker_paused_now,
+        get_effective_elapsed_sla_minutes,
+        get_active_holidays_set,
+        _get_env_business_hours,
+    )
+    from app.features.calendar.service import CalendarService
 
     # Verifica se o worker deve pausar por final de semana, feriado ou horário noturno
     is_paused, pause_reason = await is_worker_paused_now(session=session)
@@ -29,6 +35,15 @@ async def _process_expired_leads_in_session(session: AsyncSession):
     from app.features.dispositions.service import DispositionService
     disp_service = DispositionService(session)
     target_sla_minutes = await disp_service.get_unassigned_sla_minutes()
+    cal_config = await CalendarService(session).get_or_create_config()
+    env_night_start, env_night_end, env_tz = _get_env_business_hours()
+    if cal_config.work_end_hour != 19 or cal_config.work_start_hour != 7:
+        eff_night_start = cal_config.work_end_hour
+        eff_night_end = cal_config.work_start_hour
+    else:
+        eff_night_start = env_night_start
+        eff_night_end = env_night_end
+    holiday_dates = await get_active_holidays_set(session) if cal_config.pause_on_holidays else set()
     from app.models.bucket_lead import BucketLead
     from app.core.socket_manager import emit_lead_reassigned
 
@@ -48,7 +63,15 @@ async def _process_expired_leads_in_session(session: AsyncSession):
         assigned_time = lead.assigned_at or lead.created_at
         if not assigned_time:
             continue
-        elapsed_minutes = get_effective_elapsed_sla_minutes(assigned_time, now)
+        elapsed_minutes = get_effective_elapsed_sla_minutes(
+            assigned_time,
+            now,
+            holiday_dates=holiday_dates,
+            tz_name=cal_config.timezone or env_tz,
+            night_start_hour=eff_night_start if cal_config.pause_night_shift else 24,
+            night_end_hour=eff_night_end if cal_config.pause_night_shift else 0,
+            pause_weekends=cal_config.pause_on_weekends,
+        )
         if elapsed_minutes >= target_sla_minutes:
             expired_first_contact_leads.append(lead)
 
