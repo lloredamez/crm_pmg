@@ -9,6 +9,7 @@ from app.models.unit import Unit
 from app.models.disposition import Disposition
 from app.models.channel import Channel
 from app.models.category import Category
+from app.models.calendar import CalendarConfig, Holiday
 
 logger = logging.getLogger(__name__)
 
@@ -341,3 +342,35 @@ async def seed_initial_data():
             session.add_all(default_categories)
             await session.commit()
             logger.info("Categorias padrão criadas com sucesso!")
+
+        # Seed de Calendário e Feriados Padrão
+        cal_res = await session.execute(select(CalendarConfig))
+        existing_cal = cal_res.scalars().first()
+        if not existing_cal:
+            logger.info("Configuração de calendário não encontrada. Criando configuração padrão...")
+            default_cal = CalendarConfig(
+                pause_on_weekends=True,
+                pause_on_holidays=True,
+                pause_night_shift=True,
+                work_start_hour=7,
+                work_end_hour=19,
+                work_days=[0, 1, 2, 3, 4],
+                timezone="America/Sao_Paulo"
+            )
+            session.add(default_cal)
+            await session.commit()
+
+        holiday_count_res = await session.execute(select(Holiday))
+        if not holiday_count_res.scalars().first():
+            from app.features.calendar.service import DEFAULT_BRAZILIAN_HOLIDAYS
+            logger.info("Cadastrando feriados nacionais padrão no calendário...")
+            for h in DEFAULT_BRAZILIAN_HOLIDAYS:
+                session.add(Holiday(
+                    date=h["date"],
+                    name=h["name"],
+                    holiday_type=h["holiday_type"],
+                    is_recurring=h["is_recurring"],
+                    is_active=True
+                ))
+            await session.commit()
+            logger.info("Feriados nacionais padrão cadastrados com sucesso!")
