@@ -50,6 +50,8 @@ async def send_message(
     lead.last_interaction_at = now
     if lead.status == "assigned":
         lead.status = "in_progress"
+    if not lead.disposition_id:
+        lead.disposition_timeout_at = None
 
     db.add(message)
     await db.commit()

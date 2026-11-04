@@ -55,6 +55,13 @@ class LeadService:
 
         if assigned_user:
             now = datetime.now(timezone.utc)
+            from app.features.dispositions.service import DispositionService
+            from app.core.business_hours import calculate_smart_business_deadline
+            target_sla_minutes = await DispositionService(self.db).get_unassigned_sla_minutes()
+            first_contact_deadline = await calculate_smart_business_deadline(
+                self.db, now, target_sla_minutes
+            )
+
             lead = Lead(
                 name=lead_in.name,
                 phone=lead_in.phone,
@@ -76,6 +83,7 @@ class LeadService:
                 status="assigned",
                 current_attendant_id=assigned_user.id,
                 assigned_at=now,
+                disposition_timeout_at=first_contact_deadline,
                 unit_id=assigned_user.unit_id
             )
             self.db.add(lead)
@@ -154,6 +162,13 @@ class LeadService:
 
     async def _find_eligible_attendant_for_units(self, unit_ids: Optional[List[UUID]] = None, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
         from app.core.business_hours import is_night_shift_now
+        from app.workers.sla_tasks import check_and_disconnect_inactive_users
+
+        # Garante que atendentes inativos (> 1h sem ação) sejam desconectados antes de distribuir
+        try:
+            await check_and_disconnect_inactive_users(self.db)
+        except Exception:
+            pass
 
         night_shift = await is_night_shift_now(session=self.db)
 
@@ -210,51 +225,6 @@ class LeadService:
         # Ordenação sequencial por quem recebeu lead há mais tempo (Round-Robin puro: A -> B -> C -> D -> A...)
         eligible_users.sort(key=lambda x: x[0])
         return eligible_users[0][1]
-
-    async def _find_eligible_attendant_for_unit(self, unit_id: Optional[UUID] = None, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
-        unit_ids = [unit_id] if unit_id else None
-        return await self._find_eligible_attendant_for_units(unit_ids, exclude_user_id=exclude_user_id)
-
-    async def distribute_lead(self, lead: Lead, exclude_user_id: Optional[UUID] = None) -> Optional[User]:
-        selected_user = None
-        if lead.unit_id:
-            selected_user = await self._find_eligible_attendant_for_units([lead.unit_id], exclude_user_id=exclude_user_id)
-        elif lead.channel_code and lead.channel_code.strip():
-            chan_res = await self.db.execute(
-                select(Channel)
-                .options(selectinload(Channel.units))
-                .where(func.lower(Channel.code) == func.lower(lead.channel_code.strip()))
-            )
-            chan = chan_res.scalar_one_or_none()
-            if chan and chan.units:
-                unit_ids = [u.id for u in chan.units]
-                selected_user = await self._find_eligible_attendant_for_units(unit_ids, exclude_user_id=exclude_user_id)
-
-        if not selected_user and not lead.unit_id and not lead.channel_code:
-            selected_user = await self._find_eligible_attendant_for_units(None, exclude_user_id=exclude_user_id)
-
-        if not selected_user:
-            lead.status = "new"
-            lead.current_attendant_id = None
-            return None
-
-        now = datetime.now(timezone.utc)
-        lead.current_attendant_id = selected_user.id
-        lead.status = "assigned"
-        lead.assigned_at = now
-        if not lead.unit_id and selected_user.unit_id:
-            lead.unit_id = selected_user.unit_id
-
-        selected_user.last_assigned_at = now
-
-        assignment = LeadAssignment(
-            lead_id=lead.id,
-            attendant_id=selected_user.id,
-            status="active",
-            assigned_at=now
-        )
-        self.db.add(assignment)
-        return selected_user
 
     async def get_lead_by_id(self, lead_id: UUID, current_user: Optional[User] = None):
         query = select(Lead).options(selectinload(Lead.current_attendant), selectinload(Lead.unit), selectinload(Lead.disposition)).where(Lead.id == lead_id)
@@ -465,23 +435,16 @@ class LeadService:
             l.unassigned_sla_minutes = unassigned_sla
         return leads, total
 
-    async def process_pending_unassigned_leads(self, limit: int = 50) -> int:
-        # Leads na tabela separada bucket_leads NUNCA são distribuídos pelo worker.
-        # Eles só saem quando um atendente resgata manualmente ("Pegar Lead").
-        return 0
-
     async def update_status(self, lead_id: UUID, new_status: str) -> Optional[Lead]:
         lead = await self.get_lead_by_id(lead_id)
         if not lead:
             return None
         
-        old_status = lead.status
         lead.status = new_status
         lead.last_interaction_at = datetime.now(timezone.utc)
+        if not lead.disposition_id:
+            lead.disposition_timeout_at = None
         await self.db.commit()
-
-        if old_status in ["assigned", "in_progress"] and new_status not in ["assigned", "in_progress"]:
-            await self.process_pending_unassigned_leads(limit=10)
 
         return await self.get_lead_by_id(lead_id)
 
@@ -537,6 +500,8 @@ class LeadService:
             lead.custom_fields = current
 
         lead.last_interaction_at = datetime.now(timezone.utc)
+        if not lead.disposition_id:
+            lead.disposition_timeout_at = None
         await self.db.commit()
         return await self.get_lead_by_id(lead_id)
 
@@ -583,6 +548,8 @@ class LeadService:
                     lead.disposition_timeout_at = await calculate_smart_business_deadline(
                         self.db, now, disp.timeout_minutes
                     )
+                else:
+                    lead.disposition_timeout_at = None
 
                 # Registrar evento no histórico de tabulações
                 tabulation_entry = LeadTabulation(
@@ -662,9 +629,16 @@ class LeadService:
             )
 
         # Assign to new attendant
+        from app.features.dispositions.service import DispositionService
+        from app.core.business_hours import calculate_smart_business_deadline
+        target_sla_minutes = await DispositionService(self.db).get_unassigned_sla_minutes()
         lead.current_attendant_id = new_attendant_id
         lead.status = "assigned"
         lead.assigned_at = now
+        if not lead.disposition_id:
+            lead.disposition_timeout_at = await calculate_smart_business_deadline(
+                self.db, now, target_sla_minutes
+            )
 
         new_assignment = LeadAssignment(
             lead_id=lead.id,
@@ -721,6 +695,12 @@ class LeadService:
                     )
 
             now = datetime.now(timezone.utc)
+            from app.features.dispositions.service import DispositionService
+            from app.core.business_hours import calculate_smart_business_deadline
+            target_sla_minutes = await DispositionService(self.db).get_unassigned_sla_minutes()
+            first_contact_deadline = await calculate_smart_business_deadline(
+                self.db, now, target_sla_minutes
+            )
             lead = Lead(
                 id=bucket_lead.id,
                 name=bucket_lead.name,
@@ -743,6 +723,7 @@ class LeadService:
                 status="assigned",
                 current_attendant_id=current_user.id,
                 assigned_at=now,
+                disposition_timeout_at=first_contact_deadline,
                 unit_id=current_user.unit_id or bucket_lead.unit_id,
                 created_at=bucket_lead.created_at
             )
@@ -759,15 +740,6 @@ class LeadService:
             )
             self.db.add(new_assignment)
             await self.db.commit()
-
-            try:
-                from app.workers.sla_tasks import check_lead_sla_timeout
-                check_lead_sla_timeout.apply_async(
-                    args=[str(lead.id)],
-                    countdown=1 * 60
-                )
-            except Exception:
-                pass
 
             try:
                 lead_dict = {
@@ -816,9 +788,16 @@ class LeadService:
                 )
 
         now = datetime.now(timezone.utc)
+        from app.features.dispositions.service import DispositionService
+        from app.core.business_hours import calculate_smart_business_deadline
+        target_sla_minutes = await DispositionService(self.db).get_unassigned_sla_minutes()
         lead.current_attendant_id = current_user.id
         lead.status = "assigned"
         lead.assigned_at = now
+        if not lead.disposition_id:
+            lead.disposition_timeout_at = await calculate_smart_business_deadline(
+                self.db, now, target_sla_minutes
+            )
         current_user.last_assigned_at = now
 
         new_assignment = LeadAssignment(
@@ -829,16 +808,6 @@ class LeadService:
         )
         self.db.add(new_assignment)
         await self.db.commit()
-
-        # Agenda a verificação de SLA para o lead resgatado
-        try:
-            from app.workers.sla_tasks import check_lead_sla_timeout
-            check_lead_sla_timeout.apply_async(
-                args=[str(lead.id)],
-                countdown=1 * 60 # 1 min timeout
-            )
-        except Exception:
-            pass
 
         # Dispara notificação via Socket
         try:
