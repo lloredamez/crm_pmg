@@ -1,94 +1,158 @@
-import asyncio
 import logging
-from uuid import UUID
-from datetime import datetime, timezone
+import os
+from datetime import datetime, timedelta, timezone
+from typing import Optional
 from sqlalchemy import select, update
+from sqlalchemy.ext.asyncio import AsyncSession
+
 import app.models
-from app.workers.celery_app import celery_app
+from app.core.config import settings
 from app.core.database import AsyncSessionLocal
 from app.models.lead import Lead
 from app.models.lead_assignment import LeadAssignment
 from app.models.sla_breach import SlaBreach
-from app.features.leads.service import LeadService
-
-from typing import Optional
-from sqlalchemy.ext.asyncio import AsyncSession
+from app.models.user import User
 
 logger = logging.getLogger(__name__)
 
+
+def _get_inactivity_timeout_minutes() -> float:
+    """Lê o tempo limite de inatividade (padrão 60 min / 1 hora), suportando override dinâmico no .env."""
+    timeout_mins = float(getattr(settings, "USER_INACTIVITY_TIMEOUT_MINUTES", 60))
+    for env_path in [".env", "../.env", "/app/.env", "/home/raul/project/crm_leads/.env", "/home/raul/project/crm_leads/backend/.env"]:
+        if os.path.exists(env_path):
+            try:
+                with open(env_path, "r", encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line or line.startswith("#") or "=" not in line:
+                            continue
+                        k, v = line.split("=", 1)
+                        if k.strip() == "USER_INACTIVITY_TIMEOUT_MINUTES":
+                            val_str = v.strip().strip('"').strip("'")
+                            timeout_mins = float(val_str)
+            except Exception:
+                pass
+    return timeout_mins
+
+
+async def check_and_disconnect_inactive_users(session: AsyncSession):
+    """
+    Desconecta diretamente no banco de dados (UPDATE ... RETURNING) usuários com status != 'offline'
+    que ficaram mais de 1 hora (USER_INACTIVITY_TIMEOUT_MINUTES, padrão 60m) sem realizar nenhuma ação,
+    sem carregar entidades ORM em memória.
+    """
+    from app.core.socket_manager import emit_user_status_updated
+
+    now = datetime.now(timezone.utc)
+    timeout_minutes = _get_inactivity_timeout_minutes()
+    cutoff = now - timedelta(minutes=timeout_minutes)
+
+    # 1. Garante inicialização de last_action_at para usuários online sem timestamp prévio
+    await session.execute(
+        update(User)
+        .where(User.status != "offline", User.last_action_at.is_(None))
+        .values(last_action_at=now)
+    )
+
+    # 2. Query atômica direto no PostgreSQL que altera para offline e retorna apenas (id, name) dos afetados
+    res = await session.execute(
+        update(User)
+        .where(User.status != "offline", User.last_action_at <= cutoff)
+        .values(status="offline")
+        .returning(User.id, User.name)
+    )
+    disconnected_rows = res.all()
+    if disconnected_rows:
+        await session.commit()
+
+    for user_id, user_name in disconnected_rows:
+        logger.info(
+            f"User {user_name} ({user_id}) set to OFFLINE due to inactivity (>= {timeout_minutes} min)."
+        )
+        try:
+            await emit_user_status_updated(user_id, "offline", user_name)
+        except Exception as e:
+            logger.error(f"Erro ao emitir evento de status offline por inatividade para {user_id}: {e}")
+
+
 async def _process_expired_leads_in_session(session: AsyncSession):
+    # 0. Checa inatividade de usuários (independentemente de pausa de calendário)
+    try:
+        await check_and_disconnect_inactive_users(session)
+    except Exception as e:
+        logger.error(f"Erro ao verificar inatividade de usuários: {e}")
+
     from app.core.business_hours import (
         is_worker_paused_now,
-        get_effective_elapsed_sla_minutes,
-        get_active_holidays_set,
-        _get_env_business_hours,
+        calculate_smart_business_deadline,
     )
-    from app.features.calendar.service import CalendarService
+    from app.features.dispositions.service import DispositionService
+    from app.models.bucket_lead import BucketLead
+    from app.core.socket_manager import emit_lead_reassigned
 
     # Verifica se o worker deve pausar por final de semana, feriado ou horário noturno
     is_paused, pause_reason = await is_worker_paused_now(session=session)
     if is_paused:
-        logger.info(f"SLA worker execution paused due to calendar ({pause_reason}).")
         return
 
     now = datetime.now(timezone.utc)
-    from app.features.dispositions.service import DispositionService
     disp_service = DispositionService(session)
     target_sla_minutes = await disp_service.get_unassigned_sla_minutes()
-    cal_config = await CalendarService(session).get_or_create_config()
-    env_night_start, env_night_end, env_tz = _get_env_business_hours()
-    if cal_config.work_end_hour != 19 or cal_config.work_start_hour != 7:
-        eff_night_start = cal_config.work_end_hour
-        eff_night_end = cal_config.work_start_hour
-    else:
-        eff_night_start = env_night_start
-        eff_night_end = env_night_end
-    holiday_dates = await get_active_holidays_set(session) if cal_config.pause_on_holidays else set()
-    from app.models.bucket_lead import BucketLead
-    from app.core.socket_manager import emit_lead_reassigned
 
-    # 1. Checagem de Estouros de SLA de 1º Contato (lead com status 'assigned' que excedeu tempo de atendimento sem interação)
-    result = await session.execute(
-        select(Lead).where(
+    # 1. Backfill único para eventuais leads legados em status 'assigned' sem disposition_timeout_at preenchido
+    legacy_res = await session.execute(
+        select(Lead)
+        .where(
             Lead.status == "assigned",
-            Lead.is_simulation.is_(False)
+            Lead.disposition_id.is_(None),
+            Lead.disposition_timeout_at.is_(None),
+            Lead.is_simulation.is_(False),
         )
+        .with_for_update(skip_locked=True)
     )
-    assigned_leads = list(result.scalars().all())
+    legacy_leads = list(legacy_res.scalars().all())
+    if legacy_leads:
+        for l_lead in legacy_leads:
+            if l_lead.last_interaction_at and l_lead.assigned_at and l_lead.last_interaction_at > l_lead.assigned_at:
+                continue
+            ref_time = l_lead.assigned_at or l_lead.created_at or now
+            l_lead.disposition_timeout_at = await calculate_smart_business_deadline(
+                session, ref_time, target_sla_minutes
+            )
+        await session.commit()
 
-    expired_first_contact_leads = []
-    for lead in assigned_leads:
-        if lead.last_interaction_at and lead.assigned_at and lead.last_interaction_at > lead.assigned_at:
-            continue
-        assigned_time = lead.assigned_at or lead.created_at
-        if not assigned_time:
-            continue
-        elapsed_minutes = get_effective_elapsed_sla_minutes(
-            assigned_time,
-            now,
-            holiday_dates=holiday_dates,
-            tz_name=cal_config.timezone or env_tz,
-            night_start_hour=eff_night_start if cal_config.pause_night_shift else 24,
-            night_end_hour=eff_night_end if cal_config.pause_night_shift else 0,
-            pause_weekends=cal_config.pause_on_weekends,
-        )
-        if elapsed_minutes >= target_sla_minutes:
-            expired_first_contact_leads.append(lead)
-
-    # 2. Checagem de Estouros de SLA de Tabulação
-    disp_result = await session.execute(
-        select(Lead).where(
+    # 2. Busca indexada única (1º contato + tabulação) apenas dos leads já vencidos com FOR UPDATE SKIP LOCKED
+    expired_res = await session.execute(
+        select(Lead)
+        .where(
             Lead.disposition_timeout_at.is_not(None),
             Lead.disposition_timeout_at <= now,
             Lead.status.not_in(["converted", "lost"]),
-            Lead.is_simulation.is_(False)
+            Lead.is_simulation.is_(False),
         )
+        .with_for_update(skip_locked=True)
     )
-    expired_disp_leads = list(disp_result.scalars().all())
+    expired_leads = list(expired_res.scalars().all())
+    if not expired_leads:
+        return
 
-    # Processar estouros de 1º contato
-    for lead in expired_first_contact_leads:
-        logger.warning(f"SLA TIMEOUT EXCEEDED (1st contact) for Lead {lead.id}! Attendant: {lead.current_attendant_id}. Moving to Balde...")
+    notifications_to_emit = []
+
+    # 3. Processamento em lote em uma única transação
+    for lead in expired_leads:
+        is_first_contact = lead.disposition_id is None
+        if is_first_contact and lead.last_interaction_at and lead.assigned_at and lead.last_interaction_at > lead.assigned_at:
+            lead.disposition_timeout_at = None
+            continue
+
+        assignment_status = "expired_timeout" if is_first_contact else "disposition_timeout"
+        breach_type = "first_contact_timeout" if is_first_contact else "disposition_timeout"
+        breach_sla = target_sla_minutes if is_first_contact else None
+
+        logger.warning(
+            f"SLA TIMEOUT EXCEEDED ({breach_type}) for Lead {lead.id}! Attendant: {lead.current_attendant_id}. Moving to Balde..."
+        )
         old_attendant_id = lead.current_attendant_id
         if old_attendant_id:
             await session.execute(
@@ -96,9 +160,9 @@ async def _process_expired_leads_in_session(session: AsyncSession):
                 .where(
                     LeadAssignment.lead_id == lead.id,
                     LeadAssignment.attendant_id == old_attendant_id,
-                    LeadAssignment.status == "active"
+                    LeadAssignment.status == "active",
                 )
-                .values(status="expired_timeout", unassigned_at=now)
+                .values(status=assignment_status, unassigned_at=now)
             )
 
         bucket_lead = BucketLead(
@@ -121,7 +185,7 @@ async def _process_expired_leads_in_session(session: AsyncSession):
             tabela=lead.tabela,
             custom_fields=lead.custom_fields or {},
             unit_id=lead.unit_id,
-            created_at=lead.created_at
+            created_at=lead.created_at,
         )
         session.add(bucket_lead)
 
@@ -129,143 +193,45 @@ async def _process_expired_leads_in_session(session: AsyncSession):
             lead_id=lead.id,
             attendant_id=old_attendant_id,
             unit_id=lead.unit_id,
-            breach_type="first_contact_timeout",
-            target_sla_minutes=target_sla_minutes,
+            breach_type=breach_type,
+            target_sla_minutes=breach_sla,
             action_taken="sent_to_balde",
-            breached_at=now
+            breached_at=now,
         )
         session.add(sla_breach)
 
-        await session.delete(lead)
-        await session.commit()
-
-        try:
-            lead_dict = {
-                "id": str(lead.id),
-                "name": lead.name,
-                "phone": lead.phone,
-                "status": lead.status,
-                "assigned_at": None,
-                "attendant_name": ""
-            }
-            await emit_lead_reassigned(
+        notifications_to_emit.append(
+            (
                 str(old_attendant_id) if old_attendant_id else "",
-                "",
-                lead_dict
+                {
+                    "id": str(lead.id),
+                    "name": lead.name,
+                    "phone": lead.phone,
+                    "status": lead.status,
+                    "assigned_at": None,
+                    "attendant_name": "",
+                },
             )
+        )
+
+        await session.delete(lead)
+
+    # Commit único do lote inteiro
+    await session.commit()
+
+    # Disparo das notificações WebSocket após confirmação da transação
+    for old_att_id, lead_dict in notifications_to_emit:
+        try:
+            await emit_lead_reassigned(old_att_id, "", lead_dict)
         except Exception as e:
             logger.error(f"Failed to emit socket notification during SLA timeout: {e}")
 
-    # Processar estouros de tabulação
-    for lead in expired_disp_leads:
-        # Verificar se o lead ainda existe (caso estivesse em ambos os grupos)
-        check_exists = await session.execute(select(Lead).where(Lead.id == lead.id))
-        if not check_exists.scalar_one_or_none():
-            continue
-
-        logger.warning(f"SLA TIMEOUT EXCEEDED (disposition) for Lead {lead.id}! Attendant: {lead.current_attendant_id}. Moving to Balde...")
-        old_attendant_id = lead.current_attendant_id
-        if old_attendant_id:
-            await session.execute(
-                update(LeadAssignment)
-                .where(
-                    LeadAssignment.lead_id == lead.id,
-                    LeadAssignment.attendant_id == old_attendant_id,
-                    LeadAssignment.status == "active"
-                )
-                .values(status="disposition_timeout", unassigned_at=now)
-            )
-
-        bucket_lead = BucketLead(
-            id=lead.id,
-            name=lead.name,
-            phone=lead.phone,
-            cpf=lead.cpf,
-            verified_cpf=lead.verified_cpf,
-            proposal_number=lead.proposal_number,
-            notes=lead.notes,
-            email=lead.email,
-            meta_lead_id=lead.meta_lead_id,
-            campaign_name=lead.campaign_name,
-            product_name=lead.product_name,
-            channel_code=lead.channel_code,
-            prazo=lead.prazo,
-            margem=lead.margem,
-            valor_liberado=lead.valor_liberado,
-            banco=lead.banco,
-            tabela=lead.tabela,
-            custom_fields=lead.custom_fields or {},
-            unit_id=lead.unit_id,
-            created_at=lead.created_at
-        )
-        session.add(bucket_lead)
-
-        sla_breach = SlaBreach(
-            lead_id=lead.id,
-            attendant_id=old_attendant_id,
-            unit_id=lead.unit_id,
-            breach_type="disposition_timeout",
-            target_sla_minutes=None,
-            action_taken="sent_to_balde",
-            breached_at=now
-        )
-        session.add(sla_breach)
-
-        await session.delete(lead)
-        await session.commit()
-
-        try:
-            lead_dict = {
-                "id": str(lead.id),
-                "name": lead.name,
-                "phone": lead.phone,
-                "status": lead.status,
-                "assigned_at": None,
-                "attendant_name": ""
-            }
-            await emit_lead_reassigned(
-                str(old_attendant_id) if old_attendant_id else "",
-                "",
-                lead_dict
-            )
-        except Exception:
-            pass
 
 async def _async_check_all_expired_leads(session: Optional[AsyncSession] = None):
     if session is not None:
         await _process_expired_leads_in_session(session)
     else:
-        from app.core.database import get_worker_session
-        async with get_worker_session() as session_ctx:
+        # Reutiliza o pool de conexões AsyncSessionLocal do processo principal (zero overhead de criação de engine)
+        async with AsyncSessionLocal() as session_ctx:
             await _process_expired_leads_in_session(session_ctx)
-
-async def _async_check_lead_sla(lead_id_str: str):
-    await _async_check_all_expired_leads()
-
-def _run_async(coro):
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-
-    if loop and loop.is_running():
-        import concurrent.futures
-        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-            return pool.submit(asyncio.run, coro).result()
-    else:
-        return asyncio.run(coro)
-
-@celery_app.task(name="check_lead_sla_timeout")
-def check_lead_sla_timeout(lead_id: str):
-    logger.info(f"Executing Celery task SLA timeout check for lead {lead_id}")
-    _run_async(_async_check_lead_sla(lead_id))
-
-async def _async_check_disposition_timeouts():
-    await _async_check_all_expired_leads()
-
-@celery_app.task(name="check_disposition_timeouts")
-def check_disposition_timeouts():
-    logger.info("Executing Celery task to check disposition timeouts.")
-    _run_async(_async_check_disposition_timeouts())
-
 

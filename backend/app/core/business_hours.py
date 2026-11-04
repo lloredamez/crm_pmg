@@ -135,51 +135,6 @@ async def is_worker_paused_now(session=None, now_dt: Optional[datetime] = None) 
     return False, None
 
 
-def get_effective_elapsed_sla_minutes(
-    start_dt: datetime,
-    end_dt: datetime,
-    holiday_dates: Optional[Set[date]] = None,
-    tz_name: Optional[str] = None,
-    night_start_hour: Optional[int] = None,
-    night_end_hour: Optional[int] = None,
-    pause_weekends: bool = True,
-) -> float:
-    """
-    Calcula os minutos decorridos entre start_dt e end_dt considerando apenas
-    as horas úteis (fora de noites, finais de semana e feriados).
-    """
-    env_night_start, env_night_end, env_tz = _get_env_business_hours()
-    tz = ZoneInfo(tz_name or env_tz)
-    start_local = start_dt.astimezone(tz) if start_dt.tzinfo else start_dt.replace(tzinfo=timezone.utc).astimezone(tz)
-    end_local = end_dt.astimezone(tz) if end_dt.tzinfo else end_dt.replace(tzinfo=timezone.utc).astimezone(tz)
-
-    if start_local >= end_local:
-        return 0.0
-
-    start_hour = night_start_hour if night_start_hour is not None else env_night_start
-    end_hour = night_end_hour if night_end_hour is not None else env_night_end
-
-    total_active_seconds = 0.0
-    cur_date = start_local.date()
-    holidays = holiday_dates or set()
-
-    while cur_date <= end_local.date():
-        is_wknd = pause_weekends and (cur_date.weekday() >= 5)
-        if not is_wknd and cur_date not in holidays:
-            day_start = datetime.combine(cur_date, time(end_hour, 0), tzinfo=tz)
-            day_end = datetime.combine(cur_date, time(start_hour, 0), tzinfo=tz)
-
-            window_start = max(start_local, day_start)
-            window_end = min(end_local, day_end)
-
-            if window_end > window_start:
-                total_active_seconds += (window_end - window_start).total_seconds()
-
-        cur_date += timedelta(days=1)
-
-    return total_active_seconds / 60.0
-
-
 def add_business_minutes(
     start_dt: datetime,
     minutes_to_add: float,
