@@ -466,11 +466,16 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                       )}
                     </td>
                     <td className="py-3 px-4">
-                      <span className={`text-[11px] font-semibold ${
+                      <span className={`text-[11px] font-semibold block ${
                         !isActive ? 'text-slate-400' : u.status === 'online' ? 'text-emerald-600' : u.status === 'busy' ? 'text-amber-600' : 'text-slate-400'
                       }`}>
                         {!isActive ? '⚪ Inativo' : u.status === 'online' ? '🟢 Online' : u.status === 'busy' ? '🟡 Ocupado' : '⚪ Offline'}
                       </span>
+                      {u.last_action_at && (
+                        <span className="text-[10px] text-slate-400 block mt-0.5" title="Última ação registrada">
+                          Últ. ação: {new Date(u.last_action_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
                     </td>
                     <td className="py-3 px-4 font-semibold text-slate-800">
                       {u.role === 'attendant' ? (

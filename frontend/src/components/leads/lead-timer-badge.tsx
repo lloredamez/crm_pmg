@@ -224,17 +224,19 @@ export const LeadTimerBadge: React.FC<LeadTimerBadgeProps> = ({ lead }) => {
     const targetTimeMs = new Date(lead.disposition_timeout_at).getTime();
     if (!isNaN(targetTimeMs)) {
       const effectiveRemaining = getEffectiveBusinessMsBetween(now, targetTimeMs, calStatus);
+      const startRefStr = lead.dispositioned_at || lead.assigned_at || lead.created_at;
 
-      if (lead.dispositioned_at) {
-        const dispMs = new Date(lead.dispositioned_at).getTime();
-        const effectiveTotal = getEffectiveBusinessMsBetween(dispMs, targetTimeMs, calStatus);
-        const wallTotal = Math.max(1000, targetTimeMs - dispMs);
-        totalDurationMs = effectiveTotal > 0 ? effectiveTotal : wallTotal;
+      if (startRefStr) {
+        const startRefMs = new Date(startRefStr).getTime();
+        const effectiveTotal = getEffectiveBusinessMsBetween(startRefMs, targetTimeMs, calStatus);
+        const fallbackSlaMs = (lead.unassigned_sla_minutes || 15) * 60 * 1000;
+        const wallTotal = Math.max(1000, targetTimeMs - startRefMs);
+        totalDurationMs = effectiveTotal > 0 ? effectiveTotal : (lead.dispositioned_at ? wallTotal : fallbackSlaMs);
 
         if (effectiveRemaining === 0 && isCurrentlyPaused && targetTimeMs > now) {
           // Caso o horário de pausa tenha sido alterado após o agendamento do lead
-          const elapsedSinceDisp = getEffectiveBusinessMsBetween(dispMs, now, calStatus);
-          remainingMs = Math.max(0, totalDurationMs - elapsedSinceDisp);
+          const elapsedSinceStart = getEffectiveBusinessMsBetween(startRefMs, now, calStatus);
+          remainingMs = Math.max(0, totalDurationMs - elapsedSinceStart);
         } else {
           remainingMs = effectiveRemaining;
         }

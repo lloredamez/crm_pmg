@@ -161,6 +161,9 @@ export default function LeadsDashboardPage() {
     };
 
     const handleUserStatusUpdated = (data: { user_id: string; status: string }) => {
+      if (user && data.user_id === user.id) {
+        setCurrentUserStatus(data.status);
+      }
       queryClient.setQueryData<User[]>(['users'], (oldUsers) => {
         if (!oldUsers) return oldUsers;
         return oldUsers.map((u) => (u.id === data.user_id ? { ...u, status: data.status as any } : u));

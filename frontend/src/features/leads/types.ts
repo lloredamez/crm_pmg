@@ -13,6 +13,7 @@ export interface User {
   max_simultaneous_leads: number;
   unit_id?: string | null;
   managed_unit_ids?: string[];
+  last_action_at?: string | null;
   created_at: string;
 }
 
