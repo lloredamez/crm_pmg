@@ -28,6 +28,10 @@ async def apply_database_migrations_and_schema():
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS unit_id UUID REFERENCES units(id) ON DELETE SET NULL;"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_assigned_at TIMESTAMPTZ;"))
+        await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_action_at TIMESTAMPTZ;"))
+        await conn.execute(text("UPDATE users SET last_action_at = NOW() WHERE last_action_at IS NULL AND status != 'offline';"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_last_action_at ON users (last_action_at);"))
+        await conn.execute(text("DROP TABLE IF EXISTS user_action_logs;"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE;"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS can_access_simulations BOOLEAN DEFAULT FALSE;"))
         
