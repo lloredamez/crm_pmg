@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     WEBHOOK_SECRET: Optional[str] = os.getenv("WEBHOOK_SECRET", None)
     SIMULATION_WEBHOOK_URL: Optional[str] = os.getenv("SIMULATION_WEBHOOK_URL", None)
     SLA_TIMEOUT_MINUTES: int = int(os.getenv("SLA_TIMEOUT_MINUTES", "15"))
+    USER_INACTIVITY_TIMEOUT_MINUTES: int = int(os.getenv("USER_INACTIVITY_TIMEOUT_MINUTES", "60"))
     NIGHT_SHIFT_START_HOUR: int = int(os.getenv("NIGHT_SHIFT_START_HOUR", "19"))
     NIGHT_SHIFT_END_HOUR: int = int(os.getenv("NIGHT_SHIFT_END_HOUR", "7"))
     BUSINESS_TIMEZONE: str = os.getenv("BUSINESS_TIMEZONE", "America/Sao_Paulo")
