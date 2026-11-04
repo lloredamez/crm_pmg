@@ -37,6 +37,11 @@ class AuthService:
             return None
         if not verify_password(login_in.password, user.hashed_password):
             return None
+
+        from datetime import datetime, timezone
+        user.last_action_at = datetime.now(timezone.utc)
+        await self.db.commit()
+        await self.db.refresh(user)
         
         access_token = create_access_token(subject=str(user.id))
         return Token(

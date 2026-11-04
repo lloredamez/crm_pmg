@@ -27,6 +27,7 @@ class User(Base):
     max_simultaneous_leads = Column(Integer, default=10, nullable=False)
     unit_id = Column(UUID(as_uuid=True), ForeignKey("units.id", ondelete="SET NULL"), nullable=True, index=True)
     last_assigned_at = Column(DateTime(timezone=True), nullable=True)
+    last_action_at = Column(DateTime(timezone=True), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     unit = relationship("Unit", back_populates="users")

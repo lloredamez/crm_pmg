@@ -35,8 +35,11 @@ class UserUpdateStatus(BaseModel):
 
 class UserResponse(UserBase):
     id: UUID
+    last_action_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:
         from_attributes = True
+
+
 

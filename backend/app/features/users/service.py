@@ -1,4 +1,5 @@
 from uuid import UUID
+from datetime import datetime, timezone
 from typing import List, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
@@ -148,15 +149,11 @@ class UserService:
         user = await self.get_user_by_id(user_id)
         if not user:
             return None
-        old_status = user.status
         user.status = status_in.status
+        user.last_action_at = datetime.now(timezone.utc)
+
         await self.db.commit()
         await self.db.refresh(user)
-
-        if status_in.status == "online" and old_status != "online":
-            from app.features.leads.service import LeadService
-            lead_service = LeadService(self.db)
-            await lead_service.process_pending_unassigned_leads(limit=10)
 
         from app.core.socket_manager import emit_user_status_updated
         await emit_user_status_updated(user.id, user.status, user.name)

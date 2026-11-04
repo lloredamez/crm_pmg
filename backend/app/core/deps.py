@@ -1,6 +1,7 @@
 from typing import List
 from uuid import UUID
-from fastapi import Depends, HTTPException, status
+from datetime import datetime, timezone
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
 from jose import jwt, JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,6 +16,7 @@ from app.schemas.auth import TokenPayload
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login", auto_error=False)
 
 async def get_current_user(
+    request: Request,
     token: str = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db)
 ) -> User:
@@ -46,6 +48,12 @@ async def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Conta de usuário inativa. Entre em contato com o suporte ou administrador."
         )
+
+    # Atualiza timestamp de última ação em qualquer requisição de escrita/ação real (ignora GET de polling)
+    if request and request.method in ("POST", "PUT", "PATCH", "DELETE"):
+        user.last_action_at = datetime.now(timezone.utc)
+        await db.commit()
+
     return user
 
 def require_roles(allowed_roles: List[str]):
