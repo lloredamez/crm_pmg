@@ -1,11 +1,12 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
+import { notificationSound } from '@/lib/sound';
 
 interface ToastNotification {
   id: string;
-  type: 'assigned' | 'reassigned' | 'sla_warning';
+  type: 'assigned' | 'reassigned' | 'sla_warning' | 'new_lead';
   title: string;
   message: string;
 }
@@ -15,6 +16,9 @@ interface SocketContextType {
   isConnected: boolean;
   toasts: ToastNotification[];
   removeToast: (id: string) => void;
+  isSoundEnabled: boolean;
+  toggleSound: () => boolean;
+  playNotificationSound: () => void;
 }
 
 const SocketContext = createContext<SocketContextType>({
@@ -22,6 +26,9 @@ const SocketContext = createContext<SocketContextType>({
   isConnected: false,
   toasts: [],
   removeToast: () => {},
+  isSoundEnabled: true,
+  toggleSound: () => true,
+  playNotificationSound: () => {},
 });
 
 export const useSocket = () => useContext(SocketContext);
@@ -30,8 +37,27 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [toasts, setToasts] = useState<ToastNotification[]>([]);
+  const [isSoundEnabled, setIsSoundEnabled] = useState<boolean>(true);
 
-  const addToast = (notification: Omit<ToastNotification, 'id'>) => {
+  useEffect(() => {
+    setIsSoundEnabled(notificationSound.isEnabled());
+    const unsubscribe = notificationSound.subscribe((enabled) => {
+      setIsSoundEnabled(enabled);
+    });
+    return unsubscribe;
+  }, []);
+
+  const toggleSound = useCallback(() => {
+    const newState = notificationSound.toggle();
+    setIsSoundEnabled(newState);
+    return newState;
+  }, []);
+
+  const playNotificationSound = useCallback(() => {
+    notificationSound.playNotification();
+  }, []);
+
+  const addToast = useCallback((notification: Omit<ToastNotification, 'id'>) => {
     const id = Math.random().toString(36).substring(2, 9);
     const newToast = { ...notification, id };
     setToasts((prev) => [newToast, ...prev]);
@@ -40,11 +66,11 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setTimeout(() => {
       removeToast(id);
     }, 6000);
-  };
+  }, []);
 
-  const removeToast = (id: string) => {
+  const removeToast = useCallback((id: string) => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
-  };
+  }, []);
 
   useEffect(() => {
     const socketUrl = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:5052';
@@ -72,19 +98,49 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       setIsConnected(false);
     });
 
+    // Evento disparado quando um lead é atribuído ao atendente atual
     socketInstance.on('lead:assigned', (data: any) => {
       addToast({
         type: 'assigned',
         title: '🎯 Novo Lead Atribuído (SLA Ativo)',
-        message: `Lead ${data.name || 'Novo Lead'} atribuído a você!`
+        message: `Lead ${data.name || 'Novo Lead'} atribuído a você!`,
       });
+      notificationSound.playNotification();
     });
 
-    socketInstance.on('lead:timeout_removed', (data: any) => {
+    // Evento disparado quando qualquer lead novo é criado no sistema (para administradores / supervisores)
+    socketInstance.on('lead:created', (data: any) => {
+      if (typeof window !== 'undefined') {
+        const storedUser = sessionStorage.getItem('user');
+        let currentUserId = '';
+        let role = '';
+        if (storedUser) {
+          try {
+            const parsed = JSON.parse(storedUser);
+            currentUserId = parsed?.id || '';
+            role = parsed?.role || '';
+          } catch (_) {}
+        }
+
+        // Se for admin, supervisor ou gerente (ou se o lead foi para o balde sem atendente)
+        // e não for o atendente que já recebeu via lead:assigned:
+        const isAssignedToMe = data.current_attendant_id === currentUserId;
+        if (!isAssignedToMe && role && role !== 'attendant') {
+          addToast({
+            type: 'new_lead',
+            title: '📥 Novo Lead no Sistema',
+            message: `${data.name || 'Novo Lead'} (${data.campaign_name || data.channel_code || 'Geral'})`,
+          });
+          notificationSound.playNotification();
+        }
+      }
+    });
+
+    socketInstance.on('lead:timeout_removed', () => {
       addToast({
         type: 'sla_warning',
         title: '⚠️ Lead Realocado por Estouro de SLA',
-        message: `Um lead foi redirecionado para outro atendente por tempo limite.`
+        message: `Um lead foi redirecionado para outro atendente por tempo limite.`,
       });
     });
 
@@ -92,21 +148,29 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       addToast({
         type: 'reassigned',
         title: '🔄 Lead Reatribuído',
-        message: `Lead ${data.name || ''} foi transferido.`
+        message: `Lead ${data.name || ''} foi transferido.`,
       });
     });
-
-
 
     setSocket(socketInstance);
 
     return () => {
       socketInstance.disconnect();
     };
-  }, []);
+  }, [addToast, removeToast]);
 
   return (
-    <SocketContext.Provider value={{ socket, isConnected, toasts, removeToast }}>
+    <SocketContext.Provider
+      value={{
+        socket,
+        isConnected,
+        toasts,
+        removeToast,
+        isSoundEnabled,
+        toggleSound,
+        playNotificationSound,
+      }}
+    >
       {children}
       {/* Toast Notification Container */}
       <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-3 max-w-sm w-full pointer-events-none">

@@ -69,6 +69,9 @@ async def emit_lead_reassigned(old_attendant_id: str, new_attendant_id: str, lea
         await sio.emit("lead:assigned", lead_data, room=f"user_{new_attendant_id}")
     await sio.emit("leads:updated", lead_data)
 
+async def emit_lead_created(lead_data: dict):
+    await sio.emit("lead:created", lead_data)
+
 async def emit_lead_updated(lead_data: dict):
     await sio.emit("leads:updated", lead_data)
 

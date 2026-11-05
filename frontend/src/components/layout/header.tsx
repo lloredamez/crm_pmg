@@ -3,7 +3,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useSocket } from '@/features/socket/socket-provider';
 import { useAuth } from '@/features/auth/auth-provider';
-import { Zap, Users, UserCog, LogOut, Check, Settings, ChevronDown, Share2, Calculator } from 'lucide-react';
+import { Zap, Users, UserCog, LogOut, Check, Settings, ChevronDown, Share2, Calculator, Volume2, VolumeX } from 'lucide-react';
 import { Channel } from '@/features/leads/types';
 import { cn } from '@/lib/utils';
 
@@ -28,7 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   selectedChannelCode,
   onSelectChannel,
 }) => {
-  const { isConnected } = useSocket();
+  const { isConnected, isSoundEnabled, toggleSound } = useSocket();
   const { user, logout, isAdmin, isManager } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isChannelHovered, setIsChannelHovered] = useState(false);
@@ -241,11 +241,33 @@ export const Header: React.FC<HeaderProps> = ({
         </nav>
 
         {/* User Actions & Avatar Menu */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Sound Toggle Button */}
+          <button
+            onClick={toggleSound}
+            className={cn(
+              'p-2 rounded-full border transition-all flex items-center justify-center cursor-pointer',
+              isSoundEnabled
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                : 'bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200/80'
+            )}
+            title={
+              isSoundEnabled
+                ? 'Som de novos leads: Ativado (clique para silenciar)'
+                : 'Som de novos leads: Mudo (clique para ativar)'
+            }
+          >
+            {isSoundEnabled ? (
+              <Volume2 className="w-4 h-4" />
+            ) : (
+              <VolumeX className="w-4 h-4" />
+            )}
+          </button>
+
           {/* Trigger Mock Lead Button */}
           <button
             onClick={onOpenSimulateModal}
-            className="bg-brand-600 hover:bg-brand-700 text-white font-medium text-xs px-3.5 py-2 rounded-full shadow-sm shadow-brand-500/20 transition-all flex items-center gap-1.5"
+            className="bg-brand-600 hover:bg-brand-700 text-white font-medium text-xs px-3.5 py-2 rounded-full shadow-sm shadow-brand-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
           >
             + Simular
           </button>
@@ -369,6 +391,35 @@ export const Header: React.FC<HeaderProps> = ({
                       </button>
                     </div>
                   </div>
+
+                  <div className="border-t border-slate-100 my-1.5" />
+
+                  {/* Sound Toggle Option in Menu */}
+                  <button
+                    onClick={() => {
+                      toggleSound();
+                    }}
+                    className="w-full flex items-center justify-between px-2.5 py-2 rounded-xl text-xs text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2">
+                      {isSoundEnabled ? (
+                        <Volume2 className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <VolumeX className="w-4 h-4 text-slate-400" />
+                      )}
+                      <span>Som de Notificação</span>
+                    </div>
+                    <span
+                      className={cn(
+                        'text-[10px] font-bold px-2 py-0.5 rounded-full',
+                        isSoundEnabled
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-slate-200 text-slate-600'
+                      )}
+                    >
+                      {isSoundEnabled ? 'Ativo' : 'Mudo'}
+                    </span>
+                  </button>
 
                   <div className="border-t border-slate-100 my-1.5" />
 
