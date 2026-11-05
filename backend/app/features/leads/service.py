@@ -100,7 +100,7 @@ class LeadService:
             await self.db.commit()
 
             try:
-                from app.core.socket_manager import emit_lead_assigned
+                from app.core.socket_manager import emit_lead_assigned, emit_lead_created
                 lead_dict = {
                     "id": str(lead.id),
                     "name": lead.name,
@@ -114,6 +114,7 @@ class LeadService:
                     "custom_fields": lead.custom_fields,
                 }
                 await emit_lead_assigned(str(assigned_user.id), lead_dict)
+                await emit_lead_created(lead_dict)
             except Exception:
                 pass
 
@@ -143,7 +144,7 @@ class LeadService:
             await self.db.commit()
 
             try:
-                from app.core.socket_manager import emit_lead_updated
+                from app.core.socket_manager import emit_lead_updated, emit_lead_created
                 lead_dict = {
                     "id": str(bucket_lead.id),
                     "name": bucket_lead.name,
@@ -155,6 +156,7 @@ class LeadService:
                     "custom_fields": bucket_lead.custom_fields,
                 }
                 await emit_lead_updated(lead_dict)
+                await emit_lead_created(lead_dict)
             except Exception:
                 pass
 
@@ -226,6 +228,41 @@ class LeadService:
         eligible_users.sort(key=lambda x: x[0])
         return eligible_users[0][1]
 
+    async def _validate_user_can_access_channel(self, current_user: User, channel_code: Optional[str]) -> bool:
+        """
+        Valida se o usuário tem permissão para acessar ou resgatar leads do canal:
+        - Administradores têm acesso total a todos os canais.
+        - Se o canal não tem unidades configuradas (canal global) ou channel_code é vazio, acesso é liberado.
+        - Caso contrário, a unidade do atendente/supervisor (ou uma das unidades do gerente)
+          deve fazer parte das unidades vinculadas ao canal.
+        """
+        if not channel_code or not channel_code.strip():
+            return True
+        if current_user.role == "admin":
+            return True
+
+        chan_res = await self.db.execute(
+            select(Channel)
+            .options(selectinload(Channel.units))
+            .where(func.lower(Channel.code) == func.lower(channel_code.strip()))
+        )
+        chan = chan_res.scalar_one_or_none()
+        if not chan or not chan.units:
+            return True
+
+        channel_unit_ids = {u.id for u in chan.units}
+
+        if current_user.role == "manager":
+            managed_ids = set(current_user.managed_unit_ids or [])
+            if current_user.unit_id:
+                managed_ids.add(current_user.unit_id)
+            return bool(managed_ids & channel_unit_ids)
+
+        if current_user.unit_id:
+            return current_user.unit_id in channel_unit_ids
+
+        return False
+
     async def get_lead_by_id(self, lead_id: UUID, current_user: Optional[User] = None):
         query = select(Lead).options(selectinload(Lead.current_attendant), selectinload(Lead.unit), selectinload(Lead.disposition)).where(Lead.id == lead_id)
         if current_user:
@@ -289,25 +326,40 @@ class LeadService:
                 return [], 0
             b_query = select(BucketLead).options(selectinload(BucketLead.unit))
 
-            if current_user:
-                if current_user.role == "manager":
-                    managed_unit_ids = [u.id for u in current_user.managed_units] if current_user.managed_units else []
-                    if managed_unit_ids:
-                        b_query = b_query.where(or_(BucketLead.unit_id.is_(None), BucketLead.unit_id.in_(managed_unit_ids)))
-                elif current_user.role == "supervisor":
-                    if current_user.unit_id:
-                        b_query = b_query.where(or_(BucketLead.unit_id.is_(None), BucketLead.unit_id == current_user.unit_id))
-                elif current_user.role == "attendant":
-                    if current_user.unit_id:
-                        b_query = b_query.where(or_(BucketLead.unit_id.is_(None), BucketLead.unit_id == current_user.unit_id))
-
             if channel_filter and channel_filter.strip() and channel_filter.strip().lower() != "all":
+                chan_code = channel_filter.strip()
+                if current_user and not await self._validate_user_can_access_channel(current_user, chan_code):
+                    return [], 0
+
                 b_query = b_query.where(
                     BucketLead.channel_code.is_not(None),
-                    func.lower(func.trim(BucketLead.channel_code)) == channel_filter.strip().lower()
+                    func.lower(func.trim(BucketLead.channel_code)) == chan_code.lower()
                 )
             else:
-                return [], 0
+                # Se não informou canal específico, filtra pelos canais que incluem a unidade do usuário
+                if current_user and current_user.role != "admin":
+                    user_unit_ids = set()
+                    if current_user.role == "manager":
+                        user_unit_ids = set(current_user.managed_unit_ids or [])
+                        if current_user.unit_id:
+                            user_unit_ids.add(current_user.unit_id)
+                    elif current_user.unit_id:
+                        user_unit_ids.add(current_user.unit_id)
+
+                    all_chans_res = await self.db.execute(
+                        select(Channel).options(selectinload(Channel.units)).where(Channel.is_active.is_(True))
+                    )
+                    accessible_codes = []
+                    for ch in all_chans_res.scalars().all():
+                        if not ch.units or any(u.id in user_unit_ids for u in ch.units):
+                            accessible_codes.append(ch.code.lower())
+
+                    if accessible_codes:
+                        b_query = b_query.where(
+                            func.lower(func.trim(BucketLead.channel_code)).in_(accessible_codes)
+                        )
+                    else:
+                        return [], 0
 
             if banco_filter and banco_filter.lower() != "all":
                 b_query = b_query.where(BucketLead.banco.ilike(f"%{banco_filter}%"))
@@ -671,6 +723,13 @@ class LeadService:
 
         bucket_lead = await self.db.get(BucketLead, lead_id)
         if bucket_lead:
+            # Valida se o usuário pertence a uma das unidades participantes do canal do lead
+            if not await self._validate_user_can_access_channel(current_user, bucket_lead.channel_code):
+                raise HTTPException(
+                    status_code=403,
+                    detail="Sua unidade não tem permissão para pegar leads deste canal."
+                )
+
             if current_user.role == "attendant":
                 from app.models.disposition import Disposition
                 active_count_res = await self.db.execute(
@@ -764,6 +823,13 @@ class LeadService:
         if lead.current_attendant_id is not None and lead.status not in ["new", "expired"]:
             raise HTTPException(status_code=400, detail="Este lead já está atribuído a outro atendente")
 
+        # Valida se o usuário pertence a uma das unidades participantes do canal do lead
+        if not await self._validate_user_can_access_channel(current_user, lead.channel_code):
+            raise HTTPException(
+                status_code=403,
+                detail="Sua unidade não tem permissão para pegar leads deste canal."
+            )
+
         # Checagem de capacidade caso o usuário seja atendente
         if current_user.role == "attendant":
             from app.models.disposition import Disposition
@@ -794,6 +860,7 @@ class LeadService:
         lead.current_attendant_id = current_user.id
         lead.status = "assigned"
         lead.assigned_at = now
+        lead.unit_id = current_user.unit_id or lead.unit_id
         if not lead.disposition_id:
             lead.disposition_timeout_at = await calculate_smart_business_deadline(
                 self.db, now, target_sla_minutes
