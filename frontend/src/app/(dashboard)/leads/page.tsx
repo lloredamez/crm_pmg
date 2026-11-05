@@ -12,7 +12,6 @@ import { LeadTable } from '@/components/leads/lead-table';
 import { LeadModal } from '@/components/leads/lead-modal';
 import { LeadDetailsModal } from '@/components/leads/lead-details-modal';
 import { TabulateLeadModal } from '@/components/leads/tabulate-lead-modal';
-import { SimulateLeadModal } from '@/components/leads/simulate-lead-modal';
 import { UserManagement } from '@/components/users/user-management';
 import { SettingsPage } from '@/components/settings/settings-page';
 import { SimulationsManagement } from '@/components/simulations/simulations-management';
@@ -41,7 +40,6 @@ export default function LeadsDashboardPage() {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [selectedDetailsLead, setSelectedDetailsLead] = useState<Lead | null>(null);
   const [selectedTabulateLead, setSelectedTabulateLead] = useState<Lead | null>(null);
-  const [isSimulateModalOpen, setIsSimulateModalOpen] = useState(false);
   const [filterOnlyMyLeads, setFilterOnlyMyLeads] = useState(false);
 
   // Redirect if not authenticated
@@ -288,7 +286,6 @@ export default function LeadsDashboardPage() {
         setActiveTab={setActiveTab}
         currentUserStatus={currentUserStatus}
         onStatusChange={handleStatusChange}
-        onOpenSimulateModal={() => setIsSimulateModalOpen(true)}
         channels={availableChannels}
         selectedChannelCode={effectiveChannelFilter}
         onSelectChannel={(chCode) => {
@@ -412,12 +409,6 @@ export default function LeadsDashboardPage() {
         lead={selectedTabulateLead}
         isOpen={!!selectedTabulateLead}
         onClose={() => setSelectedTabulateLead(null)}
-        onSuccess={refetchLeads}
-      />
-
-      <SimulateLeadModal
-        isOpen={isSimulateModalOpen}
-        onClose={() => setIsSimulateModalOpen(false)}
         onSuccess={refetchLeads}
       />
     </div>

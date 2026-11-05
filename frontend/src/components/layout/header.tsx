@@ -12,7 +12,6 @@ interface HeaderProps {
   setActiveTab: (tab: string) => void;
   currentUserStatus: string;
   onStatusChange: (status: string) => void;
-  onOpenSimulateModal: () => void;
   channels?: Channel[];
   selectedChannelCode?: string;
   onSelectChannel?: (channelCode: string) => void;
@@ -23,7 +22,6 @@ export const Header: React.FC<HeaderProps> = ({
   setActiveTab,
   currentUserStatus,
   onStatusChange,
-  onOpenSimulateModal,
   channels = [],
   selectedChannelCode,
   onSelectChannel,
@@ -262,14 +260,6 @@ export const Header: React.FC<HeaderProps> = ({
             ) : (
               <VolumeX className="w-4 h-4" />
             )}
-          </button>
-
-          {/* Trigger Mock Lead Button */}
-          <button
-            onClick={onOpenSimulateModal}
-            className="bg-brand-600 hover:bg-brand-700 text-white font-medium text-xs px-3.5 py-2 rounded-full shadow-sm shadow-brand-500/20 transition-all flex items-center gap-1.5 cursor-pointer"
-          >
-            + Simular
           </button>
 
           {/* User Avatar Circle with Status Popover */}
