@@ -79,6 +79,10 @@ async def emit_sla_warning(attendant_id: str, lead_data: dict):
     room = f"user_{attendant_id}"
     await sio.emit("sla:warning", lead_data, room=room)
 
+async def emit_attendant_esteira_full(attendant_id: str, data: dict):
+    room = f"user_{attendant_id}"
+    await sio.emit("esteira:full", data, room=room)
+
 async def emit_user_status_updated(user_id: Any, status: str, user_name: str = None):
     await sio.emit("user:status_updated", {
         "user_id": str(user_id),

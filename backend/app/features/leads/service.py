@@ -100,7 +100,8 @@ class LeadService:
             await self.db.commit()
 
             try:
-                from app.core.socket_manager import emit_lead_assigned, emit_lead_created
+                from app.core.socket_manager import emit_lead_assigned, emit_lead_created, emit_attendant_esteira_full
+                active_count, max_leads, is_full = await self.check_attendant_esteira_capacity(assigned_user.id)
                 lead_dict = {
                     "id": str(lead.id),
                     "name": lead.name,
@@ -112,9 +113,19 @@ class LeadService:
                     "assigned_at": lead.assigned_at.isoformat() if lead.assigned_at else None,
                     "attendant_name": assigned_user.name,
                     "custom_fields": lead.custom_fields,
+                    "is_esteira_full": is_full,
+                    "active_count": active_count,
+                    "max_leads": max_leads,
                 }
                 await emit_lead_assigned(str(assigned_user.id), lead_dict)
                 await emit_lead_created(lead_dict)
+                if is_full:
+                    await emit_attendant_esteira_full(str(assigned_user.id), {
+                        "active_count": active_count,
+                        "max_leads": max_leads,
+                        "lead_id": str(lead.id),
+                        "lead_name": lead.name,
+                    })
             except Exception:
                 pass
 
@@ -262,6 +273,37 @@ class LeadService:
             return current_user.unit_id in channel_unit_ids
 
         return False
+
+    async def check_attendant_esteira_capacity(self, attendant_id: UUID) -> Tuple[int, int, bool]:
+        """
+        Calcula a ocupação atual da esteira do atendente e verifica se está cheia:
+        - active_count: quantidade de leads em aberto / sem tabulação na esteira
+        - max_leads: limite máximo de leads simultâneos do atendente (user.max_simultaneous_leads)
+        - is_full: True se active_count >= max_leads
+        """
+        user = await self.db.get(User, attendant_id)
+        if not user or user.role != "attendant":
+            return (0, 10, False)
+
+        from app.models.disposition import Disposition
+        active_count_res = await self.db.execute(
+            select(func.count(Lead.id))
+            .outerjoin(Disposition, Lead.disposition_id == Disposition.id)
+            .where(
+                Lead.current_attendant_id == attendant_id,
+                Lead.is_simulation.is_(False),
+                Lead.status.in_(["assigned", "in_progress"]),
+                or_(
+                    Lead.disposition_id.is_(None),
+                    Disposition.category.ilike("%Sem Tabulação%"),
+                    Disposition.name.ilike("%Sem Tabulação%")
+                )
+            )
+        )
+        cnt = active_count_res.scalar() or 0
+        max_leads = user.max_simultaneous_leads or 10
+        is_full = cnt >= max_leads
+        return (cnt, max_leads, is_full)
 
     async def get_lead_by_id(self, lead_id: UUID, current_user: Optional[User] = None):
         query = select(Lead).options(selectinload(Lead.current_attendant), selectinload(Lead.unit), selectinload(Lead.disposition)).where(Lead.id == lead_id)
@@ -705,6 +747,8 @@ class LeadService:
         new_attendant_res = await self.db.execute(select(User).where(User.id == new_attendant_id))
         new_attendant = new_attendant_res.scalar_one_or_none()
 
+        active_count, max_leads, is_full = await self.check_attendant_esteira_capacity(new_attendant_id)
+
         lead_dict = {
             "id": str(lead.id),
             "name": lead.name,
@@ -712,9 +756,20 @@ class LeadService:
             "email": lead.email,
             "status": lead.status,
             "assigned_at": lead.assigned_at.isoformat() if lead.assigned_at else None,
-            "attendant_name": new_attendant.name if new_attendant else ""
+            "attendant_name": new_attendant.name if new_attendant else "",
+            "is_esteira_full": is_full,
+            "active_count": active_count,
+            "max_leads": max_leads,
         }
         await emit_lead_reassigned(str(old_attendant_id) if old_attendant_id else "", str(new_attendant_id), lead_dict)
+        if is_full:
+            from app.core.socket_manager import emit_attendant_esteira_full
+            await emit_attendant_esteira_full(str(new_attendant_id), {
+                "active_count": active_count,
+                "max_leads": max_leads,
+                "lead_id": str(lead.id),
+                "lead_name": lead.name,
+            })
 
         return await self.get_lead_by_id(lead_id)
 
@@ -801,6 +856,8 @@ class LeadService:
             await self.db.commit()
 
             try:
+                from app.core.socket_manager import emit_attendant_esteira_full
+                active_count, max_leads, is_full = await self.check_attendant_esteira_capacity(current_user.id)
                 lead_dict = {
                     "id": str(lead.id),
                     "name": lead.name,
@@ -808,9 +865,19 @@ class LeadService:
                     "email": lead.email,
                     "status": lead.status,
                     "assigned_at": lead.assigned_at.isoformat() if lead.assigned_at else None,
-                    "attendant_name": current_user.name
+                    "attendant_name": current_user.name,
+                    "is_esteira_full": is_full,
+                    "active_count": active_count,
+                    "max_leads": max_leads,
                 }
                 await emit_lead_assigned(str(current_user.id), lead_dict)
+                if is_full:
+                    await emit_attendant_esteira_full(str(current_user.id), {
+                        "active_count": active_count,
+                        "max_leads": max_leads,
+                        "lead_id": str(lead.id),
+                        "lead_name": lead.name,
+                    })
             except Exception:
                 pass
 
@@ -878,6 +945,8 @@ class LeadService:
 
         # Dispara notificação via Socket
         try:
+            from app.core.socket_manager import emit_attendant_esteira_full
+            active_count, max_leads, is_full = await self.check_attendant_esteira_capacity(current_user.id)
             lead_dict = {
                 "id": str(lead.id),
                 "name": lead.name,
@@ -885,9 +954,19 @@ class LeadService:
                 "email": lead.email,
                 "status": lead.status,
                 "assigned_at": lead.assigned_at.isoformat() if lead.assigned_at else None,
-                "attendant_name": current_user.name
+                "attendant_name": current_user.name,
+                "is_esteira_full": is_full,
+                "active_count": active_count,
+                "max_leads": max_leads,
             }
             await emit_lead_assigned(str(current_user.id), lead_dict)
+            if is_full:
+                await emit_attendant_esteira_full(str(current_user.id), {
+                    "active_count": active_count,
+                    "max_leads": max_leads,
+                    "lead_id": str(lead.id),
+                    "lead_name": lead.name,
+                })
         except Exception:
             pass
 
