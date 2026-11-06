@@ -1,3 +1,4 @@
+import os
 import re
 import math
 import logging
@@ -27,6 +28,19 @@ def _format_cpf(clean_cpf: str) -> str:
 
 def _clean_cpf(cpf_str: str) -> str:
     return re.sub(r"\D", "", cpf_str or "")
+
+def _clean_phone(phone_str: Optional[str]) -> str:
+    cleaned = re.sub(r"\D", "", phone_str or "")
+    if cleaned.startswith("55") and len(cleaned) in (12, 13):
+        cleaned = cleaned[2:]
+    return cleaned
+
+def _format_phone(clean_phone: str) -> str:
+    if len(clean_phone) == 11:
+        return f"({clean_phone[:2]}) {clean_phone[2:7]}-{clean_phone[7:]}"
+    elif len(clean_phone) == 10:
+        return f"({clean_phone[:2]}) {clean_phone[2:6]}-{clean_phone[6:]}"
+    return clean_phone
 
 def _get_simulation_webhook_url() -> Optional[str]:
     """Obtém a URL do webhook das configurações ou lê diretamente do arquivo .env."""
@@ -60,6 +74,7 @@ class SimulationService:
             id=lead.id,
             name=lead.name or "Aguardando simulação...",
             cpf=lead.cpf,
+            phone=lead.phone,
             valor_liberado=lead.valor_liberado,
             quantidade_parcelas=lead.prazo,
             valor_parcela=lead.valor_parcela,
@@ -81,6 +96,11 @@ class SimulationService:
         if not clean_cpf or len(clean_cpf) != 11:
             raise ValueError("CPF inválido. Deve conter 11 dígitos numéricos.")
 
+        clean_phone = _clean_phone(data.phone) if data.phone else ""
+        if clean_phone and len(clean_phone) not in (10, 11):
+            raise ValueError("Número de celular inválido. Deve conter DDD e 8 ou 9 dígitos.")
+        formatted_phone = _format_phone(clean_phone) if clean_phone else (data.phone.strip() if data.phone else "")
+
         formatted_cpf = _format_cpf(clean_cpf)
         now = datetime.now(timezone.utc)
 
@@ -88,6 +108,7 @@ class SimulationService:
             name="Aguardando simulação...",
             cpf=formatted_cpf,
             verified_cpf=clean_cpf,
+            phone=formatted_phone,
             channel_code="SIMULACAO",
             is_simulation=True,
             simulation_status="pending",
@@ -108,6 +129,8 @@ class SimulationService:
                 "lead_id": str(lead.id),
                 "cpf": clean_cpf,
                 "cpf_formatted": formatted_cpf,
+                "phone": formatted_phone,
+                "phone_clean": clean_phone,
                 "attendant_id": str(current_user.id),
                 "attendant_name": current_user.name,
                 "unit_id": str(current_user.unit_id) if current_user.unit_id else None,
@@ -150,6 +173,7 @@ class SimulationService:
             await sio.emit("simulation:created", {
                 "id": str(lead_loaded.id),
                 "cpf": lead_loaded.cpf,
+                "phone": lead_loaded.phone,
                 "attendant_id": str(lead_loaded.current_attendant_id),
                 "simulation_status": lead_loaded.simulation_status,
                 "created_at": lead_loaded.created_at.isoformat()
@@ -193,6 +217,9 @@ class SimulationService:
             if clean_s:
                 conditions.append(Lead.cpf.ilike(f"%{clean_s}%"))
                 conditions.append(Lead.verified_cpf.ilike(f"%{clean_s}%"))
+                conditions.append(Lead.phone.ilike(f"%{clean_s}%"))
+            else:
+                conditions.append(Lead.phone.ilike(f"%{s}%"))
             query = query.where(or_(*conditions))
 
         # Contagem total
@@ -241,6 +268,9 @@ class SimulationService:
         # Atualização dos campos fornecidos
         if data.nome:
             lead.name = data.nome.strip()
+        if data.phone:
+            clean_p = _clean_phone(data.phone)
+            lead.phone = _format_phone(clean_p) if clean_p else data.phone.strip()
         if data.valor_liberado is not None:
             lead.valor_liberado = float(data.valor_liberado)
         if data.quantidade_parcelas is not None:
@@ -272,6 +302,7 @@ class SimulationService:
                 "id": str(lead.id),
                 "name": lead.name,
                 "cpf": lead.cpf,
+                "phone": lead.phone,
                 "valor_liberado": lead.valor_liberado,
                 "quantidade_parcelas": lead.prazo,
                 "valor_parcela": lead.valor_parcela,

@@ -5,10 +5,12 @@ from pydantic import BaseModel, Field
 
 class SimulationCreate(BaseModel):
     cpf: str = Field(..., description="CPF do cliente para a simulação")
+    phone: Optional[str] = Field(None, description="Número de celular com DDD do cliente")
 
 class SimulationUpdate(BaseModel):
     nome: Optional[str] = Field(None, description="Nome do cliente retornado pela simulação")
     cpf: Optional[str] = Field(None, description="CPF do cliente")
+    phone: Optional[str] = Field(None, description="Número de celular com DDD do cliente")
     valor_liberado: Optional[float] = Field(None, description="Valor total liberado/aprovado")
     quantidade_parcelas: Optional[int] = Field(None, description="Quantidade de parcelas (prazo)")
     valor_parcela: Optional[float] = Field(None, description="Valor individual de cada parcela")
@@ -21,6 +23,7 @@ class SimulationResponse(BaseModel):
     id: UUID
     name: str
     cpf: Optional[str] = None
+    phone: Optional[str] = None
     valor_liberado: Optional[float] = None
     quantidade_parcelas: Optional[int] = None
     valor_parcela: Optional[float] = None
