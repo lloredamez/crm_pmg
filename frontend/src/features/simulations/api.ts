@@ -47,12 +47,20 @@ export async function fetchSimulations(params: {
   return handleResponse<SimulationPaginationResponse>(res);
 }
 
-export async function createSimulation(cpf: string): Promise<Simulation> {
+export interface CreateSimulationParams {
+  cpf: string;
+  phone?: string;
+}
+
+export async function createSimulation(
+  params: string | CreateSimulationParams
+): Promise<Simulation> {
   const API_URL = getApiUrl();
+  const payload = typeof params === 'string' ? { cpf: params } : params;
   const res = await fetch(`${API_URL}/api/v1/simulations`, {
     method: 'POST',
     headers: getAuthHeaders(),
-    body: JSON.stringify({ cpf }),
+    body: JSON.stringify(payload),
   });
   return handleResponse<Simulation>(res);
 }

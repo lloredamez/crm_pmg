@@ -21,6 +21,7 @@ export interface Simulation {
   id: string;
   name: string;
   cpf?: string | null;
+  phone?: string | null;
   valor_liberado?: number | null;
   quantidade_parcelas?: number | null;
   valor_parcela?: number | null;
