@@ -6,7 +6,7 @@ import { notificationSound } from '@/lib/sound';
 
 interface ToastNotification {
   id: string;
-  type: 'assigned' | 'reassigned' | 'sla_warning' | 'new_lead';
+  type: 'assigned' | 'reassigned' | 'sla_warning' | 'new_lead' | 'esteira_full';
   title: string;
   message: string;
 }
@@ -19,6 +19,7 @@ interface SocketContextType {
   isSoundEnabled: boolean;
   toggleSound: () => boolean;
   playNotificationSound: () => void;
+  playUrgentAlertSound: () => void;
 }
 
 const SocketContext = createContext<SocketContextType>({
@@ -29,6 +30,7 @@ const SocketContext = createContext<SocketContextType>({
   isSoundEnabled: true,
   toggleSound: () => true,
   playNotificationSound: () => {},
+  playUrgentAlertSound: () => {},
 });
 
 export const useSocket = () => useContext(SocketContext);
@@ -55,6 +57,10 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const playNotificationSound = useCallback(() => {
     notificationSound.playNotification();
+  }, []);
+
+  const playUrgentAlertSound = useCallback(() => {
+    notificationSound.playUrgentAlert();
   }, []);
 
   const addToast = useCallback((notification: Omit<ToastNotification, 'id'>) => {
@@ -100,12 +106,31 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
     // Evento disparado quando um lead é atribuído ao atendente atual
     socketInstance.on('lead:assigned', (data: any) => {
+      if (data?.is_esteira_full) {
+        addToast({
+          type: 'esteira_full',
+          title: '🚨 Urgência: Esteira Cheia!',
+          message: `Sua esteira atingiu a capacidade máxima (${data.active_count || data.max_leads}/${data.max_leads || 10} leads). Tabule seus atendimentos pendentes!`,
+        });
+        notificationSound.playUrgentAlert();
+      } else {
+        addToast({
+          type: 'assigned',
+          title: '🎯 Novo Lead Atribuído (SLA Ativo)',
+          message: `Lead ${data.name || 'Novo Lead'} atribuído a você!`,
+        });
+        notificationSound.playNotification();
+      }
+    });
+
+    // Evento específico disparado quando a esteira do atendente enche
+    socketInstance.on('esteira:full', (data: any) => {
       addToast({
-        type: 'assigned',
-        title: '🎯 Novo Lead Atribuído (SLA Ativo)',
-        message: `Lead ${data.name || 'Novo Lead'} atribuído a você!`,
+        type: 'esteira_full',
+        title: '🚨 Urgência: Esteira Cheia!',
+        message: `Sua esteira atingiu o limite de ${data.max_leads || 10} leads sem tabulação. Tabule seus atendimentos pendentes!`,
       });
-      notificationSound.playNotification();
+      notificationSound.playUrgentAlert();
     });
 
     // Evento disparado quando qualquer lead novo é criado no sistema (para administradores / supervisores)
@@ -122,8 +147,8 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           } catch (_) {}
         }
 
-        // Se for admin, supervisor ou gerente (ou se o lead foi para o balde sem atendente)
-        // e não for o atendente que já recebeu via lead:assigned:
+        // Notificação visual no sistema para administradores / supervisores / gerentes
+        // Somente visual (o som toca exclusivamente quando um lead entra na esteira do atendente via lead:assigned)
         const isAssignedToMe = data.current_attendant_id === currentUserId;
         if (!isAssignedToMe && role && role !== 'attendant') {
           addToast({
@@ -131,7 +156,6 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             title: '📥 Novo Lead no Sistema',
             message: `${data.name || 'Novo Lead'} (${data.campaign_name || data.channel_code || 'Geral'})`,
           });
-          notificationSound.playNotification();
         }
       }
     });
@@ -169,28 +193,40 @@ export const SocketProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isSoundEnabled,
         toggleSound,
         playNotificationSound,
+        playUrgentAlertSound,
       }}
     >
       {children}
       {/* Toast Notification Container */}
       <div className="fixed bottom-5 right-5 z-50 flex flex-col gap-3 max-w-sm w-full pointer-events-none">
-        {toasts.map((toast) => (
-          <div
-            key={toast.id}
-            className="pointer-events-auto bg-slate-900 text-white rounded-2xl p-4 shadow-xl border border-indigo-500/30 flex items-start justify-between gap-3 animate-in fade-in slide-in-from-bottom-5 duration-300"
-          >
-            <div>
-              <h4 className="font-semibold text-sm text-indigo-300">{toast.title}</h4>
-              <p className="text-xs text-slate-300 mt-1">{toast.message}</p>
-            </div>
-            <button
-              onClick={() => removeToast(toast.id)}
-              className="text-slate-400 hover:text-white text-xs p-1"
+        {toasts.map((toast) => {
+          const isUrgent = toast.type === 'esteira_full';
+          return (
+            <div
+              key={toast.id}
+              className={`pointer-events-auto text-white rounded-2xl p-4 shadow-xl flex items-start justify-between gap-3 animate-in fade-in slide-in-from-bottom-5 duration-300 ${
+                isUrgent
+                  ? 'bg-rose-950/95 border-2 border-rose-500 shadow-rose-900/40 ring-2 ring-rose-500/20'
+                  : 'bg-slate-900 border border-indigo-500/30'
+              }`}
             >
-              ✕
-            </button>
-          </div>
-        ))}
+              <div>
+                <h4 className={`font-semibold text-sm ${isUrgent ? 'text-rose-200 font-bold' : 'text-indigo-300'}`}>
+                  {toast.title}
+                </h4>
+                <p className={`text-xs mt-1 ${isUrgent ? 'text-rose-100' : 'text-slate-300'}`}>
+                  {toast.message}
+                </p>
+              </div>
+              <button
+                onClick={() => removeToast(toast.id)}
+                className="text-slate-400 hover:text-white text-xs p-1 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          );
+        })}
       </div>
     </SocketContext.Provider>
   );

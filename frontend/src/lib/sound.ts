@@ -132,6 +132,89 @@ class NotificationSound {
       console.warn('Não foi possível tocar o som de notificação:', e);
     }
   }
+
+  private lastUrgentTime: number = 0;
+
+  /**
+   * Reproduz um som de alerta de URGÊNCIA (Esteira Cheia / Limite Atingido):
+   * Sequência vibrante de alerta em 3 pulsos rápidos com harmônico agudo de atenção
+   * Distinto do som suave de lead novo, sinalizando que a esteira está lotada e precisa de tabulação.
+   */
+  public playUrgentAlert() {
+    if (!this.soundEnabled || typeof window === 'undefined') return;
+
+    // Throttle para evitar sobreposição ou excesso de bipes em ações em lote
+    const currentTimeMs = Date.now();
+    if (currentTimeMs - this.lastUrgentTime < 2500) {
+      return;
+    }
+    this.lastUrgentTime = currentTimeMs;
+
+    try {
+      const ctx = this.ensureContext();
+      if (!ctx) return;
+
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+
+      const now = ctx.currentTime;
+
+      // Pulso 1: Tom de alerta A5 (880 Hz)
+      const osc1 = ctx.createOscillator();
+      const gain1 = ctx.createGain();
+      osc1.type = 'triangle';
+      osc1.frequency.setValueAtTime(880, now);
+      gain1.gain.setValueAtTime(0.0001, now);
+      gain1.gain.exponentialRampToValueAtTime(0.35, now + 0.015);
+      gain1.gain.exponentialRampToValueAtTime(0.0001, now + 0.11);
+      osc1.connect(gain1);
+      gain1.connect(ctx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.12);
+
+      // Pulso 2 (repetição rápida): Tom de alerta A5 (880 Hz)
+      const osc2 = ctx.createOscillator();
+      const gain2 = ctx.createGain();
+      osc2.type = 'triangle';
+      osc2.frequency.setValueAtTime(880, now + 0.13);
+      gain2.gain.setValueAtTime(0.0001, now + 0.13);
+      gain2.gain.exponentialRampToValueAtTime(0.4, now + 0.145);
+      gain2.gain.exponentialRampToValueAtTime(0.0001, now + 0.24);
+      osc2.connect(gain2);
+      gain2.connect(ctx.destination);
+      osc2.start(now + 0.13);
+      osc2.stop(now + 0.25);
+
+      // Pulso 3: Tom agudo de alarme D6 (1174.66 Hz) com sustentação
+      const osc3 = ctx.createOscillator();
+      const gain3 = ctx.createGain();
+      osc3.type = 'sine';
+      osc3.frequency.setValueAtTime(1174.66, now + 0.26);
+      gain3.gain.setValueAtTime(0.0001, now + 0.26);
+      gain3.gain.exponentialRampToValueAtTime(0.45, now + 0.28);
+      gain3.gain.exponentialRampToValueAtTime(0.0001, now + 0.70);
+      osc3.connect(gain3);
+      gain3.connect(ctx.destination);
+      osc3.start(now + 0.26);
+      osc3.stop(now + 0.75);
+
+      // Harmônico complementar agudo (F#6 - 1479.98 Hz) para máxima clareza sonora
+      const osc4 = ctx.createOscillator();
+      const gain4 = ctx.createGain();
+      osc4.type = 'sine';
+      osc4.frequency.setValueAtTime(1479.98, now + 0.27);
+      gain4.gain.setValueAtTime(0.0001, now + 0.27);
+      gain4.gain.exponentialRampToValueAtTime(0.2, now + 0.29);
+      gain4.gain.exponentialRampToValueAtTime(0.0001, now + 0.60);
+      osc4.connect(gain4);
+      gain4.connect(ctx.destination);
+      osc4.start(now + 0.27);
+      osc4.stop(now + 0.65);
+    } catch (e) {
+      console.warn('Não foi possível tocar o som de alerta urgente:', e);
+    }
+  }
 }
 
 export const notificationSound = new NotificationSound();
