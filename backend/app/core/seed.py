@@ -109,6 +109,54 @@ async def apply_database_migrations_and_schema():
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_lead_assignments_attendant_id ON lead_assignments (attendant_id);"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_lead_assignments_active ON lead_assignments (lead_id, attendant_id, status);"))
 
+        # Tabela e índices dedicados para simulações (isolados de tabulações e SLA)
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS simulation_leads (
+                id UUID PRIMARY KEY,
+                name VARCHAR(255) NOT NULL DEFAULT 'Aguardando simulação...',
+                phone VARCHAR(50) DEFAULT '',
+                cpf VARCHAR(14),
+                verified_cpf VARCHAR(14),
+                prazo INTEGER,
+                margem DOUBLE PRECISION,
+                valor_liberado DOUBLE PRECISION,
+                valor_parcela DOUBLE PRECISION,
+                banco VARCHAR(100),
+                tabela VARCHAR(100),
+                custom_fields JSON DEFAULT '{}'::json,
+                simulation_status VARCHAR(50) NOT NULL DEFAULT 'pending',
+                status VARCHAR(50) NOT NULL DEFAULT 'assigned',
+                current_attendant_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                unit_id UUID REFERENCES units(id) ON DELETE SET NULL,
+                webhook_sent_at TIMESTAMPTZ,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_leads_verified_cpf ON simulation_leads (verified_cpf);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_leads_status ON simulation_leads (simulation_status);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_leads_attendant ON simulation_leads (current_attendant_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_leads_unit ON simulation_leads (unit_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_leads_created_at ON simulation_leads (created_at DESC);"))
+
+        # Migrar registros legados de simulações que estavam na tabela leads
+        await conn.execute(text("""
+            INSERT INTO simulation_leads (
+                id, name, phone, cpf, verified_cpf, prazo, margem, valor_liberado, valor_parcela,
+                banco, tabela, custom_fields, simulation_status, status, current_attendant_id,
+                unit_id, webhook_sent_at, created_at, updated_at
+            )
+            SELECT
+                id, name, phone, cpf, verified_cpf, prazo, margem, valor_liberado, valor_parcela,
+                banco, tabela, custom_fields, COALESCE(simulation_status, 'pending'), status, current_attendant_id,
+                unit_id, webhook_sent_at, created_at, NOW()
+            FROM leads
+            WHERE is_simulation = TRUE
+            ON CONFLICT (id) DO NOTHING;
+        """))
+        await conn.execute(text("DELETE FROM leads WHERE is_simulation = TRUE;"))
+
+
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_lead_tabulations_lead_id ON lead_tabulations (lead_id);"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_lead_tabulations_attendant_id ON lead_tabulations (attendant_id);"))
 

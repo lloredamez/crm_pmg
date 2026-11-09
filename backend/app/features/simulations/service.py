@@ -11,7 +11,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.models.lead import Lead
+from app.models.simulation_lead import SimulationLead
 from app.models.user import User
 from app.schemas.simulation import (
     SimulationCreate,
@@ -67,7 +67,7 @@ class SimulationService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    def _to_response(self, lead: Lead) -> SimulationResponse:
+    def _to_response(self, lead: SimulationLead) -> SimulationResponse:
         attendant_name = lead.current_attendant.name if lead.current_attendant else None
         unit_name = lead.unit.name if lead.unit else None
         return SimulationResponse(
@@ -104,18 +104,15 @@ class SimulationService:
         formatted_cpf = _format_cpf(clean_cpf)
         now = datetime.now(timezone.utc)
 
-        lead = Lead(
+        lead = SimulationLead(
             name="Aguardando simulação...",
             cpf=formatted_cpf,
             verified_cpf=clean_cpf,
             phone=formatted_phone,
-            channel_code="SIMULACAO",
-            is_simulation=True,
             simulation_status="pending",
             status="assigned",
             current_attendant_id=current_user.id,
             unit_id=current_user.unit_id,
-            assigned_at=now,
             created_at=now
         )
         self.db.add(lead)
@@ -158,9 +155,9 @@ class SimulationService:
 
         # Carregar relacionamentos para serialização
         query = (
-            select(Lead)
-            .options(selectinload(Lead.current_attendant), selectinload(Lead.unit))
-            .where(Lead.id == lead.id)
+            select(SimulationLead)
+            .options(selectinload(SimulationLead.current_attendant), selectinload(SimulationLead.unit))
+            .where(SimulationLead.id == lead.id)
         )
         lead_res = await self.db.execute(query)
         lead_loaded = lead_res.scalar_one()
@@ -192,34 +189,33 @@ class SimulationService:
         status: Optional[str] = None
     ) -> Tuple[List[SimulationResponse], int]:
         query = (
-            select(Lead)
-            .options(selectinload(Lead.current_attendant), selectinload(Lead.unit))
-            .where(Lead.is_simulation.is_(True))
+            select(SimulationLead)
+            .options(selectinload(SimulationLead.current_attendant), selectinload(SimulationLead.unit))
         )
 
         # Regras de visualização por perfil
         if current_user.role == "attendant":
-            query = query.where(Lead.current_attendant_id == current_user.id)
+            query = query.where(SimulationLead.current_attendant_id == current_user.id)
         elif current_user.role == "supervisor" and current_user.unit_id:
-            query = query.where(Lead.unit_id == current_user.unit_id)
+            query = query.where(SimulationLead.unit_id == current_user.unit_id)
         elif current_user.role == "manager":
             managed_ids = current_user.managed_unit_ids or ([current_user.unit_id] if current_user.unit_id else [])
             if managed_ids:
-                query = query.where(Lead.unit_id.in_(managed_ids))
+                query = query.where(SimulationLead.unit_id.in_(managed_ids))
 
         if status and status.lower() != "all":
-            query = query.where(Lead.simulation_status == status.lower())
+            query = query.where(SimulationLead.simulation_status == status.lower())
 
         if search and search.strip():
             s = search.strip()
             clean_s = _clean_cpf(s)
-            conditions = [Lead.name.ilike(f"%{s}%")]
+            conditions = [SimulationLead.name.ilike(f"%{s}%")]
             if clean_s:
-                conditions.append(Lead.cpf.ilike(f"%{clean_s}%"))
-                conditions.append(Lead.verified_cpf.ilike(f"%{clean_s}%"))
-                conditions.append(Lead.phone.ilike(f"%{clean_s}%"))
+                conditions.append(SimulationLead.cpf.ilike(f"%{clean_s}%"))
+                conditions.append(SimulationLead.verified_cpf.ilike(f"%{clean_s}%"))
+                conditions.append(SimulationLead.phone.ilike(f"%{clean_s}%"))
             else:
-                conditions.append(Lead.phone.ilike(f"%{s}%"))
+                conditions.append(SimulationLead.phone.ilike(f"%{s}%"))
             query = query.where(or_(*conditions))
 
         # Contagem total
@@ -229,7 +225,7 @@ class SimulationService:
 
         # Paginação e ordenação
         offset = (page - 1) * limit
-        query = query.order_by(desc(Lead.created_at)).offset(offset).limit(limit)
+        query = query.order_by(desc(SimulationLead.created_at)).offset(offset).limit(limit)
 
         result = await self.db.execute(query)
         leads = list(result.scalars().all())
@@ -244,18 +240,17 @@ class SimulationService:
         data: SimulationUpdate
     ) -> SimulationResponse:
         query = (
-            select(Lead)
-            .options(selectinload(Lead.current_attendant), selectinload(Lead.unit))
-            .where(Lead.is_simulation.is_(True))
+            select(SimulationLead)
+            .options(selectinload(SimulationLead.current_attendant), selectinload(SimulationLead.unit))
         )
 
         if lead_id:
-            query = query.where(Lead.id == lead_id)
+            query = query.where(SimulationLead.id == lead_id)
         elif cpf:
             clean_cpf = _clean_cpf(cpf)
             query = query.where(
-                or_(Lead.verified_cpf == clean_cpf, Lead.cpf == _format_cpf(clean_cpf))
-            ).order_by(desc(Lead.created_at))
+                or_(SimulationLead.verified_cpf == clean_cpf, SimulationLead.cpf == _format_cpf(clean_cpf))
+            ).order_by(desc(SimulationLead.created_at))
         else:
             raise ValueError("É necessário informar lead_id ou cpf para atualizar a simulação.")
 
