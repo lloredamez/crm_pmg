@@ -116,13 +116,14 @@ async def apply_database_migrations_and_schema():
                 name VARCHAR(255) NOT NULL DEFAULT 'Aguardando simulação...',
                 phone VARCHAR(50) DEFAULT '',
                 cpf VARCHAR(14),
-                verified_cpf VARCHAR(14),
-                prazo INTEGER,
-                margem DOUBLE PRECISION,
-                valor_liberado DOUBLE PRECISION,
-                valor_parcela DOUBLE PRECISION,
-                banco VARCHAR(100),
-                tabela VARCHAR(100),
+                prazo_maximo INTEGER,
+                valor_bruto_maximo DOUBLE PRECISION,
+                valor_liberado_maximo DOUBLE PRECISION,
+                valor_parcela_maximo DOUBLE PRECISION,
+                proposta_prospect_id VARCHAR(255),
+                produto_id VARCHAR(255),
+                nome_produto VARCHAR(255),
+                notes TEXT,
                 custom_fields JSON DEFAULT '{}'::json,
                 simulation_status VARCHAR(50) NOT NULL DEFAULT 'pending',
                 status VARCHAR(50) NOT NULL DEFAULT 'assigned',
@@ -133,28 +134,136 @@ async def apply_database_migrations_and_schema():
                 updated_at TIMESTAMPTZ DEFAULT NOW()
             );
         """))
-        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_leads_verified_cpf ON simulation_leads (verified_cpf);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_leads_cpf ON simulation_leads (cpf);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_leads_phone ON simulation_leads (phone);"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_leads_status ON simulation_leads (simulation_status);"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_leads_attendant ON simulation_leads (current_attendant_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_leads_attendant_status ON simulation_leads (current_attendant_id, simulation_status);"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_leads_unit ON simulation_leads (unit_id);"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_leads_created_at ON simulation_leads (created_at DESC);"))
+        await conn.execute(text("ALTER TABLE simulation_leads ADD COLUMN IF NOT EXISTS proposta_prospect_id VARCHAR(255);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_leads_proposta_prospect_id ON simulation_leads (proposta_prospect_id);"))
+        await conn.execute(text("ALTER TABLE simulation_leads ADD COLUMN IF NOT EXISTS produto_id VARCHAR(255);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_leads_produto_id ON simulation_leads (produto_id);"))
+        await conn.execute(text("ALTER TABLE simulation_leads ADD COLUMN IF NOT EXISTS nome_produto VARCHAR(255);"))
+        await conn.execute(text("ALTER TABLE simulation_leads ADD COLUMN IF NOT EXISTS notes TEXT;"))
+        await conn.execute(text("ALTER TABLE simulation_leads DROP COLUMN IF EXISTS verified_cpf;"))
+        await conn.execute(text("ALTER TABLE simulation_leads DROP COLUMN IF EXISTS banco;"))
+        await conn.execute(text("ALTER TABLE simulation_leads DROP COLUMN IF EXISTS tabela;"))
+
+        # Renomeação / migração das colunas para representar os valores máximos no banco de dados
+        await conn.execute(text("""
+            DO $$
+            BEGIN
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'simulation_leads' AND column_name = 'margem') THEN
+                    ALTER TABLE simulation_leads RENAME COLUMN margem TO valor_bruto_maximo;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'simulation_leads' AND column_name = 'prazo') THEN
+                    ALTER TABLE simulation_leads RENAME COLUMN prazo TO prazo_maximo;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'simulation_leads' AND column_name = 'valor_liberado') THEN
+                    ALTER TABLE simulation_leads RENAME COLUMN valor_liberado TO valor_liberado_maximo;
+                END IF;
+                IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'simulation_leads' AND column_name = 'valor_parcela') THEN
+                    ALTER TABLE simulation_leads RENAME COLUMN valor_parcela TO valor_parcela_maximo;
+                END IF;
+            END $$;
+        """))
+        await conn.execute(text("ALTER TABLE simulation_leads ADD COLUMN IF NOT EXISTS valor_bruto_maximo DOUBLE PRECISION;"))
+        await conn.execute(text("ALTER TABLE simulation_leads ADD COLUMN IF NOT EXISTS prazo_maximo INTEGER;"))
+        await conn.execute(text("ALTER TABLE simulation_leads ADD COLUMN IF NOT EXISTS valor_liberado_maximo DOUBLE PRECISION;"))
+        await conn.execute(text("ALTER TABLE simulation_leads ADD COLUMN IF NOT EXISTS valor_parcela_maximo DOUBLE PRECISION;"))
 
         # Migrar registros legados de simulações que estavam na tabela leads
         await conn.execute(text("""
             INSERT INTO simulation_leads (
-                id, name, phone, cpf, verified_cpf, prazo, margem, valor_liberado, valor_parcela,
-                banco, tabela, custom_fields, simulation_status, status, current_attendant_id,
+                id, name, phone, cpf, prazo_maximo, valor_bruto_maximo, valor_liberado_maximo, valor_parcela_maximo,
+                notes, custom_fields, simulation_status, status, current_attendant_id,
                 unit_id, webhook_sent_at, created_at, updated_at
             )
             SELECT
-                id, name, phone, cpf, verified_cpf, prazo, margem, valor_liberado, valor_parcela,
-                banco, tabela, custom_fields, COALESCE(simulation_status, 'pending'), status, current_attendant_id,
+                id, name, phone, cpf, prazo, margem, valor_liberado, valor_parcela,
+                notes, custom_fields, COALESCE(simulation_status, 'pending'), status, current_attendant_id,
                 unit_id, webhook_sent_at, created_at, NOW()
             FROM leads
             WHERE is_simulation = TRUE
             ON CONFLICT (id) DO NOTHING;
         """))
         await conn.execute(text("DELETE FROM leads WHERE is_simulation = TRUE;"))
+
+        # Tabela e índices para o histórico de propostas/simulações (1:N com simulation_leads)
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS simulation_offers (
+                id UUID PRIMARY KEY,
+                simulation_lead_id UUID NOT NULL REFERENCES simulation_leads(id) ON DELETE CASCADE,
+                attendant_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                valor_bruto DOUBLE PRECISION,
+                valor_liberado DOUBLE PRECISION,
+                parcela INTEGER,
+                valor_parcela DOUBLE PRECISION,
+                taxa_juros DOUBLE PRECISION,
+                status VARCHAR(50) NOT NULL DEFAULT 'pending',
+                custom_fields JSON DEFAULT '{}'::json,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_offers_lead ON simulation_offers (simulation_lead_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_offers_lead_created ON simulation_offers (simulation_lead_id, created_at DESC);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_offers_attendant ON simulation_offers (attendant_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_offers_status ON simulation_offers (status);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_offers_created_at ON simulation_offers (created_at DESC);"))
+        await conn.execute(text("ALTER TABLE simulation_offers DROP COLUMN IF EXISTS banco;"))
+        await conn.execute(text("ALTER TABLE simulation_offers DROP COLUMN IF EXISTS tabela;"))
+
+        # Tabela e índices para dados cadastrais do cliente da simulação (1:1 com simulation_leads)
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS simulation_lead_data (
+                id UUID PRIMARY KEY,
+                simulation_lead_id UUID NOT NULL UNIQUE REFERENCES simulation_leads(id) ON DELETE CASCADE,
+                data_nascimento VARCHAR(50),
+                sexo VARCHAR(50),
+                estado_civil VARCHAR(50),
+                nome_mae VARCHAR(255),
+                numero_referencial_ipc BIGINT,
+                valor_renda DOUBLE PRECISION,
+                cep VARCHAR(20),
+                tipo_logradouro VARCHAR(50),
+                logradouro VARCHAR(255),
+                numero VARCHAR(50),
+                bairro VARCHAR(100),
+                cidade VARCHAR(100),
+                uf VARCHAR(10),
+                ddd_celular VARCHAR(10),
+                numero_celular VARCHAR(30),
+                email VARCHAR(255),
+                tipo_documento VARCHAR(50),
+                numero_documento VARCHAR(50),
+                orgao_emissor VARCHAR(50),
+                uf_orgao_emissor VARCHAR(10),
+                data_emissao VARCHAR(50),
+                raw_data JSON DEFAULT '{}'::json,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW()
+            );
+        """))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_lead_data_lead ON simulation_lead_data (simulation_lead_id);"))
+
+        # Migrar dados legados de simulações existentes em simulation_leads para simulation_offers
+        await conn.execute(text("""
+            INSERT INTO simulation_offers (
+                id, simulation_lead_id, attendant_id, valor_liberado, parcela, valor_parcela,
+                status, custom_fields, created_at, updated_at
+            )
+            SELECT
+                gen_random_uuid(), id, current_attendant_id, valor_liberado_maximo, prazo_maximo, valor_parcela_maximo,
+                COALESCE(simulation_status, 'pending'), COALESCE(custom_fields, '{}'::json), created_at, NOW()
+            FROM simulation_leads
+            WHERE (valor_liberado_maximo IS NOT NULL OR prazo_maximo IS NOT NULL OR simulation_status = 'completed')
+              AND NOT EXISTS (
+                  SELECT 1 FROM simulation_offers WHERE simulation_offers.simulation_lead_id = simulation_leads.id
+              );
+        """))
 
 
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_lead_tabulations_lead_id ON lead_tabulations (lead_id);"))

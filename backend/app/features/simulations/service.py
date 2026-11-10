@@ -12,11 +12,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.simulation_lead import SimulationLead
+from app.models.simulation_offer import SimulationOffer
+from app.models.simulation_lead_data import SimulationLeadData
 from app.models.user import User
 from app.schemas.simulation import (
     SimulationCreate,
     SimulationUpdate,
-    SimulationResponse
+    SimulationResponse,
+    SimulationOfferResponse,
+    SimulationLeadDataResponse
 )
 
 logger = logging.getLogger(__name__)
@@ -70,17 +74,92 @@ class SimulationService:
     def _to_response(self, lead: SimulationLead) -> SimulationResponse:
         attendant_name = lead.current_attendant.name if lead.current_attendant else None
         unit_name = lead.unit.name if lead.unit else None
+        notes_val = lead.notes
+
+        # Mapeamento do histórico de simulações / propostas do lead
+        offers_list: List[SimulationOfferResponse] = []
+        latest_offer: Optional[SimulationOffer] = None
+        if lead.offers:
+            # Já ordenadas desc por created_at pelo relationship
+            latest_offer = lead.offers[0]
+            for o in lead.offers:
+                att_name = o.attendant.name if o.attendant else None
+                offers_list.append(
+                    SimulationOfferResponse(
+                        id=o.id,
+                        simulation_lead_id=o.simulation_lead_id,
+                        attendant_id=o.attendant_id,
+                        attendant_name=att_name,
+                        valor_bruto=o.valor_bruto,
+                        valor_liberado=o.valor_liberado,
+                        parcela=o.parcela,
+                        quantidade_parcelas=o.parcela,
+                        valor_parcela=o.valor_parcela,
+                        taxa_juros=o.taxa_juros,
+                        status=o.status or "pending",
+                        custom_fields=o.custom_fields,
+                        created_at=o.created_at,
+                    )
+                )
+
+        cadastral_resp = None
+        if getattr(lead, "cadastral_data", None):
+            c = lead.cadastral_data
+            cadastral_resp = SimulationLeadDataResponse(
+                id=c.id,
+                simulation_lead_id=c.simulation_lead_id,
+                data_nascimento=c.data_nascimento,
+                sexo=c.sexo,
+                estado_civil=c.estado_civil,
+                nome_mae=c.nome_mae,
+                numero_referencial_ipc=c.numero_referencial_ipc,
+                valor_renda=c.valor_renda,
+                cep=c.cep,
+                tipo_logradouro=c.tipo_logradouro,
+                logradouro=c.logradouro,
+                numero=c.numero,
+                bairro=c.bairro,
+                cidade=c.cidade,
+                uf=c.uf,
+                ddd_celular=c.ddd_celular,
+                numero_celular=c.numero_celular,
+                email=c.email,
+                tipo_documento=c.tipo_documento,
+                numero_documento=c.numero_documento,
+                orgao_emissor=c.orgao_emissor,
+                uf_orgao_emissor=c.uf_orgao_emissor,
+                data_emissao=c.data_emissao,
+                created_at=c.created_at,
+                updated_at=c.updated_at,
+            )
+
+        # Campos de status e metadados adicionais
+        sim_status = latest_offer.status if latest_offer and latest_offer.status else (lead.simulation_status or "pending")
+
+        # Os campos prazo_maximo, valor_bruto_maximo, valor_liberado_maximo e valor_parcela_maximo
+        # contêm os limites máximos do cliente aprovados no lead e permanecem fixos, nunca alterados por cotações maiores.
         return SimulationResponse(
             id=lead.id,
             name=lead.name or "Aguardando simulação...",
             cpf=lead.cpf,
             phone=lead.phone,
-            valor_liberado=lead.valor_liberado,
-            quantidade_parcelas=lead.prazo,
-            valor_parcela=lead.valor_parcela,
-            banco=lead.banco,
-            tabela=lead.tabela,
-            simulation_status=lead.simulation_status or "pending",
+            proposta_prospect_id=lead.proposta_prospect_id,
+            produto_id=lead.produto_id,
+            ProdutoId=lead.produto_id,
+            nome_produto=lead.nome_produto,
+            NomeProduto=lead.nome_produto,
+            valor_bruto_maximo=lead.valor_bruto_maximo,
+            margem=lead.valor_bruto_maximo,
+            prazo=lead.prazo_maximo,
+            prazo_maximo=lead.prazo_maximo,
+            valor_liberado_maximo=lead.valor_liberado_maximo,
+            valor_parcela_maximo=lead.valor_parcela_maximo,
+            valor_liberado=lead.valor_liberado_maximo,
+            quantidade_parcelas=lead.prazo_maximo,
+            valor_parcela=lead.valor_parcela_maximo,
+            notes=notes_val,
+            observacoes=notes_val,
+            simulation_status=sim_status,
             status=lead.status,
             current_attendant_id=lead.current_attendant_id,
             attendant_name=attendant_name,
@@ -88,7 +167,10 @@ class SimulationService:
             unit_name=unit_name,
             webhook_sent_at=lead.webhook_sent_at,
             created_at=lead.created_at,
-            custom_fields=lead.custom_fields
+            custom_fields=lead.custom_fields,
+            offers=offers_list,
+            total_offers=len(offers_list),
+            cadastral_data=cadastral_resp,
         )
 
     async def create_simulation(self, current_user: User, data: SimulationCreate) -> SimulationResponse:
@@ -103,31 +185,70 @@ class SimulationService:
 
         formatted_cpf = _format_cpf(clean_cpf)
         now = datetime.now(timezone.utc)
+        notes_val = (data.notes or data.observacoes or "").strip() or None
 
-        lead = SimulationLead(
-            name="Aguardando simulação...",
-            cpf=formatted_cpf,
-            verified_cpf=clean_cpf,
-            phone=formatted_phone,
-            simulation_status="pending",
-            status="assigned",
-            current_attendant_id=current_user.id,
-            unit_id=current_user.unit_id,
-            created_at=now
+        # 1. Regra de compartilhamento: verificar se já existe lead cadastrado com este CPF
+        query_existing = (
+            select(SimulationLead)
+            .options(
+                selectinload(SimulationLead.current_attendant),
+                selectinload(SimulationLead.unit),
+                selectinload(SimulationLead.cadastral_data),
+                selectinload(SimulationLead.offers).selectinload(SimulationOffer.attendant)
+            )
+            .where(or_(SimulationLead.cpf == clean_cpf, SimulationLead.cpf == formatted_cpf))
         )
-        self.db.add(lead)
+        res_existing = await self.db.execute(query_existing)
+        lead = res_existing.scalars().first()
+
+        if lead:
+            # Reaproveita o cadastro do lead existente
+            if formatted_phone and not lead.phone:
+                lead.phone = formatted_phone
+            if notes_val:
+                lead.notes = f"{lead.notes}\n[{current_user.name}]: {notes_val}" if lead.notes else notes_val
+            lead.updated_at = now
+            logger.info(f"CPF {clean_cpf} já existente. Reaproveitando lead {lead.id} para nova cotação do atendente {current_user.name}")
+        else:
+            # Cria novo lead para este cliente
+            lead = SimulationLead(
+                name="Aguardando simulação...",
+                cpf=formatted_cpf,
+                phone=formatted_phone,
+                notes=notes_val,
+                simulation_status="pending",
+                status="assigned",
+                current_attendant_id=current_user.id,
+                unit_id=current_user.unit_id,
+                created_at=now,
+                updated_at=now
+            )
+            self.db.add(lead)
+            await self.db.flush()
+
+        # 2. Criação do novo registro individual de simulação/cálculo vinculado ao consultor atual
+        new_offer = SimulationOffer(
+            simulation_lead_id=lead.id,
+            attendant_id=current_user.id,
+            status="pending",
+            created_at=now,
+            updated_at=now
+        )
+        self.db.add(new_offer)
         await self.db.flush()
 
-        # Disparo do Webhook externo configurado no .env
+        # 3. Disparo do Webhook externo configurado no .env
         webhook_url = _get_simulation_webhook_url()
         if webhook_url:
             webhook_payload = {
                 "event": "simulation_created",
                 "lead_id": str(lead.id),
+                "offer_id": str(new_offer.id),
                 "cpf": clean_cpf,
                 "cpf_formatted": formatted_cpf,
-                "phone": formatted_phone,
+                "phone": lead.phone or formatted_phone,
                 "phone_clean": clean_phone,
+                "notes": notes_val,
                 "attendant_id": str(current_user.id),
                 "attendant_name": current_user.name,
                 "unit_id": str(current_user.unit_id) if current_user.unit_id else None,
@@ -141,7 +262,7 @@ class SimulationService:
                 }
                 async with httpx.AsyncClient(timeout=15.0, verify=False) as client:
                     resp = await client.post(webhook_url, json=webhook_payload, headers=headers)
-                    logger.info(f"Resposta do webhook de simulação para {lead.id}: HTTP {resp.status_code} - {resp.text[:300]}")
+                    logger.info(f"Resposta do webhook de simulação para {lead.id} (offer {new_offer.id}): HTTP {resp.status_code} - {resp.text[:300]}")
                     if resp.is_success:
                         lead.webhook_sent_at = datetime.now(timezone.utc)
                     else:
@@ -153,10 +274,15 @@ class SimulationService:
 
         await self.db.commit()
 
-        # Carregar relacionamentos para serialização
+        # Recarregar relacionamentos para serialização
         query = (
             select(SimulationLead)
-            .options(selectinload(SimulationLead.current_attendant), selectinload(SimulationLead.unit))
+            .options(
+                selectinload(SimulationLead.current_attendant),
+                selectinload(SimulationLead.unit),
+                selectinload(SimulationLead.cadastral_data),
+                selectinload(SimulationLead.offers).selectinload(SimulationOffer.attendant)
+            )
             .where(SimulationLead.id == lead.id)
         )
         lead_res = await self.db.execute(query)
@@ -169,10 +295,14 @@ class SimulationService:
             from app.core.socket_manager import sio
             await sio.emit("simulation:created", {
                 "id": str(lead_loaded.id),
+                "offer_id": str(new_offer.id),
                 "cpf": lead_loaded.cpf,
                 "phone": lead_loaded.phone,
-                "attendant_id": str(lead_loaded.current_attendant_id),
-                "simulation_status": lead_loaded.simulation_status,
+                "notes": lead_loaded.notes,
+                "attendant_id": str(current_user.id),
+                "attendant_name": current_user.name,
+                "simulation_status": "pending",
+                "total_offers": response.total_offers,
                 "created_at": lead_loaded.created_at.isoformat()
             })
         except Exception as e:
@@ -190,12 +320,29 @@ class SimulationService:
     ) -> Tuple[List[SimulationResponse], int]:
         query = (
             select(SimulationLead)
-            .options(selectinload(SimulationLead.current_attendant), selectinload(SimulationLead.unit))
+            .options(
+                selectinload(SimulationLead.current_attendant),
+                selectinload(SimulationLead.unit),
+                selectinload(SimulationLead.cadastral_data),
+                selectinload(SimulationLead.offers).selectinload(SimulationOffer.attendant)
+            )
         )
 
-        # Regras de visualização por perfil
+        # Regras de visualização por perfil:
+        # Quando há busca (ex.: consulta de CPF), o atendente pode localizar o lead para ver os dados já existentes!
+        has_search = bool(search and search.strip())
+
         if current_user.role == "attendant":
-            query = query.where(SimulationLead.current_attendant_id == current_user.id)
+            if not has_search:
+                # Na listagem padrão sem busca, exibe os leads atribuídos, cotados por ele ou da mesma unidade
+                unit_cond = [SimulationLead.unit_id == current_user.unit_id] if current_user.unit_id else []
+                query = query.where(
+                    or_(
+                        SimulationLead.current_attendant_id == current_user.id,
+                        SimulationLead.offers.any(SimulationOffer.attendant_id == current_user.id),
+                        *unit_cond
+                    )
+                )
         elif current_user.role == "supervisor" and current_user.unit_id:
             query = query.where(SimulationLead.unit_id == current_user.unit_id)
         elif current_user.role == "manager":
@@ -204,15 +351,21 @@ class SimulationService:
                 query = query.where(SimulationLead.unit_id.in_(managed_ids))
 
         if status and status.lower() != "all":
-            query = query.where(SimulationLead.simulation_status == status.lower())
+            # Filtra por status do lead ou de qualquer uma de suas ofertas
+            query = query.where(
+                or_(
+                    SimulationLead.simulation_status == status.lower(),
+                    SimulationLead.offers.any(SimulationOffer.status == status.lower())
+                )
+            )
 
-        if search and search.strip():
+        if has_search:
             s = search.strip()
             clean_s = _clean_cpf(s)
-            conditions = [SimulationLead.name.ilike(f"%{s}%")]
+            conditions = [SimulationLead.name.ilike(f"%{s}%"), SimulationLead.notes.ilike(f"%{s}%")]
             if clean_s:
                 conditions.append(SimulationLead.cpf.ilike(f"%{clean_s}%"))
-                conditions.append(SimulationLead.verified_cpf.ilike(f"%{clean_s}%"))
+                conditions.append(SimulationLead.cpf.ilike(f"%{_format_cpf(clean_s)}%"))
                 conditions.append(SimulationLead.phone.ilike(f"%{clean_s}%"))
             else:
                 conditions.append(SimulationLead.phone.ilike(f"%{s}%"))
@@ -241,7 +394,12 @@ class SimulationService:
     ) -> SimulationResponse:
         query = (
             select(SimulationLead)
-            .options(selectinload(SimulationLead.current_attendant), selectinload(SimulationLead.unit))
+            .options(
+                selectinload(SimulationLead.current_attendant),
+                selectinload(SimulationLead.unit),
+                selectinload(SimulationLead.cadastral_data),
+                selectinload(SimulationLead.offers).selectinload(SimulationOffer.attendant)
+            )
         )
 
         if lead_id:
@@ -249,7 +407,7 @@ class SimulationService:
         elif cpf:
             clean_cpf = _clean_cpf(cpf)
             query = query.where(
-                or_(SimulationLead.verified_cpf == clean_cpf, SimulationLead.cpf == _format_cpf(clean_cpf))
+                or_(SimulationLead.cpf == clean_cpf, SimulationLead.cpf == _format_cpf(clean_cpf))
             ).order_by(desc(SimulationLead.created_at))
         else:
             raise ValueError("É necessário informar lead_id ou cpf para atualizar a simulação.")
@@ -260,51 +418,269 @@ class SimulationService:
         if not lead:
             raise LookupError("Simulação não encontrada.")
 
-        # Atualização dos campos fornecidos
+        now = datetime.now(timezone.utc)
+
+        # Atualização dos dados do cliente no Lead
         if data.nome:
             lead.name = data.nome.strip()
         if data.phone:
             clean_p = _clean_phone(data.phone)
             lead.phone = _format_phone(clean_p) if clean_p else data.phone.strip()
-        if data.valor_liberado is not None:
-            lead.valor_liberado = float(data.valor_liberado)
-        if data.quantidade_parcelas is not None:
-            lead.prazo = int(data.quantidade_parcelas)
-        if data.valor_parcela is not None:
-            lead.valor_parcela = float(data.valor_parcela)
-        if data.banco:
-            lead.banco = data.banco.strip()
-        if data.tabela:
-            lead.tabela = data.tabela.strip()
-        if data.status:
-            lead.simulation_status = data.status.strip()
+
+        prop_id = data.proposta_prospect_id if data.proposta_prospect_id is not None else data.PropostaProspectId
+        if prop_id is not None:
+            lead.proposta_prospect_id = str(prop_id).strip()
+
+        prod_id = data.produto_id if data.produto_id is not None else data.ProdutoId
+        if prod_id is not None:
+            lead.produto_id = str(prod_id).strip()
+
+        prod_name = data.nome_produto if data.nome_produto is not None else data.NomeProduto
+        if prod_name is not None:
+            lead.nome_produto = str(prod_name).strip()
+
+        # Limites máximos disponíveis para o cliente (teto de valor bruto, prazo, valor liberado e parcela)
+        # Preenchidos na chamada do webhook e permanecem fixos
+        if data.valor_bruto_maximo is not None:
+            lead.valor_bruto_maximo = float(data.valor_bruto_maximo)
+        elif data.margem is not None:
+            lead.valor_bruto_maximo = float(data.margem)
+
+        if data.valor_liberado_maximo is not None:
+            lead.valor_liberado_maximo = float(data.valor_liberado_maximo)
+        elif lead.valor_liberado_maximo is None and data.valor_liberado is not None and not data.create_new:
+            lead.valor_liberado_maximo = float(data.valor_liberado)
+
+        if data.prazo_maximo is not None:
+            lead.prazo_maximo = int(data.prazo_maximo)
+        elif data.prazo is not None:
+            lead.prazo_maximo = int(data.prazo)
+        elif lead.prazo_maximo is None and (data.quantidade_parcelas is not None or data.parcela is not None) and not data.create_new:
+            lead.prazo_maximo = int(data.quantidade_parcelas if data.quantidade_parcelas is not None else data.parcela)
+
+        if data.valor_parcela_maximo is not None:
+            lead.valor_parcela_maximo = float(data.valor_parcela_maximo)
+        elif lead.valor_parcela_maximo is None and data.valor_parcela is not None and not data.create_new:
+            lead.valor_parcela_maximo = float(data.valor_parcela)
+
+        # Processamento e atualização dos Dados Cadastrais do Cliente (SimulationLeadData)
+        cad_payload = data.dados_cadastrais or {}
+        end_payload = data.endereco or {}
+        cont_payload = data.contato or {}
+        doc_payload = data.documento or {}
+
+        def _get_cad(*keys, default=None):
+            for k in keys:
+                val = getattr(data, k, None)
+                if val is not None and val != "":
+                    return val
+                for d in (cad_payload, end_payload, cont_payload, doc_payload):
+                    if isinstance(d, dict) and k in d and d[k] is not None and d[k] != "":
+                        return d[k]
+            return default
+
+        dt_nasc = _get_cad("dataNascimento", "data_nascimento")
+        sexo_val = _get_cad("sexo")
+        est_civil = _get_cad("estadoCivil", "estado_civil")
+        mae_val = _get_cad("nomeMae", "nome_mae")
+        ipc_val = _get_cad("numeroReferencialIpc", "numero_referencial_ipc")
+        renda_val = _get_cad("valorRenda", "valor_renda")
+        cep_val = _get_cad("cep")
+        tipo_logr = _get_cad("tipoLogradouro", "tipo_logradouro")
+        logr_val = _get_cad("logradouro")
+        num_end = _get_cad("numero", "numeroEndereco", "numero_endereco")
+        bairro_val = _get_cad("bairro")
+        cidade_val = _get_cad("cidade")
+        uf_val = _get_cad("uf")
+        ddd_cel = _get_cad("dddCelular", "ddd_celular", "ddd")
+        num_cel = _get_cad("numeroCelular", "numero_celular", "celular")
+        email_val = _get_cad("email")
+        tipo_doc = _get_cad("tipoDocumento", "tipo_documento")
+        num_doc = _get_cad("numeroDocumento", "numero_documento")
+        if not num_doc and isinstance(doc_payload, dict) and "numero" in doc_payload:
+            num_doc = doc_payload["numero"]
+        org_emiss = _get_cad("orgaoEmissor", "orgao_emissor")
+        uf_emiss = _get_cad("ufOrgaoEmissor", "uf_orgao_emissor")
+        dt_emiss = _get_cad("dataEmissao", "data_emissao")
+
+        has_cadastral = any(v is not None for v in [
+            dt_nasc, sexo_val, est_civil, mae_val, ipc_val, renda_val,
+            cep_val, tipo_logr, logr_val, num_end, bairro_val, cidade_val, uf_val,
+            ddd_cel, num_cel, email_val, tipo_doc, num_doc, org_emiss, uf_emiss, dt_emiss
+        ])
+
+        if has_cadastral:
+            cad_record = lead.cadastral_data
+            if not cad_record:
+                cad_record = SimulationLeadData(
+                    simulation_lead_id=lead.id,
+                    created_at=now,
+                    updated_at=now
+                )
+                self.db.add(cad_record)
+
+            if dt_nasc is not None:
+                cad_record.data_nascimento = str(dt_nasc).strip()
+            if sexo_val is not None:
+                cad_record.sexo = str(sexo_val).strip()
+            if est_civil is not None:
+                cad_record.estado_civil = str(est_civil).strip()
+            if mae_val is not None:
+                cad_record.nome_mae = str(mae_val).strip()
+            if ipc_val is not None:
+                try:
+                    cad_record.numero_referencial_ipc = int(ipc_val)
+                except (ValueError, TypeError):
+                    pass
+            if renda_val is not None:
+                try:
+                    cad_record.valor_renda = float(renda_val)
+                except (ValueError, TypeError):
+                    pass
+
+            if cep_val is not None:
+                cad_record.cep = str(cep_val).strip()
+            if tipo_logr is not None:
+                cad_record.tipo_logradouro = str(tipo_logr).strip()
+            if logr_val is not None:
+                cad_record.logradouro = str(logr_val).strip()
+            if num_end is not None:
+                cad_record.numero = str(num_end).strip()
+            if bairro_val is not None:
+                cad_record.bairro = str(bairro_val).strip()
+            if cidade_val is not None:
+                cad_record.cidade = str(cidade_val).strip()
+            if uf_val is not None:
+                cad_record.uf = str(uf_val).strip()
+
+            if ddd_cel is not None:
+                cad_record.ddd_celular = str(ddd_cel).strip()
+            if num_cel is not None:
+                cad_record.numero_celular = str(num_cel).strip()
+            if email_val is not None:
+                cad_record.email = str(email_val).strip()
+
+            if not lead.phone and ddd_cel and num_cel:
+                clean_full_phone = f"{ddd_cel}{num_cel}"
+                lead.phone = _format_phone(clean_full_phone)
+
+            if tipo_doc is not None:
+                cad_record.tipo_documento = str(tipo_doc).strip()
+            if num_doc is not None:
+                cad_record.numero_documento = str(num_doc).strip()
+            if org_emiss is not None:
+                cad_record.orgao_emissor = str(org_emiss).strip()
+            if uf_emiss is not None:
+                cad_record.uf_orgao_emissor = str(uf_emiss).strip()
+            if dt_emiss is not None:
+                cad_record.data_emissao = str(dt_emiss).strip()
+
+            cad_record.updated_at = now
+
+        notes_val = data.notes if data.notes is not None else data.observacoes
+        if notes_val is not None:
+            lead.notes = notes_val.strip() if notes_val else None
+
+        status_val = data.simulation_status or data.status
+        normalized_status = status_val.strip().lower() if status_val else "completed"
+
+        # Atualização ou inserção das ofertas no histórico
+        if data.offers and isinstance(data.offers, list):
+            # Robô enviou múltiplas opções de parcelamento
+            for item in data.offers:
+                off = SimulationOffer(
+                    simulation_lead_id=lead.id,
+                    attendant_id=lead.current_attendant_id,
+                    valor_bruto=float(item.get("valor_bruto")) if item.get("valor_bruto") is not None else None,
+                    valor_liberado=float(item.get("valor_liberado")) if item.get("valor_liberado") is not None else None,
+                    parcela=int(item.get("parcela") or item.get("quantidade_parcelas")) if (item.get("parcela") or item.get("quantidade_parcelas")) is not None else None,
+                    valor_parcela=float(item.get("valor_parcela")) if item.get("valor_parcela") is not None else None,
+                    taxa_juros=float(item.get("taxa_juros")) if item.get("taxa_juros") is not None else None,
+                    status=str(item.get("status") or normalized_status).strip().lower(),
+                    custom_fields=item.get("custom_fields") or {},
+                    created_at=now,
+                    updated_at=now
+                )
+                self.db.add(off)
+            lead.simulation_status = normalized_status
         else:
-            lead.simulation_status = "completed"
+            # Atualização de oferta única ou inserção de nova cotação
+            target_offer: Optional[SimulationOffer] = None
+            offer_attendant_id = data.attendant_id or lead.current_attendant_id
 
-        if data.custom_fields:
-            current_cf = lead.custom_fields or {}
-            lead.custom_fields = {**current_cf, **data.custom_fields}
+            if not data.create_new:
+                if data.offer_id and lead.offers:
+                    for o in lead.offers:
+                        if o.id == data.offer_id:
+                            target_offer = o
+                            break
 
+                if not target_offer and lead.offers:
+                    # Procura a oferta pendente mais recente
+                    for o in lead.offers:
+                        if o.status == "pending":
+                            target_offer = o
+                            break
+                    # Se não houver pendente, usa a mais recente
+                    if not target_offer:
+                        target_offer = lead.offers[0]
+
+            if not target_offer:
+                target_offer = SimulationOffer(
+                    simulation_lead_id=lead.id,
+                    attendant_id=offer_attendant_id,
+                    created_at=now,
+                    updated_at=now
+                )
+                self.db.add(target_offer)
+            elif data.attendant_id:
+                target_offer.attendant_id = data.attendant_id
+
+            # Atualizar os campos da oferta
+            if data.valor_bruto is not None:
+                target_offer.valor_bruto = float(data.valor_bruto)
+            if data.valor_liberado is not None:
+                target_offer.valor_liberado = float(data.valor_liberado)
+            qtd_p = data.quantidade_parcelas if data.quantidade_parcelas is not None else data.parcela
+            if qtd_p is not None:
+                target_offer.parcela = int(qtd_p)
+            if data.valor_parcela is not None:
+                target_offer.valor_parcela = float(data.valor_parcela)
+            if data.taxa_juros is not None:
+                target_offer.taxa_juros = float(data.taxa_juros)
+            target_offer.status = normalized_status
+            target_offer.updated_at = now
+
+            if data.custom_fields:
+                current_cf = target_offer.custom_fields or {}
+                target_offer.custom_fields = {**current_cf, **data.custom_fields}
+
+            # Os limites máximos do lead (prazo, margem, valor_liberado, valor_parcela) permanecem fixos
+            # e nunca são sobrescritos quando ofertas ou valores maiores chegam.
+            lead.simulation_status = normalized_status
+
+        lead.updated_at = now
         await self.db.commit()
-        await self.db.refresh(lead)
 
-        response = self._to_response(lead)
+        # Recarregar
+        lead_res = await self.db.execute(query.where(SimulationLead.id == lead.id))
+        lead_reloaded = lead_res.scalar_one()
+
+        response = self._to_response(lead_reloaded)
 
         # Emissão WebSocket em tempo real para os consultores
         try:
             from app.core.socket_manager import sio
             await sio.emit("simulation:updated", {
-                "id": str(lead.id),
-                "name": lead.name,
-                "cpf": lead.cpf,
-                "phone": lead.phone,
-                "valor_liberado": lead.valor_liberado,
-                "quantidade_parcelas": lead.prazo,
-                "valor_parcela": lead.valor_parcela,
-                "banco": lead.banco,
-                "tabela": lead.tabela,
-                "simulation_status": lead.simulation_status,
-                "current_attendant_id": str(lead.current_attendant_id) if lead.current_attendant_id else None
+                "id": str(lead_reloaded.id),
+                "name": lead_reloaded.name,
+                "cpf": lead_reloaded.cpf,
+                "phone": lead_reloaded.phone,
+                "notes": lead_reloaded.notes,
+                "simulation_status": lead_reloaded.simulation_status,
+                "total_offers": response.total_offers,
+                "offers": [o.model_dump(mode="json") for o in response.offers],
+                "current_attendant_id": str(lead_reloaded.current_attendant_id) if lead_reloaded.current_attendant_id else None
             })
         except Exception as e:
             logger.warning(f"Falha ao emitir socket simulation:updated: {e}")
