@@ -15,17 +15,74 @@ class SimulationLead(Base):
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False, default="Aguardando simulação...")
-    phone = Column(String(50), nullable=True, default="")
-    cpf = Column(String(14), nullable=True)
-    verified_cpf = Column(String(14), nullable=True, index=True)
+    phone = Column(String(50), nullable=True, default="", index=True)
+    cpf = Column(String(14), nullable=True, index=True)
 
-    prazo = Column(Integer, nullable=True)
-    margem = Column(Float, nullable=True)
-    valor_liberado = Column(Float, nullable=True)
-    valor_parcela = Column(Float, nullable=True)
-    banco = Column(String(100), nullable=True)
-    tabela = Column(String(100), nullable=True)
+    prazo_maximo = Column(Integer, nullable=True)
+    valor_bruto_maximo = Column(Float, nullable=True)
+    valor_liberado_maximo = Column(Float, nullable=True)
+    valor_parcela_maximo = Column(Float, nullable=True)
+    proposta_prospect_id = Column(String(255), nullable=True, index=True)
+    produto_id = Column(String(255), nullable=True, index=True)
+    nome_produto = Column(String(255), nullable=True)
+    notes = Column(Text, nullable=True)
     custom_fields = Column(JSON, nullable=True, default=dict)
+
+    @property
+    def PropostaProspectId(self):
+        return self.proposta_prospect_id
+
+    @PropostaProspectId.setter
+    def PropostaProspectId(self, value):
+        self.proposta_prospect_id = value
+
+    @property
+    def ProdutoId(self):
+        return self.produto_id
+
+    @ProdutoId.setter
+    def ProdutoId(self, value):
+        self.produto_id = value
+
+    @property
+    def NomeProduto(self):
+        return self.nome_produto
+
+    @NomeProduto.setter
+    def NomeProduto(self, value):
+        self.nome_produto = value
+
+    @property
+    def margem(self):
+        return self.valor_bruto_maximo
+
+    @margem.setter
+    def margem(self, value):
+        self.valor_bruto_maximo = value
+
+    @property
+    def prazo(self):
+        return self.prazo_maximo
+
+    @prazo.setter
+    def prazo(self, value):
+        self.prazo_maximo = value
+
+    @property
+    def valor_liberado(self):
+        return self.valor_liberado_maximo
+
+    @valor_liberado.setter
+    def valor_liberado(self, value):
+        self.valor_liberado_maximo = value
+
+    @property
+    def valor_parcela(self):
+        return self.valor_parcela_maximo
+
+    @valor_parcela.setter
+    def valor_parcela(self, value):
+        self.valor_parcela_maximo = value
 
     simulation_status = Column(String(50), nullable=False, default="pending", index=True)
     status = Column(String(50), nullable=False, default="assigned", index=True)
@@ -40,12 +97,32 @@ class SimulationLead(Base):
     # Relacionamentos diretos
     unit = relationship("Unit")
     current_attendant = relationship("User", foreign_keys=[current_attendant_id])
+    offers = relationship(
+        "SimulationOffer",
+        back_populates="lead",
+        cascade="all, delete-orphan",
+        order_by="desc(SimulationOffer.created_at)"
+    )
+    cadastral_data = relationship(
+        "SimulationLeadData",
+        back_populates="lead",
+        uselist=False,
+        cascade="all, delete-orphan"
+    )
 
     @property
     def quantidade_parcelas(self) -> Optional[int]:
-        return self.prazo
+        return self.prazo_maximo
 
     @quantidade_parcelas.setter
     def quantidade_parcelas(self, val: Optional[int]):
-        self.prazo = val
+        self.prazo_maximo = val
+
+    @property
+    def observacoes(self) -> Optional[str]:
+        return self.notes
+
+    @observacoes.setter
+    def observacoes(self, val: Optional[str]):
+        self.notes = val
 
