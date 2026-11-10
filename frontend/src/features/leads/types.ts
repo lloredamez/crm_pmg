@@ -17,16 +17,72 @@ export interface User {
   created_at: string;
 }
 
+export interface SimulationLeadData {
+  id: string;
+  simulation_lead_id: string;
+  data_nascimento?: string | null;
+  sexo?: string | null;
+  estado_civil?: string | null;
+  nome_mae?: string | null;
+  numero_referencial_ipc?: number | null;
+  valor_renda?: number | null;
+  cep?: string | null;
+  tipo_logradouro?: string | null;
+  logradouro?: string | null;
+  numero?: string | null;
+  bairro?: string | null;
+  cidade?: string | null;
+  uf?: string | null;
+  ddd_celular?: string | null;
+  numero_celular?: string | null;
+  email?: string | null;
+  tipo_documento?: string | null;
+  numero_documento?: string | null;
+  orgao_emissor?: string | null;
+  uf_orgao_emissor?: string | null;
+  data_emissao?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface SimulationOffer {
+  id: string;
+  simulation_lead_id: string;
+  attendant_id?: string | null;
+  attendant_name?: string | null;
+  valor_bruto?: number | null;
+  valor_liberado?: number | null;
+  parcela?: number | null;
+  quantidade_parcelas?: number | null;
+  valor_parcela?: number | null;
+  taxa_juros?: number | null;
+  status?: string | null;
+  custom_fields?: Record<string, any> | null;
+  created_at: string;
+}
+
 export interface Simulation {
   id: string;
   name: string;
   cpf?: string | null;
   phone?: string | null;
+  proposta_prospect_id?: string | null;
+  PropostaProspectId?: string | null;
+  produto_id?: string | null;
+  ProdutoId?: string | null;
+  nome_produto?: string | null;
+  NomeProduto?: string | null;
+  valor_bruto_maximo?: number | null;
+  margem?: number | null;
+  prazo?: number | null;
+  prazo_maximo?: number | null;
+  valor_liberado_maximo?: number | null;
+  valor_parcela_maximo?: number | null;
   valor_liberado?: number | null;
   quantidade_parcelas?: number | null;
   valor_parcela?: number | null;
-  banco?: string | null;
-  tabela?: string | null;
+  notes?: string | null;
+  observacoes?: string | null;
   simulation_status: string;
   status: string;
   current_attendant_id?: string | null;
@@ -36,6 +92,9 @@ export interface Simulation {
   webhook_sent_at?: string | null;
   created_at: string;
   custom_fields?: Record<string, any> | null;
+  offers?: SimulationOffer[];
+  total_offers?: number;
+  cadastral_data?: SimulationLeadData | null;
 }
 
 export interface SimulationPaginationResponse {

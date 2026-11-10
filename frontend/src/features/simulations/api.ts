@@ -50,6 +50,8 @@ export async function fetchSimulations(params: {
 export interface CreateSimulationParams {
   cpf: string;
   phone?: string;
+  notes?: string;
+  observacoes?: string;
 }
 
 export async function createSimulation(
