@@ -42,13 +42,29 @@ def _check_webhook_secret(
 
     if not received and authorization and authorization.lower().startswith("bearer "):
         received = authorization[7:].strip()
+    elif received and received.lower().startswith("bearer "):
+        received = received[7:].strip()
 
-    if not received or not hmac.compare_digest(received, expected):
-        logger.warning("Tentativa de chamada de webhook rejeitada: Token ausente ou inválido.")
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Token de autenticação do webhook inválido ou ausente. Forneça o token no cabeçalho X-Webhook-Secret ou parâmetro ?token="
-        )
+    # 1. Verifica se corresponde ao WEBHOOK_SECRET configurado
+    if received and hmac.compare_digest(received, expected):
+        return
+
+    # 2. Permite também autenticação via JWT de usuário ativo do CRM
+    if received:
+        try:
+            from jose import jwt
+            from app.core.security import ALGORITHM
+            payload = jwt.decode(received, settings.SECRET_KEY, algorithms=[ALGORITHM])
+            if payload.get("sub"):
+                return  # Token JWT válido de usuário do CRM
+        except Exception:
+            pass
+
+    logger.warning("Tentativa de chamada de webhook rejeitada: Token ausente ou inválido.")
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="Token de autenticação do webhook inválido ou ausente. Forneça o token no cabeçalho X-Webhook-Secret ou parâmetro ?token="
+    )
 
 
 def _extract_lead_data(payload: Dict[str, Any], default_channel_code: Optional[str] = None) -> LeadCreate:

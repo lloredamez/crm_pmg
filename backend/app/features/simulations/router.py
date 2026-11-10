@@ -73,7 +73,41 @@ async def list_simulations(
         pages=pages
     )
 
+@router.patch("/callback", response_model=SimulationResponse)
+@router.post("/callback", response_model=SimulationResponse)
+async def update_simulation_callback(
+    data: SimulationUpdate,
+    request: Request,
+    lead_id: Optional[UUID] = Query(None),
+    cpf: Optional[str] = Query(None),
+    token: Optional[str] = Query(None),
+    api_key: Optional[str] = Query(None),
+    x_webhook_secret: Optional[str] = Header(None, alias="X-Webhook-Secret"),
+    x_api_key: Optional[str] = Header(None, alias="X-Api-Key"),
+    authorization: Optional[str] = Header(None),
+    db: AsyncSession = Depends(get_db)
+):
+    """Endpoint alternativo flexível de callback chamado pela API externa via query params ou body (PATCH ou POST)."""
+    _check_webhook_secret(
+        request=request,
+        token=token,
+        api_key=api_key,
+        x_webhook_secret=x_webhook_secret,
+        x_api_key=x_api_key,
+        authorization=authorization
+    )
+    target_cpf = cpf or data.cpf
+    target_lead_id = lead_id or data.lead_id
+    service = SimulationService(db)
+    try:
+        return await service.update_simulation_from_api(lead_id=target_lead_id, cpf=target_cpf, data=data)
+    except LookupError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
 @router.patch("/{id}", response_model=SimulationResponse)
+@router.post("/{id}", response_model=SimulationResponse)
 async def update_simulation_by_id(
     id: UUID,
     data: SimulationUpdate,
@@ -97,37 +131,6 @@ async def update_simulation_by_id(
     service = SimulationService(db)
     try:
         return await service.update_simulation_from_api(lead_id=id, cpf=None, data=data)
-    except LookupError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-@router.patch("/callback", response_model=SimulationResponse)
-async def update_simulation_callback(
-    data: SimulationUpdate,
-    request: Request,
-    lead_id: Optional[UUID] = Query(None),
-    cpf: Optional[str] = Query(None),
-    token: Optional[str] = Query(None),
-    api_key: Optional[str] = Query(None),
-    x_webhook_secret: Optional[str] = Header(None, alias="X-Webhook-Secret"),
-    x_api_key: Optional[str] = Header(None, alias="X-Api-Key"),
-    authorization: Optional[str] = Header(None),
-    db: AsyncSession = Depends(get_db)
-):
-    """Endpoint alternativo flexível de callback chamado pela API externa via query params ou body."""
-    _check_webhook_secret(
-        request=request,
-        token=token,
-        api_key=api_key,
-        x_webhook_secret=x_webhook_secret,
-        x_api_key=x_api_key,
-        authorization=authorization
-    )
-    target_cpf = cpf or data.cpf
-    service = SimulationService(db)
-    try:
-        return await service.update_simulation_from_api(lead_id=lead_id, cpf=target_cpf, data=data)
     except LookupError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValueError as e:
