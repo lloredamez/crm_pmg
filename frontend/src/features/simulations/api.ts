@@ -1,4 +1,4 @@
-import { Simulation, SimulationPaginationResponse } from '@/features/leads/types';
+import { Simulation, SimulationPaginationResponse, Bank } from '@/features/leads/types';
 import { getApiUrl } from '@/lib/config';
 
 const getAuthHeaders = (): Record<string, string> => {
@@ -65,5 +65,46 @@ export async function createSimulation(
     body: JSON.stringify(payload),
   });
   return handleResponse<Simulation>(res);
+}
+
+export interface SimulationQuoteParams {
+  tipo_simulacao: 'valor_parcela' | 'valor_emprestimo';
+  valor_simulado: number;
+  produto_id?: string | null;
+  notes?: string;
+}
+
+export async function requestSimulationQuote(
+  leadId: string,
+  params: SimulationQuoteParams
+): Promise<Simulation> {
+  const API_URL = getApiUrl();
+  const res = await fetch(`${API_URL}/api/v1/simulations/${leadId}/quote`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(params),
+  });
+  return handleResponse<Simulation>(res);
+}
+
+export async function updateSimulationCadastralData(
+  leadId: string,
+  data: Record<string, any>
+): Promise<Simulation> {
+  const API_URL = getApiUrl();
+  const res = await fetch(`${API_URL}/api/v1/simulations/${leadId}/cadastral-data`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+  return handleResponse<Simulation>(res);
+}
+
+export async function fetchBanks(): Promise<Bank[]> {
+  const API_URL = getApiUrl();
+  const res = await fetch(`${API_URL}/api/v1/banks`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<Bank[]>(res);
 }
 

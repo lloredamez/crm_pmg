@@ -41,8 +41,20 @@ export interface SimulationLeadData {
   orgao_emissor?: string | null;
   uf_orgao_emissor?: string | null;
   data_emissao?: string | null;
+  banco_numero?: string | null;
+  banco_nome?: string | null;
+  agencia?: string | null;
+  conta?: string | null;
+  conta_digito?: string | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface Bank {
+  id: string;
+  code: string;
+  name: string;
+  is_active: boolean;
 }
 
 export interface SimulationOffer {

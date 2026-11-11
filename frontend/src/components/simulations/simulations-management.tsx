@@ -22,14 +22,25 @@ import {
   Sparkles,
   Phone,
   User,
+  DollarSign,
+  CreditCard,
+  Pencil,
+  Landmark,
 } from 'lucide-react';
-import { fetchSimulations, createSimulation } from '@/features/simulations/api';
-import { Simulation, SimulationOffer, SimulationPaginationResponse } from '@/features/leads/types';
+import {
+  fetchSimulations,
+  createSimulation,
+  requestSimulationQuote,
+  updateSimulationCadastralData,
+  fetchBanks,
+} from '@/features/simulations/api';
+import { Simulation, SimulationOffer, SimulationPaginationResponse, Bank } from '@/features/leads/types';
 import { useSocket } from '@/features/socket/socket-provider';
 import { useAuth } from '@/features/auth/auth-provider';
 
 // Utilitário para formatar CPF enquanto digita ou exibe
-const formatCpf = (val: string): string => {
+const formatCpf = (val?: string | null): string => {
+  if (!val) return '-';
   const digits = val.replace(/\D/g, '').slice(0, 11);
   if (digits.length <= 3) return digits;
   if (digits.length <= 6) return `${digits.slice(0, 3)}.${digits.slice(3)}`;
@@ -73,6 +84,25 @@ const formatCurrency = (val?: number | null): string => {
     style: 'currency',
     currency: 'BRL',
   }).format(val);
+};
+
+// Utilitário para formatar Moeda enquanto digita
+const formatCurrencyInput = (val: string): string => {
+  const digits = val.replace(/\D/g, '');
+  if (!digits) return '';
+  const num = parseInt(digits, 10) / 100;
+  return num.toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+};
+
+const parseCurrencyToNumber = (val: string): number => {
+  const digits = val.replace(/\D/g, '');
+  if (!digits) return 0;
+  return parseInt(digits, 10) / 100;
 };
 
 // Formatação de Data
@@ -145,7 +175,7 @@ export const SimulationsManagement: React.FC = () => {
     });
   };
 
-  // Modal State
+  // Modal State (Nova Simulação por CPF)
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [cpfInput, setCpfInput] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
@@ -153,6 +183,102 @@ export const SimulationsManagement: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<string | null>(null);
+
+  // Modal State (Nova Cotação por Lead existente)
+  const [isQuoteModalOpen, setIsQuoteModalOpen] = useState(false);
+  const [selectedLeadForQuote, setSelectedLeadForQuote] = useState<Simulation | null>(null);
+  const [quoteType, setQuoteType] = useState<'valor_emprestimo' | 'valor_parcela'>('valor_emprestimo');
+  const [quoteValueInput, setQuoteValueInput] = useState('');
+  const [quoteNotesInput, setQuoteNotesInput] = useState('');
+  const [isSubmittingQuote, setIsSubmittingQuote] = useState(false);
+  const [quoteFormError, setQuoteFormError] = useState<string | null>(null);
+  const [quoteFormSuccess, setQuoteFormSuccess] = useState<string | null>(null);
+
+  // Modal de Edição de Dados Cadastrais
+  const [isCadastralModalOpen, setIsCadastralModalOpen] = useState(false);
+  const [selectedLeadForCadastral, setSelectedLeadForCadastral] = useState<Simulation | null>(null);
+  const [activeCadastralTab, setActiveCadastralTab] = useState<'pessoal' | 'documento' | 'endereco' | 'bancario'>('pessoal');
+  const [isSavingCadastral, setIsSavingCadastral] = useState(false);
+  const [cadastralFormError, setCadastralFormError] = useState<string | null>(null);
+  const [cadastralFormSuccess, setCadastralFormSuccess] = useState<string | null>(null);
+
+  // Consulta da lista oficial de Bancos para o Select
+  const { data: banksData } = useQuery<Bank[]>({
+    queryKey: ['banks'],
+    queryFn: fetchBanks,
+    staleTime: 1000 * 60 * 30, // 30 minutos de cache
+  });
+  const banks = banksData || [];
+
+  // Estado dos campos do formulário cadastral
+  const [cadForm, setCadForm] = useState({
+    data_nascimento: '',
+    sexo: '',
+    estado_civil: '',
+    nome_mae: '',
+    valor_renda: '',
+    numero_referencial_ipc: '',
+    tipo_documento: '',
+    numero_documento: '',
+    orgao_emissor: '',
+    uf_orgao_emissor: '',
+    data_emissao: '',
+    ddd_celular: '',
+    numero_celular: '',
+    email: '',
+    cep: '',
+    tipo_logradouro: '',
+    logradouro: '',
+    numero: '',
+    bairro: '',
+    cidade: '',
+    uf: '',
+    // Dados Bancários
+    banco_numero: '',
+    banco_nome: '',
+    agencia: '',
+    conta: '',
+    conta_digito: '',
+  });
+
+  const handleOpenEditCadastral = (sim: Simulation, tab: 'pessoal' | 'documento' | 'endereco' | 'bancario' = 'pessoal') => {
+    setSelectedLeadForCadastral(sim);
+    setActiveCadastralTab(tab);
+    setCadastralFormError(null);
+    setCadastralFormSuccess(null);
+
+    const c = sim.cadastral_data;
+    setCadForm({
+      data_nascimento: c?.data_nascimento ? c.data_nascimento.split('T')[0] : '',
+      sexo: c?.sexo || '',
+      estado_civil: c?.estado_civil || '',
+      nome_mae: c?.nome_mae || '',
+      valor_renda: c?.valor_renda !== undefined && c?.valor_renda !== null ? String(c.valor_renda) : '',
+      numero_referencial_ipc: c?.numero_referencial_ipc !== undefined && c?.numero_referencial_ipc !== null ? String(c.numero_referencial_ipc) : '',
+      tipo_documento: c?.tipo_documento || '',
+      numero_documento: c?.numero_documento || '',
+      orgao_emissor: c?.orgao_emissor || '',
+      uf_orgao_emissor: c?.uf_orgao_emissor || '',
+      data_emissao: c?.data_emissao ? c.data_emissao.split('T')[0] : '',
+      ddd_celular: c?.ddd_celular || '',
+      numero_celular: c?.numero_celular || '',
+      email: c?.email || '',
+      cep: c?.cep || '',
+      tipo_logradouro: c?.tipo_logradouro || '',
+      logradouro: c?.logradouro || '',
+      numero: c?.numero || '',
+      bairro: c?.bairro || '',
+      cidade: c?.cidade || '',
+      uf: c?.uf || '',
+      banco_numero: c?.banco_numero || '',
+      banco_nome: c?.banco_nome || '',
+      agencia: c?.agencia || '',
+      conta: c?.conta || '',
+      conta_digito: c?.conta_digito || '',
+    });
+
+    setIsCadastralModalOpen(true);
+  };
 
   // Debounce para busca
   useEffect(() => {
@@ -246,6 +372,99 @@ export const SimulationsManagement: React.FC = () => {
       setFormError(err.message || 'Falha ao criar simulação.');
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmitQuote = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedLeadForQuote) return;
+
+    const numericValue = parseCurrencyToNumber(quoteValueInput);
+    if (!numericValue || numericValue <= 0) {
+      setQuoteFormError('Por favor, informe um valor válido para a simulação.');
+      return;
+    }
+
+    setIsSubmittingQuote(true);
+    setQuoteFormError(null);
+    setQuoteFormSuccess(null);
+
+    try {
+      await requestSimulationQuote(selectedLeadForQuote.id, {
+        tipo_simulacao: quoteType,
+        valor_simulado: numericValue,
+        produto_id: selectedLeadForQuote.produto_id ?? selectedLeadForQuote.ProdutoId ?? undefined,
+        notes: quoteNotesInput.trim() || undefined,
+      });
+
+      setQuoteFormSuccess('Cotação solicitada e enviada com sucesso ao webhook!');
+      queryClient.invalidateQueries({ queryKey: ['simulations'] });
+
+      setTimeout(() => {
+        setIsQuoteModalOpen(false);
+        setSelectedLeadForQuote(null);
+        setQuoteValueInput('');
+        setQuoteNotesInput('');
+        setQuoteFormSuccess(null);
+      }, 1200);
+    } catch (err: any) {
+      setQuoteFormError(err.message || 'Falha ao solicitar cotação.');
+    } finally {
+      setIsSubmittingQuote(false);
+    }
+  };
+
+  const handleSaveCadastral = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedLeadForCadastral) return;
+
+    setIsSavingCadastral(true);
+    setCadastralFormError(null);
+    setCadastralFormSuccess(null);
+
+    try {
+      const payload: Record<string, any> = {
+        data_nascimento: cadForm.data_nascimento.trim() || null,
+        sexo: cadForm.sexo.trim() || null,
+        estado_civil: cadForm.estado_civil.trim() || null,
+        nome_mae: cadForm.nome_mae.trim() || null,
+        valor_renda: cadForm.valor_renda ? parseFloat(cadForm.valor_renda) : null,
+        numero_referencial_ipc: cadForm.numero_referencial_ipc ? parseInt(cadForm.numero_referencial_ipc, 10) : null,
+        tipo_documento: cadForm.tipo_documento.trim() || null,
+        numero_documento: cadForm.numero_documento.trim() || null,
+        orgao_emissor: cadForm.orgao_emissor.trim() || null,
+        uf_orgao_emissor: cadForm.uf_orgao_emissor.trim() || null,
+        data_emissao: cadForm.data_emissao.trim() || null,
+        ddd_celular: cadForm.ddd_celular.trim() || null,
+        numero_celular: cadForm.numero_celular.trim() || null,
+        email: cadForm.email.trim() || null,
+        cep: cadForm.cep.replace(/\D/g, '') || null,
+        tipo_logradouro: cadForm.tipo_logradouro.trim() || null,
+        logradouro: cadForm.logradouro.trim() || null,
+        numero: cadForm.numero.trim() || null,
+        bairro: cadForm.bairro.trim() || null,
+        cidade: cadForm.cidade.trim() || null,
+        uf: cadForm.uf.trim().toUpperCase() || null,
+        banco_numero: cadForm.banco_numero.trim() || null,
+        banco_nome: cadForm.banco_nome.trim() || null,
+        agencia: cadForm.agencia.trim() || null,
+        conta: cadForm.conta.trim() || null,
+        conta_digito: cadForm.conta_digito.trim() || null,
+      };
+
+      await updateSimulationCadastralData(selectedLeadForCadastral.id, payload);
+      setCadastralFormSuccess('Dados cadastrais atualizados com sucesso!');
+      queryClient.invalidateQueries({ queryKey: ['simulations'] });
+
+      setTimeout(() => {
+        setIsCadastralModalOpen(false);
+        setSelectedLeadForCadastral(null);
+        setCadastralFormSuccess(null);
+      }, 900);
+    } catch (err: any) {
+      setCadastralFormError(err.message || 'Falha ao salvar dados cadastrais.');
+    } finally {
+      setIsSavingCadastral(false);
     }
   };
 
@@ -553,10 +772,13 @@ export const SimulationsManagement: React.FC = () => {
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    setCpfInput(sim.cpf || '');
-                                    setPhoneInput(sim.phone || '');
-                                    setNotesInput('');
-                                    setIsModalOpen(true);
+                                    setSelectedLeadForQuote(sim);
+                                    setQuoteType('valor_emprestimo');
+                                    setQuoteValueInput('');
+                                    setQuoteNotesInput('');
+                                    setQuoteFormError(null);
+                                    setQuoteFormSuccess(null);
+                                    setIsQuoteModalOpen(true);
                                   }}
                                   className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200/60 rounded-xl transition-all cursor-pointer"
                                 >
@@ -611,18 +833,45 @@ export const SimulationsManagement: React.FC = () => {
                                 </div>
                               )}
 
-                              {/* Dados Cadastrais do Cliente (se fornecidos pelo webhook) */}
-                              {sim.cadastral_data && (
+                              {/* Dados Cadastrais do Cliente */}
+                              {sim.cadastral_data ? (
                                 <div className="p-3.5 rounded-xl bg-slate-50/80 border border-slate-200/80 space-y-2 text-xs">
-                                  <div className="flex items-center gap-2 pb-2 border-b border-slate-200/60 text-slate-700 font-bold text-[11px] uppercase tracking-wider">
-                                    <User className="w-3.5 h-3.5 text-indigo-500" />
-                                    <span>Dados Cadastrais do Cliente</span>
+                                  <div className="flex items-center justify-between pb-2 border-b border-slate-200/60 text-slate-700 font-bold text-[11px] uppercase tracking-wider">
+                                    <div className="flex items-center gap-2">
+                                      <User className="w-3.5 h-3.5 text-indigo-500" />
+                                      <span>Dados Cadastrais do Cliente</span>
+                                    </div>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleOpenEditCadastral(sim, 'pessoal');
+                                      }}
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-indigo-600 bg-white hover:bg-indigo-50 border border-indigo-200/70 rounded-lg transition-colors cursor-pointer"
+                                      title="Editar todos os dados cadastrais"
+                                    >
+                                      <Pencil className="w-3 h-3" />
+                                      <span>Editar Cadastro</span>
+                                    </button>
                                   </div>
-                                  <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 pt-1">
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
                                     {/* Pessoal & Financeiro */}
                                     <div className="space-y-1 bg-white p-2.5 rounded-lg border border-slate-200/70 text-slate-700">
-                                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pb-0.5 border-b border-slate-100">
-                                        Pessoal & Renda
+                                      <div className="flex items-center justify-between pb-0.5 border-b border-slate-100">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                          Pessoal & Renda
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleOpenEditCadastral(sim, 'pessoal');
+                                          }}
+                                          className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                                          title="Editar dados pessoais e renda"
+                                        >
+                                          <Pencil className="w-3 h-3" />
+                                        </button>
                                       </div>
                                       <div>
                                         <span className="text-slate-400">Nascimento:</span>{' '}
@@ -659,8 +908,21 @@ export const SimulationsManagement: React.FC = () => {
 
                                     {/* Documento & Contato */}
                                     <div className="space-y-1 bg-white p-2.5 rounded-lg border border-slate-200/70 text-slate-700">
-                                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pb-0.5 border-b border-slate-100">
-                                        Documento & Contato
+                                      <div className="flex items-center justify-between pb-0.5 border-b border-slate-100">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                          Documento & Contato
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleOpenEditCadastral(sim, 'documento');
+                                          }}
+                                          className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                                          title="Editar documento e contato"
+                                        >
+                                          <Pencil className="w-3 h-3" />
+                                        </button>
                                       </div>
                                       <div>
                                         <span className="text-slate-400">Documento:</span>{' '}
@@ -694,8 +956,21 @@ export const SimulationsManagement: React.FC = () => {
 
                                     {/* Endereço */}
                                     <div className="space-y-1 bg-white p-2.5 rounded-lg border border-slate-200/70 text-slate-700">
-                                      <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pb-0.5 border-b border-slate-100">
-                                        Endereço
+                                      <div className="flex items-center justify-between pb-0.5 border-b border-slate-100">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                          Endereço
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleOpenEditCadastral(sim, 'endereco');
+                                          }}
+                                          className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                                          title="Editar endereço"
+                                        >
+                                          <Pencil className="w-3 h-3" />
+                                        </button>
                                       </div>
                                       <div>
                                         <span className="font-semibold text-slate-900">
@@ -714,7 +989,67 @@ export const SimulationsManagement: React.FC = () => {
                                         {formatCep(sim.cadastral_data.cep)}
                                       </div>
                                     </div>
+
+                                    {/* Dados Bancários */}
+                                    <div className="space-y-1 bg-white p-2.5 rounded-lg border border-slate-200/70 text-slate-700">
+                                      <div className="flex items-center justify-between pb-0.5 border-b border-slate-100">
+                                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                                          Dados Bancários
+                                        </span>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleOpenEditCadastral(sim, 'bancario');
+                                          }}
+                                          className="p-1 rounded text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                                          title="Editar dados bancários"
+                                        >
+                                          <Pencil className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                      <div>
+                                        <span className="text-slate-400">Banco:</span>{' '}
+                                        <strong className="font-semibold text-slate-800" title={sim.cadastral_data.banco_nome || undefined}>
+                                          {sim.cadastral_data.banco_numero
+                                            ? `${sim.cadastral_data.banco_numero} - `
+                                            : ''}
+                                          {sim.cadastral_data.banco_nome || '-'}
+                                        </strong>
+                                      </div>
+                                      <div>
+                                        <span className="text-slate-400">Agência:</span>{' '}
+                                        <span className="font-mono font-medium text-slate-800">
+                                          {sim.cadastral_data.agencia || '-'}
+                                        </span>
+                                      </div>
+                                      <div>
+                                        <span className="text-slate-400">Conta:</span>{' '}
+                                        <span className="font-mono font-medium text-slate-800">
+                                          {sim.cadastral_data.conta || '-'}
+                                          {sim.cadastral_data.conta_digito ? `-${sim.cadastral_data.conta_digito}` : ''}
+                                        </span>
+                                      </div>
+                                    </div>
                                   </div>
+                                </div>
+                              ) : (
+                                <div className="p-3 rounded-xl bg-slate-50/70 border border-dashed border-slate-200 flex items-center justify-between text-xs">
+                                  <div className="flex items-center gap-2 text-slate-500">
+                                    <User className="w-3.5 h-3.5 text-slate-400" />
+                                    <span>Nenhum dado cadastral registrado para este cliente.</span>
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleOpenEditCadastral(sim, 'pessoal');
+                                    }}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-indigo-600 bg-white hover:bg-indigo-50 border border-indigo-200/70 rounded-lg transition-colors cursor-pointer"
+                                  >
+                                    <Pencil className="w-3 h-3" />
+                                    <span>Cadastrar Dados</span>
+                                  </button>
                                 </div>
                               )}
 
@@ -960,6 +1295,725 @@ export const SimulationsManagement: React.FC = () => {
                     <>
                       <Calculator className="w-4 h-4" />
                       <span>Iniciar Simulação</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Nova Cotação Personalizada (Webhook) */}
+      {isQuoteModalOpen && selectedLeadForQuote && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md sm:max-w-lg w-full p-6 sm:p-7 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                  <Calculator className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Nova Cotação</h3>
+                  <p className="text-[11px] text-slate-400">Simulação por valor de empréstimo ou parcela</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsQuoteModalOpen(false);
+                  setSelectedLeadForQuote(null);
+                  setQuoteValueInput('');
+                  setQuoteNotesInput('');
+                  setQuoteFormError(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-xl hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Resumo do Lead */}
+            <div className="mt-4 p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2">
+              <div className="flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Cliente</span>
+                  <p className="text-xs font-bold text-slate-900 truncate max-w-[200px] sm:max-w-xs">
+                    {selectedLeadForQuote.name || 'Cliente'}
+                  </p>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">CPF</span>
+                  <p className="text-xs font-mono font-bold text-slate-700">{formatCpf(selectedLeadForQuote.cpf)}</p>
+                </div>
+              </div>
+
+              {(selectedLeadForQuote.nome_produto || selectedLeadForQuote.NomeProduto || selectedLeadForQuote.produto_id || selectedLeadForQuote.ProdutoId) && (
+                <div className="pt-2 border-t border-slate-200/60 flex items-center justify-between text-xs">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Produto</span>
+                    <span className="font-bold text-brand-700">
+                      {selectedLeadForQuote.nome_produto || selectedLeadForQuote.NomeProduto || `ID: ${selectedLeadForQuote.produto_id || selectedLeadForQuote.ProdutoId}`}
+                    </span>
+                  </div>
+                  {(selectedLeadForQuote.valor_liberado_maximo || selectedLeadForQuote.valor_liberado) && (
+                    <div className="text-right">
+                      <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Máx. Liberado</span>
+                      <span className="font-bold text-emerald-600">
+                        {formatCurrency(selectedLeadForQuote.valor_liberado_maximo ?? selectedLeadForQuote.valor_liberado)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleSubmitQuote} className="mt-4 space-y-4">
+              {quoteFormError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-2xl flex items-center gap-2 font-medium">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{quoteFormError}</span>
+                </div>
+              )}
+
+              {quoteFormSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-2xl flex items-center gap-2 font-medium">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{quoteFormSuccess}</span>
+                </div>
+              )}
+
+              {/* Seletor do Tipo de Simulação */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-2">
+                  Tipo de Simulação
+                </label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setQuoteType('valor_emprestimo')}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      quoteType === 'valor_emprestimo'
+                        ? 'border-brand-500 bg-brand-50/50 ring-2 ring-brand-500/20 shadow-sm'
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${quoteType === 'valor_emprestimo' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                        <DollarSign className="w-4 h-4" />
+                      </div>
+                      <span className={`w-2.5 h-2.5 rounded-full border ${quoteType === 'valor_emprestimo' ? 'bg-brand-600 border-brand-600' : 'border-slate-300'}`} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-900 block">Valor de Empréstimo</span>
+                    <span className="text-[10px] text-slate-500">Valor desejado a liberar</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setQuoteType('valor_parcela')}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                      quoteType === 'valor_parcela'
+                        ? 'border-brand-500 bg-brand-50/50 ring-2 ring-brand-500/20 shadow-sm'
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/50'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${quoteType === 'valor_parcela' ? 'bg-brand-600 text-white' : 'bg-slate-100 text-slate-600'}`}>
+                        <CreditCard className="w-4 h-4" />
+                      </div>
+                      <span className={`w-2.5 h-2.5 rounded-full border ${quoteType === 'valor_parcela' ? 'bg-brand-600 border-brand-600' : 'border-slate-300'}`} />
+                    </div>
+                    <span className="text-xs font-bold text-slate-900 block">Valor de Parcela</span>
+                    <span className="text-[10px] text-slate-500">Parcela mensal máxima</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Input de Valor */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>
+                    {quoteType === 'valor_emprestimo' ? 'Valor do Empréstimo a Simular' : 'Valor da Parcela Desejada'}
+                  </span>
+                  <span className="text-[10px] font-normal text-slate-400">Obrigatório</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  placeholder="R$ 0,00"
+                  value={quoteValueInput}
+                  onChange={(e) => {
+                    setQuoteValueInput(formatCurrencyInput(e.target.value));
+                    setQuoteFormError(null);
+                  }}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3 text-base font-mono text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all font-bold"
+                />
+              </div>
+
+              {/* Observações */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>Observações (opcional)</span>
+                </label>
+                <textarea
+                  rows={2}
+                  placeholder="Informações adicionais para este cálculo..."
+                  value={quoteNotesInput}
+                  onChange={(e) => setQuoteNotesInput(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-2.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all font-medium resize-none"
+                />
+              </div>
+
+              {/* Botões */}
+              <div className="flex gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsQuoteModalOpen(false);
+                    setSelectedLeadForQuote(null);
+                    setQuoteValueInput('');
+                    setQuoteNotesInput('');
+                    setQuoteFormError(null);
+                  }}
+                  className="w-1/3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs py-3 rounded-2xl transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingQuote || !quoteValueInput}
+                  className="w-2/3 bg-brand-600 hover:bg-brand-700 active:scale-[0.98] disabled:opacity-50 text-white font-bold text-xs py-3 rounded-2xl shadow-md shadow-brand-500/20 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {isSubmittingQuote ? (
+                    <>
+                      <Clock className="w-4 h-4 animate-spin" />
+                      <span>Enviando Cotação...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Calculator className="w-4 h-4" />
+                      <span>Solicitar Cotação</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Edição de Dados Cadastrais */}
+      {isCadastralModalOpen && selectedLeadForCadastral && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-xl w-full p-6 sm:p-7 shadow-2xl border border-slate-100 animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Editar Dados Cadastrais</h3>
+                  <p className="text-[11px] text-slate-400">
+                    Cliente: <strong className="text-slate-700">{selectedLeadForCadastral.name || 'Cliente'}</strong> ({formatCpf(selectedLeadForCadastral.cpf)})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsCadastralModalOpen(false);
+                  setSelectedLeadForCadastral(null);
+                  setCadastralFormError(null);
+                }}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-xl hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Abas de Navegação */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mt-4 p-1 bg-slate-100/80 rounded-2xl shrink-0">
+              <button
+                type="button"
+                onClick={() => setActiveCadastralTab('pessoal')}
+                className={`py-2 px-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  activeCadastralTab === 'pessoal'
+                    ? 'bg-white text-indigo-700 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <User className="w-3.5 h-3.5" />
+                <span className="truncate">Pessoal</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveCadastralTab('documento')}
+                className={`py-2 px-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  activeCadastralTab === 'documento'
+                    ? 'bg-white text-indigo-700 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span className="truncate">Documento</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveCadastralTab('endereco')}
+                className={`py-2 px-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  activeCadastralTab === 'endereco'
+                    ? 'bg-white text-indigo-700 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Building2 className="w-3.5 h-3.5" />
+                <span className="truncate">Endereço</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveCadastralTab('bancario')}
+                className={`py-2 px-2.5 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                  activeCadastralTab === 'bancario'
+                    ? 'bg-white text-indigo-700 shadow-sm'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Landmark className="w-3.5 h-3.5" />
+                <span className="truncate">Bancário</span>
+              </button>
+            </div>
+
+            {/* Formulário com Scroll */}
+            <form onSubmit={handleSaveCadastral} className="mt-4 flex-1 overflow-y-auto pr-1 space-y-4">
+              {cadastralFormError && (
+                <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-2xl flex items-center gap-2 font-medium">
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span>{cadastralFormError}</span>
+                </div>
+              )}
+
+              {cadastralFormSuccess && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-2xl flex items-center gap-2 font-medium">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  <span>{cadastralFormSuccess}</span>
+                </div>
+              )}
+
+              {/* Aba: Pessoal & Renda */}
+              {activeCadastralTab === 'pessoal' && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Data de Nascimento
+                      </label>
+                      <input
+                        type="date"
+                        value={cadForm.data_nascimento}
+                        onChange={(e) => setCadForm({ ...cadForm, data_nascimento: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Sexo
+                      </label>
+                      <select
+                        value={cadForm.sexo}
+                        onChange={(e) => setCadForm({ ...cadForm, sexo: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      >
+                        <option value="">Selecione...</option>
+                        <option value="Feminino">Feminino</option>
+                        <option value="Masculino">Masculino</option>
+                        <option value="Outro">Outro</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Estado Civil
+                      </label>
+                      <select
+                        value={cadForm.estado_civil}
+                        onChange={(e) => setCadForm({ ...cadForm, estado_civil: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      >
+                        <option value="">Selecione...</option>
+                        <option value="Solteiro">Solteiro(a)</option>
+                        <option value="Casado">Casado(a)</option>
+                        <option value="Divorciado">Divorciado(a)</option>
+                        <option value="Viúvo">Viúvo(a)</option>
+                        <option value="União Estável">União Estável</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Renda Mensal (R$)
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={cadForm.valor_renda}
+                        onChange={(e) => setCadForm({ ...cadForm, valor_renda: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Nome da Mãe
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Nome completo da mãe"
+                      value={cadForm.nome_mae}
+                      onChange={(e) => setCadForm({ ...cadForm, nome_mae: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all uppercase"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Número Referencial IPC
+                    </label>
+                    <input
+                      type="number"
+                      placeholder="Ex: 17195116"
+                      value={cadForm.numero_referencial_ipc}
+                      onChange={(e) => setCadForm({ ...cadForm, numero_referencial_ipc: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Aba: Documento & Contato */}
+              {activeCadastralTab === 'documento' && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Tipo Documento
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: RG, CNH"
+                        value={cadForm.tipo_documento}
+                        onChange={(e) => setCadForm({ ...cadForm, tipo_documento: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all uppercase"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Número do Documento
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Número do documento"
+                        value={cadForm.numero_documento}
+                        onChange={(e) => setCadForm({ ...cadForm, numero_documento: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Órgão Emissor
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: SSP"
+                        value={cadForm.orgao_emissor}
+                        onChange={(e) => setCadForm({ ...cadForm, orgao_emissor: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        UF Emissor
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={2}
+                        placeholder="Ex: SP"
+                        value={cadForm.uf_orgao_emissor}
+                        onChange={(e) => setCadForm({ ...cadForm, uf_orgao_emissor: e.target.value.toUpperCase() })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all uppercase"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Data de Emissão
+                      </label>
+                      <input
+                        type="date"
+                        value={cadForm.data_emissao}
+                        onChange={(e) => setCadForm({ ...cadForm, data_emissao: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-slate-100">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        DDD Celular
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={2}
+                        placeholder="Ex: 11"
+                        value={cadForm.ddd_celular}
+                        onChange={(e) => setCadForm({ ...cadForm, ddd_celular: e.target.value.replace(/\D/g, '') })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Número Celular
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: 999999999"
+                        value={cadForm.numero_celular}
+                        onChange={(e) => setCadForm({ ...cadForm, numero_celular: e.target.value.replace(/\D/g, '') })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      E-mail do Cliente
+                    </label>
+                    <input
+                      type="email"
+                      placeholder="cliente@email.com"
+                      value={cadForm.email}
+                      onChange={(e) => setCadForm({ ...cadForm, email: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Aba: Endereço */}
+              {activeCadastralTab === 'endereco' && (
+                <div className="space-y-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        CEP
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={9}
+                        placeholder="00000-000"
+                        value={cadForm.cep}
+                        onChange={(e) => setCadForm({ ...cadForm, cep: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Tipo Logradouro
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: Rua, Av."
+                        value={cadForm.tipo_logradouro}
+                        onChange={(e) => setCadForm({ ...cadForm, tipo_logradouro: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Número
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: 123"
+                        value={cadForm.numero}
+                        onChange={(e) => setCadForm({ ...cadForm, numero: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Logradouro (Rua / Endereço)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Nome da rua ou avenida"
+                      value={cadForm.logradouro}
+                      onChange={(e) => setCadForm({ ...cadForm, logradouro: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Bairro
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Nome do bairro"
+                        value={cadForm.bairro}
+                        onChange={(e) => setCadForm({ ...cadForm, bairro: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        UF (Estado)
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={2}
+                        placeholder="Ex: SP"
+                        value={cadForm.uf}
+                        onChange={(e) => setCadForm({ ...cadForm, uf: e.target.value.toUpperCase() })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all uppercase"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                      Cidade
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="Nome da cidade"
+                      value={cadForm.cidade}
+                      onChange={(e) => setCadForm({ ...cadForm, cidade: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Aba: Dados Bancários */}
+              {activeCadastralTab === 'bancario' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1 flex items-center justify-between">
+                      <span>Banco (Instituição Financeira)</span>
+                      <span className="text-[10px] font-normal text-slate-400">
+                        {banks.length} bancos disponíveis
+                      </span>
+                    </label>
+                    <select
+                      value={cadForm.banco_numero}
+                      onChange={(e) => {
+                        const code = e.target.value;
+                        const sel = banks.find((b) => b.code === code);
+                        setCadForm({
+                          ...cadForm,
+                          banco_numero: code,
+                          banco_nome: sel ? sel.name : '',
+                        });
+                      }}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-medium cursor-pointer"
+                    >
+                      <option value="">Selecione um banco...</option>
+                      {banks.map((b) => (
+                        <option key={b.code} value={b.code}>
+                          {b.code} - {b.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {cadForm.banco_nome && (
+                    <div className="p-2.5 bg-indigo-50/70 border border-indigo-200/60 rounded-xl text-xs flex items-center gap-2">
+                      <Landmark className="w-4 h-4 text-indigo-600 shrink-0" />
+                      <span className="text-[11px] text-indigo-800 font-semibold">
+                        Código: <strong className="font-mono">{cadForm.banco_numero}</strong> • {cadForm.banco_nome}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Agência
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: 0001"
+                        value={cadForm.agencia}
+                        onChange={(e) => setCadForm({ ...cadForm, agencia: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Conta
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="Ex: 1234567"
+                        value={cadForm.conta}
+                        onChange={(e) => setCadForm({ ...cadForm, conta: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                        Dígito da Conta
+                      </label>
+                      <input
+                        type="text"
+                        maxLength={4}
+                        placeholder="Ex: 8"
+                        value={cadForm.conta_digito}
+                        onChange={(e) => setCadForm({ ...cadForm, conta_digito: e.target.value.toUpperCase() })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all uppercase"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Botões do Rodapé */}
+              <div className="flex gap-2.5 pt-3 border-t border-slate-100 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCadastralModalOpen(false);
+                    setSelectedLeadForCadastral(null);
+                    setCadastralFormError(null);
+                  }}
+                  className="w-1/3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs py-3 rounded-2xl transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingCadastral}
+                  className="w-2/3 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] disabled:opacity-50 text-white font-bold text-xs py-3 rounded-2xl shadow-md shadow-indigo-500/20 transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  {isSavingCadastral ? (
+                    <>
+                      <Clock className="w-4 h-4 animate-spin" />
+                      <span>Salvando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <CheckCircle2 className="w-4 h-4" />
+                      <span>Salvar Alterações</span>
                     </>
                   )}
                 </button>
