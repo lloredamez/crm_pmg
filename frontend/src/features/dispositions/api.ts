@@ -110,7 +110,7 @@ export async function deleteDisposition(id: string): Promise<void> {
 
 export async function tabulateLead(
   leadId: string,
-  data: { disposition_id: string; notes?: string }
+  data: { disposition_id: string; notes?: string; lead_fields?: Record<string, any> }
 ): Promise<Lead> {
   const API_URL = getApiUrl();
   const res = await fetch(`${API_URL}/api/v1/dispositions/tabulate/${leadId}`, {
