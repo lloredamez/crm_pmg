@@ -1,3 +1,4 @@
+from __future__ import annotations
 from uuid import UUID
 from datetime import datetime, timezone
 from typing import List, Optional, Tuple
@@ -11,6 +12,7 @@ from app.models.lead_assignment import LeadAssignment
 from app.models.sla_breach import SlaBreach
 from app.models.lead_tabulation import LeadTabulation
 from app.models.channel import Channel
+from app.models.disposition import Disposition
 from app.schemas.lead import LeadCreate, LeadUpdateStatus
 
 
@@ -599,6 +601,59 @@ class LeadService:
         await self.db.commit()
         return await self.get_lead_by_id(lead_id)
 
+    async def get_default_reveal_disposition(self, channel_code: Optional[str] = None) -> Optional[Disposition]:
+        from app.models.disposition import Disposition
+        from app.models.channel import Channel
+        from sqlalchemy import case, not_, func
+
+        # 1. Se o canal estiver presente, buscar se tem tabulação ativa vinculada com is_default_on_reveal=True
+        if channel_code and channel_code.strip():
+            chan_res = await self.db.execute(
+                select(Channel).options(selectinload(Channel.dispositions)).where(
+                    func.lower(Channel.code) == func.lower(channel_code.strip())
+                )
+            )
+            chan = chan_res.scalar_one_or_none()
+            if chan and chan.dispositions:
+                for d in chan.dispositions:
+                    if d.is_active and getattr(d, "is_default_on_reveal", False):
+                        return d
+
+        # 2. Busca pela tabulação ativa do sistema marcada explicitamente com is_default_on_reveal=True
+        query = (
+            select(Disposition)
+            .where(
+                Disposition.is_active.is_(True),
+                Disposition.is_default_on_reveal.is_(True),
+            )
+            .order_by(Disposition.id.asc())
+        )
+        res = await self.db.execute(query)
+        disp = res.scalars().first()
+        if disp:
+            return disp
+
+        # 3. Se nenhuma tabulação estiver marcada como padrão ainda, fallback seguro procurando "Em Contato"
+        fb_query = (
+            select(Disposition)
+            .where(
+                Disposition.is_active.is_(True),
+                Disposition.name.ilike("%Em Contato%"),
+                not_(Disposition.name.ilike("%Sem Contato%")),
+                not_(Disposition.name.ilike("%Sem Tabulação%")),
+                not_(Disposition.category.ilike("%Perda%")),
+                not_(Disposition.category.ilike("%Sem Tabulação%")),
+            )
+            .order_by(
+                case((func.lower(func.trim(Disposition.name)) == "em contato", 1), else_=2),
+                Disposition.id.asc()
+            )
+        )
+        res_fb = await self.db.execute(fb_query)
+        return res_fb.scalars().first()
+
+    get_em_contato_disposition = get_default_reveal_disposition
+
     async def reveal_lead(self, lead_id: UUID) -> Optional[Lead]:
         from app.models.disposition import Disposition
         from datetime import timedelta
@@ -618,21 +673,16 @@ class LeadService:
         lead.is_revealed = True
         lead.revealed_at = now
 
-        # Tabulate as "Em Contato" if not dispositioned or if in initial state
-        if not lead.disposition_id:
-            disp_res = await self.db.execute(
-                select(Disposition).where(
-                    Disposition.is_active.is_(True),
-                    or_(
-                        Disposition.name.ilike("%Em Contato%"),
-                        Disposition.name.ilike("%Contato%")
-                    )
-                )
-            )
-            disp = disp_res.scalars().first()
-            if not disp:
-                disp_res_any = await self.db.execute(select(Disposition).where(Disposition.is_active.is_(True)))
-                disp = disp_res_any.scalars().first()
+        # Tabular com a tabulação padrão de revelação caso ainda não esteja tabulado ou em estado inicial
+        current_disp_name = (lead.disposition.name or "").lower() if lead.disposition else ""
+        should_tabulate_on_reveal = (
+            not lead.disposition_id or
+            "sem contato" in current_disp_name or
+            "sem tabula" in current_disp_name
+        )
+
+        if should_tabulate_on_reveal:
+            disp = await self.get_default_reveal_disposition(lead.channel_code)
 
             if disp:
                 lead.disposition_id = disp.id
@@ -815,6 +865,16 @@ class LeadService:
             first_contact_deadline = await calculate_smart_business_deadline(
                 self.db, now, target_sla_minutes
             )
+
+            disp = await self.get_default_reveal_disposition(bucket_lead.channel_code)
+            disp_timeout = None
+            if disp and disp.has_timeout and disp.timeout_minutes and disp.timeout_minutes > 0:
+                disp_timeout = await calculate_smart_business_deadline(
+                    self.db, now, disp.timeout_minutes
+                )
+            else:
+                disp_timeout = first_contact_deadline
+
             lead = Lead(
                 id=bucket_lead.id,
                 name=bucket_lead.name,
@@ -837,7 +897,9 @@ class LeadService:
                 status="assigned",
                 current_attendant_id=current_user.id,
                 assigned_at=now,
-                disposition_timeout_at=first_contact_deadline,
+                disposition_id=disp.id if disp else None,
+                dispositioned_at=now if disp else None,
+                disposition_timeout_at=disp_timeout,
                 unit_id=current_user.unit_id or bucket_lead.unit_id,
                 created_at=bucket_lead.created_at
             )
@@ -850,9 +912,23 @@ class LeadService:
                 lead_id=lead.id,
                 attendant_id=current_user.id,
                 status="active",
+                disposition_name=disp.name if disp else None,
+                disposition_notes="Tabulação automática ao assumir lead" if disp else None,
                 assigned_at=now
             )
             self.db.add(new_assignment)
+
+            if disp:
+                tabulation_entry = LeadTabulation(
+                    lead_id=lead.id,
+                    attendant_id=current_user.id,
+                    disposition_id=disp.id,
+                    disposition_name=disp.name,
+                    disposition_notes="Tabulação automática ao assumir lead",
+                    created_at=now
+                )
+                self.db.add(tabulation_entry)
+
             await self.db.commit()
 
             try:
@@ -928,19 +1004,46 @@ class LeadService:
         lead.status = "assigned"
         lead.assigned_at = now
         lead.unit_id = current_user.unit_id or lead.unit_id
-        if not lead.disposition_id:
-            lead.disposition_timeout_at = await calculate_smart_business_deadline(
-                self.db, now, target_sla_minutes
-            )
+
+        disp = await self.get_default_reveal_disposition(lead.channel_code)
+        current_disp_name = (lead.disposition.name or "").lower() if lead.disposition else ""
+        if not lead.disposition_id or "sem contato" in current_disp_name or "sem tabula" in current_disp_name:
+            if disp:
+                lead.disposition_id = disp.id
+                lead.dispositioned_at = now
+                if disp.has_timeout and disp.timeout_minutes and disp.timeout_minutes > 0:
+                    lead.disposition_timeout_at = await calculate_smart_business_deadline(
+                        self.db, now, disp.timeout_minutes
+                    )
+                else:
+                    lead.disposition_timeout_at = None
+            else:
+                lead.disposition_timeout_at = await calculate_smart_business_deadline(
+                    self.db, now, target_sla_minutes
+                )
         current_user.last_assigned_at = now
 
         new_assignment = LeadAssignment(
             lead_id=lead.id,
             attendant_id=current_user.id,
             status="active",
+            disposition_name=disp.name if disp else None,
+            disposition_notes="Tabulação inicial ao pegar lead" if disp else None,
             assigned_at=now
         )
         self.db.add(new_assignment)
+
+        if disp:
+            tabulation_entry = LeadTabulation(
+                lead_id=lead.id,
+                attendant_id=current_user.id,
+                disposition_id=disp.id,
+                disposition_name=disp.name,
+                disposition_notes="Tabulação inicial ao pegar lead",
+                created_at=now
+            )
+            self.db.add(tabulation_entry)
+
         await self.db.commit()
 
         # Dispara notificação via Socket

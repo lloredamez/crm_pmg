@@ -14,6 +14,7 @@ class Disposition(Base):
     has_timeout = Column(Boolean, default=True, nullable=False)
     timeout_minutes = Column(Float, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    is_default_on_reveal = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
 
     leads = relationship("Lead", back_populates="disposition")

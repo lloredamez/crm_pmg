@@ -102,6 +102,7 @@ async def apply_database_migrations_and_schema():
         await conn.execute(text("ALTER TABLE lead_assignments ADD COLUMN IF NOT EXISTS disposition_name VARCHAR(255);"))
         await conn.execute(text("ALTER TABLE lead_assignments ADD COLUMN IF NOT EXISTS disposition_notes TEXT;"))
         await conn.execute(text("ALTER TABLE dispositions ALTER COLUMN timeout_minutes TYPE FLOAT USING timeout_minutes::double precision;"))
+        await conn.execute(text("ALTER TABLE dispositions ADD COLUMN IF NOT EXISTS is_default_on_reveal BOOLEAN DEFAULT FALSE;"))
         
         await conn.execute(text("ALTER TABLE lead_assignments DROP CONSTRAINT IF EXISTS lead_assignments_lead_id_fkey;"))
         await conn.execute(text("ALTER TABLE sla_breaches DROP CONSTRAINT IF EXISTS sla_breaches_lead_id_fkey;"))
@@ -505,7 +506,7 @@ async def seed_initial_data():
             default_dispositions = [
                 Disposition(name="Sem Tabulação (Primeiro Contato)", category="Sem Tabulação", has_timeout=True, timeout_minutes=15),
                 Disposition(name="Vendido", category="Venda", has_timeout=False, timeout_minutes=None),
-                Disposition(name="Em Contato", category="Negociação", has_timeout=True, timeout_minutes=120),
+                Disposition(name="Em Contato", category="Negociação", has_timeout=True, timeout_minutes=120, is_default_on_reveal=True),
                 Disposition(name="Formalização", category="Negociação", has_timeout=True, timeout_minutes=240),
                 Disposition(name="Reapresentação", category="Negociação", has_timeout=True, timeout_minutes=1440),
             ]
@@ -513,6 +514,20 @@ async def seed_initial_data():
             await session.commit()
             logger.info("Tabulações padrão criadas com sucesso!")
         else:
+            reveal_check = await session.execute(
+                select(Disposition).where(Disposition.is_default_on_reveal.is_(True))
+            )
+            if not reveal_check.scalars().first():
+                em_contato_res = await session.execute(
+                    select(Disposition).where(
+                        Disposition.name.ilike("%Em Contato%"),
+                        Disposition.is_active.is_(True)
+                    )
+                )
+                em_contato_disp = em_contato_res.scalars().first()
+                if em_contato_disp:
+                    em_contato_disp.is_default_on_reveal = True
+                    await session.commit()
             sem_tab_check = await session.execute(
                 select(Disposition).where(
                     or_(

@@ -9,6 +9,7 @@ class DispositionBase(BaseModel):
     has_timeout: bool = Field(default=True)
     timeout_minutes: Optional[float] = Field(default=None, gt=0)
     is_active: bool = Field(default=True)
+    is_default_on_reveal: bool = Field(default=False)
 
 class DispositionCreate(DispositionBase):
     pass
@@ -19,6 +20,7 @@ class DispositionUpdate(BaseModel):
     has_timeout: Optional[bool] = None
     timeout_minutes: Optional[float] = Field(None, gt=0)
     is_active: Optional[bool] = None
+    is_default_on_reveal: Optional[bool] = None
 
 class DispositionResponse(DispositionBase):
     id: UUID

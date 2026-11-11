@@ -47,12 +47,18 @@ class DispositionService:
         return result.scalar_one_or_none()
 
     async def create_disposition(self, disposition_in: DispositionCreate) -> Disposition:
+        if disposition_in.is_default_on_reveal:
+            await self.db.execute(
+                update(Disposition).values(is_default_on_reveal=False)
+            )
+
         disposition = Disposition(
             name=disposition_in.name,
             category=disposition_in.category,
             has_timeout=disposition_in.has_timeout,
             timeout_minutes=disposition_in.timeout_minutes if disposition_in.has_timeout else None,
-            is_active=disposition_in.is_active
+            is_active=disposition_in.is_active,
+            is_default_on_reveal=disposition_in.is_default_on_reveal
         )
         self.db.add(disposition)
         await self.db.commit()
@@ -64,6 +70,13 @@ class DispositionService:
         if not disposition:
             return None
 
+        if disposition_in.is_default_on_reveal is True:
+            await self.db.execute(
+                update(Disposition)
+                .where(Disposition.id != disposition_id)
+                .values(is_default_on_reveal=False)
+            )
+
         if disposition_in.name is not None:
             disposition.name = disposition_in.name
         if disposition_in.category is not None:
@@ -74,6 +87,8 @@ class DispositionService:
             disposition.timeout_minutes = disposition_in.timeout_minutes if disposition.has_timeout else None
         if disposition_in.is_active is not None:
             disposition.is_active = disposition_in.is_active
+        if disposition_in.is_default_on_reveal is not None:
+            disposition.is_default_on_reveal = disposition_in.is_default_on_reveal
 
         await self.db.commit()
         await self.db.refresh(disposition)
