@@ -128,12 +128,67 @@ class DispositionService:
                 )
 
         now = datetime.now(timezone.utc)
+
+        # Se campos do lead foram passados, atualizar o lead antes de validar
+        if tabulate_in.lead_fields and isinstance(tabulate_in.lead_fields, dict):
+            from app.schemas.lead import LeadUpdateDetails
+            from app.features.leads.service import LeadService
+            details_obj = LeadUpdateDetails(**tabulate_in.lead_fields)
+            await LeadService(self.db).update_details(lead.id, details_obj)
+            re_res = await self.db.execute(query)
+            lead = re_res.scalar_one_or_none()
+            if not lead:
+                return None
+
+        # Identificar se a tabulação é de ganho / conversão
+        cat_lower = (disposition.category or "").lower()
+        disp_name_lower = (disposition.name or "").lower()
+        is_won = (
+            any(term in cat_lower for term in ["venda", "ganho", "sucesso", "fechado"]) or
+            any(term in disp_name_lower for term in ["venda", "ganho", "sucesso", "fechado"])
+        )
+
+        # Validação: na tabulação de ganho, é obrigatório preencher todos os campos obrigatórios
+        if is_won:
+            required_fields = []
+            if lead.channel_code and lead.channel_code.strip():
+                chan_res = await self.db.execute(
+                    select(Channel).where(func.lower(Channel.code) == func.lower(lead.channel_code.strip()))
+                )
+                chan_obj = chan_res.scalar_one_or_none()
+                if chan_obj and isinstance(chan_obj.allowed_fields, list):
+                    for item in chan_obj.allowed_fields:
+                        if isinstance(item, dict) and item.get("required") is True:
+                            required_fields.append(item)
+
+            missing_labels = []
+            for rf in required_fields:
+                key = rf.get("key")
+                label = rf.get("label") or key
+                val = getattr(lead, key, None)
+                if val is None and lead.custom_fields and isinstance(lead.custom_fields, dict):
+                    val = lead.custom_fields.get(key)
+
+                is_empty = False
+                if val is None:
+                    is_empty = True
+                elif isinstance(val, str) and val.strip() == "":
+                    is_empty = True
+
+                if is_empty:
+                    missing_labels.append(label)
+
+            if missing_labels:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Para tabulação de ganho, é obrigatório preencher todos os campos obrigatórios: {', '.join(missing_labels)}."
+                )
+
         lead.disposition_id = disposition.id
         lead.dispositioned_at = now
 
         # Update status based on category if applicable
-        cat_lower = disposition.category.lower()
-        if "venda" in cat_lower or "sucesso" in cat_lower or "fechado" in cat_lower:
+        if is_won:
             lead.status = "converted"
         elif "perda" in cat_lower or "sem interesse" in cat_lower:
             lead.status = "lost"

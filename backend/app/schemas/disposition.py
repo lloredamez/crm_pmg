@@ -30,6 +30,7 @@ class DispositionResponse(DispositionBase):
 class LeadTabulateRequest(BaseModel):
     disposition_id: UUID
     notes: Optional[str] = None
+    lead_fields: Optional[dict] = None
 
 class ChannelDispositionSlaCreate(BaseModel):
     channel_id: UUID
