@@ -151,6 +151,7 @@ export interface Disposition {
   has_timeout: boolean;
   timeout_minutes?: number | null;
   is_active: boolean;
+  is_default_on_reveal?: boolean;
   created_at: string;
 }
 

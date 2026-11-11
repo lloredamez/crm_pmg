@@ -42,6 +42,7 @@ export async function createDisposition(data: {
   has_timeout: boolean;
   timeout_minutes?: number | null;
   is_active?: boolean;
+  is_default_on_reveal?: boolean;
 }): Promise<Disposition> {
   const API_URL = getApiUrl();
   const res = await fetch(`${API_URL}/api/v1/dispositions`, {
@@ -63,6 +64,7 @@ export async function updateDisposition(
     has_timeout?: boolean;
     timeout_minutes?: number | null;
     is_active?: boolean;
+    is_default_on_reveal?: boolean;
   }
 ): Promise<Disposition> {
   const API_URL = getApiUrl();

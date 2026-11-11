@@ -14,7 +14,7 @@ import {
 } from '@/features/dispositions/api';
 import { fetchChannels } from '@/features/channels/api';
 import { fetchCategories } from '@/features/categories/api';
-import { Plus, Edit2, Trash2, Tag, Power, X, Clock, AlertCircle, Sliders, Share2, Check } from 'lucide-react';
+import { Plus, Edit2, Trash2, Tag, Power, X, Clock, AlertCircle, Sliders, Share2, Check, Eye } from 'lucide-react';
 
 export const DispositionManagement: React.FC = () => {
   const [dispositions, setDispositions] = useState<Disposition[]>([]);
@@ -30,6 +30,7 @@ export const DispositionManagement: React.FC = () => {
   const [category, setCategory] = useState('Negociação');
   const [hasTimeout, setHasTimeout] = useState(true);
   const [timeoutHours, setTimeoutHours] = useState('2');
+  const [isDefaultOnReveal, setIsDefaultOnReveal] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
@@ -71,6 +72,7 @@ export const DispositionManagement: React.FC = () => {
     setCategory('Negociação');
     setHasTimeout(true);
     setTimeoutHours('2');
+    setIsDefaultOnReveal(false);
     setErrorMsg('');
     setIsModalOpen(true);
   };
@@ -83,6 +85,7 @@ export const DispositionManagement: React.FC = () => {
     setTimeoutHours(
       disp.timeout_minutes ? (disp.timeout_minutes / 60).toString() : '2'
     );
+    setIsDefaultOnReveal(!!disp.is_default_on_reveal);
     setErrorMsg('');
     setIsModalOpen(true);
   };
@@ -125,6 +128,7 @@ export const DispositionManagement: React.FC = () => {
           category,
           has_timeout: hasTimeout,
           timeout_minutes: minutes,
+          is_default_on_reveal: isDefaultOnReveal,
         });
       } else {
         await createDisposition({
@@ -133,6 +137,7 @@ export const DispositionManagement: React.FC = () => {
           has_timeout: hasTimeout,
           timeout_minutes: minutes,
           is_active: true,
+          is_default_on_reveal: isDefaultOnReveal,
         });
       }
       setIsModalOpen(false);
@@ -264,6 +269,11 @@ export const DispositionManagement: React.FC = () => {
                           {isSemTabulacao && (
                             <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200">
                               SLA Inicial
+                            </span>
+                          )}
+                          {disp.is_default_on_reveal && (
+                            <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-200 flex items-center gap-1">
+                              <Eye className="w-3 h-3" /> Padrão ao Revelar
                             </span>
                           )}
                         </div>
@@ -412,6 +422,24 @@ export const DispositionManagement: React.FC = () => {
                     />
                   </div>
                 )}
+              </div>
+
+              <div className="bg-indigo-50/70 border border-indigo-100 p-3.5 rounded-2xl flex items-start gap-2.5">
+                <input
+                  type="checkbox"
+                  id="chk-default-reveal"
+                  checked={isDefaultOnReveal}
+                  onChange={(e) => setIsDefaultOnReveal(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500 cursor-pointer"
+                />
+                <div>
+                  <label htmlFor="chk-default-reveal" className="text-xs font-semibold text-indigo-950 block cursor-pointer">
+                    Tabulação Padrão ao Revelar Lead
+                  </label>
+                  <span className="text-[11px] text-indigo-700 block leading-tight mt-0.5">
+                    Quando o atendente clica para ver os dados do lead (telefone/CPF) ou assume o lead, esta tabulação será aplicada automaticamente.
+                  </span>
+                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
