@@ -10,8 +10,47 @@ from app.models.disposition import Disposition
 from app.models.channel import Channel
 from app.models.category import Category
 from app.models.calendar import CalendarConfig, Holiday
+from app.models.bank import Bank
 
 logger = logging.getLogger(__name__)
+
+INITIAL_BANKS = [
+    {"code": "001", "name": "Banco do Brasil S.A."},
+    {"code": "033", "name": "Banco Santander (Brasil) S.A."},
+    {"code": "104", "name": "Caixa Econômica Federal"},
+    {"code": "237", "name": "Banco Bradesco S.A."},
+    {"code": "341", "name": "Itaú Unibanco S.A."},
+    {"code": "260", "name": "Nu Pagamentos S.A. (Nubank)"},
+    {"code": "077", "name": "Banco Inter S.A."},
+    {"code": "336", "name": "Banco C6 S.A."},
+    {"code": "212", "name": "Banco Original S.A."},
+    {"code": "623", "name": "Banco PAN S.A."},
+    {"code": "422", "name": "Banco Safra S.A."},
+    {"code": "041", "name": "Banco do Estado do Rio Grande do Sul S.A. (Banrisul)"},
+    {"code": "070", "name": "Banco de Brasília S.A. (BRB)"},
+    {"code": "748", "name": "Banco Cooperativo Sicredi S.A."},
+    {"code": "756", "name": "Banco Cooperativo Sicoob S.A."},
+    {"code": "655", "name": "Banco Votorantim S.A. (BV)"},
+    {"code": "029", "name": "Banco Itaú Consignado S.A."},
+    {"code": "633", "name": "Banco Rendimento S.A."},
+    {"code": "012", "name": "Banco INBURSA de Investimentos S.A."},
+    {"code": "389", "name": "Banco Mercantil do Brasil S.A."},
+    {"code": "021", "name": "BANESTES S.A. Banco do Estado do Espírito Santo"},
+    {"code": "047", "name": "Banco do Estado de Sergipe S.A. (Banese)"},
+    {"code": "037", "name": "Banco do Estado do Pará S.A. (Banpará)"},
+    {"code": "208", "name": "Banco BTG Pactual S.A."},
+    {"code": "243", "name": "Banco Master S.A."},
+    {"code": "654", "name": "Banco Digimais S.A."},
+    {"code": "335", "name": "Banco Digio S.A."},
+    {"code": "380", "name": "PicPay Bank - Banco Múltiplo S.A."},
+    {"code": "290", "name": "PagBank (PagSeguro Internet S.A.)"},
+    {"code": "323", "name": "Mercado Pago Instituição de Pagamento LTDA"},
+    {"code": "707", "name": "Banco Daycoval S.A."},
+    {"code": "626", "name": "Banco Crefisa S.A."},
+    {"code": "318", "name": "Banco BMG S.A."},
+    {"code": "643", "name": "Banco Pine S.A."},
+    {"code": "653", "name": "Banco Indusval S.A."},
+]
 
 async def apply_database_migrations_and_schema():
     """Garante a integridade do schema e colunas essenciais."""
@@ -248,6 +287,26 @@ async def apply_database_migrations_and_schema():
             );
         """))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_lead_data_lead ON simulation_lead_data (simulation_lead_id);"))
+
+        # Tabela e índices para instituições bancárias
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS banks (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                code VARCHAR(20) NOT NULL UNIQUE,
+                name VARCHAR(255) NOT NULL,
+                is_active BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+        """))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_banks_code ON banks (code);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_banks_name ON banks (name);"))
+
+        # Colunas de dados bancários em simulation_lead_data
+        await conn.execute(text("ALTER TABLE simulation_lead_data ADD COLUMN IF NOT EXISTS banco_numero VARCHAR(20);"))
+        await conn.execute(text("ALTER TABLE simulation_lead_data ADD COLUMN IF NOT EXISTS banco_nome VARCHAR(100);"))
+        await conn.execute(text("ALTER TABLE simulation_lead_data ADD COLUMN IF NOT EXISTS agencia VARCHAR(20);"))
+        await conn.execute(text("ALTER TABLE simulation_lead_data ADD COLUMN IF NOT EXISTS conta VARCHAR(30);"))
+        await conn.execute(text("ALTER TABLE simulation_lead_data ADD COLUMN IF NOT EXISTS conta_digito VARCHAR(10);"))
 
         # Migrar dados legados de simulações existentes em simulation_leads para simulation_offers
         await conn.execute(text("""
@@ -535,3 +594,16 @@ async def seed_initial_data():
                 ))
             await session.commit()
             logger.info("Feriados nacionais padrão cadastrados com sucesso!")
+
+        # Seed da Tabela de Bancos Brasileiros
+        bank_count_res = await session.execute(select(Bank))
+        if not bank_count_res.scalars().first():
+            logger.info("Cadastrando instituições bancárias brasileiras padrão...")
+            for b in INITIAL_BANKS:
+                session.add(Bank(
+                    code=b["code"],
+                    name=b["name"],
+                    is_active=True
+                ))
+            await session.commit()
+            logger.info(f"{len(INITIAL_BANKS)} bancos cadastrados com sucesso!")

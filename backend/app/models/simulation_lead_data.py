@@ -51,6 +51,13 @@ class SimulationLeadData(Base):
     uf_orgao_emissor = Column(String(10), nullable=True)
     data_emissao = Column(String(50), nullable=True)
 
+    # Dados Bancários
+    banco_numero = Column(String(20), nullable=True)
+    banco_nome = Column(String(100), nullable=True)
+    agencia = Column(String(20), nullable=True)
+    conta = Column(String(30), nullable=True)
+    conta_digito = Column(String(10), nullable=True)
+
     # Dados brutos para contingência
     raw_data = Column(JSON, nullable=True, default=dict)
 
