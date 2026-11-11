@@ -9,6 +9,12 @@ class SimulationCreate(BaseModel):
     notes: Optional[str] = Field(None, description="Observações sobre o cliente ou simulação")
     observacoes: Optional[str] = Field(None, description="Alias para notes")
 
+class SimulationQuoteCreate(BaseModel):
+    tipo_simulacao: str = Field(..., description="Tipo da simulação: 'valor_parcela' ou 'valor_emprestimo'")
+    valor_simulado: float = Field(..., gt=0, description="Valor numérico a ser simulado")
+    produto_id: Optional[str] = Field(None, description="ID do produto externo")
+    notes: Optional[str] = Field(None, description="Observações adicionais para esta cotação")
+
 class SimulationOfferResponse(BaseModel):
     id: UUID
     simulation_lead_id: UUID
@@ -51,11 +57,44 @@ class SimulationLeadDataResponse(BaseModel):
     orgao_emissor: Optional[str] = None
     uf_orgao_emissor: Optional[str] = None
     data_emissao: Optional[str] = None
+    banco_numero: Optional[str] = None
+    banco_nome: Optional[str] = None
+    agencia: Optional[str] = None
+    conta: Optional[str] = None
+    conta_digito: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+
+class SimulationLeadDataUpdate(BaseModel):
+    data_nascimento: Optional[str] = None
+    sexo: Optional[str] = None
+    estado_civil: Optional[str] = None
+    nome_mae: Optional[str] = None
+    numero_referencial_ipc: Optional[int] = None
+    valor_renda: Optional[float] = None
+    cep: Optional[str] = None
+    tipo_logradouro: Optional[str] = None
+    logradouro: Optional[str] = None
+    numero: Optional[str] = None
+    bairro: Optional[str] = None
+    cidade: Optional[str] = None
+    uf: Optional[str] = None
+    ddd_celular: Optional[str] = None
+    numero_celular: Optional[str] = None
+    email: Optional[str] = None
+    tipo_documento: Optional[str] = None
+    numero_documento: Optional[str] = None
+    orgao_emissor: Optional[str] = None
+    uf_orgao_emissor: Optional[str] = None
+    data_emissao: Optional[str] = None
+    banco_numero: Optional[str] = None
+    banco_nome: Optional[str] = None
+    agencia: Optional[str] = None
+    conta: Optional[str] = None
+    conta_digito: Optional[str] = None
 
 class SimulationUpdate(BaseModel):
     lead_id: Optional[UUID] = Field(None, description="ID do lead de simulação")
@@ -125,6 +164,20 @@ class SimulationUpdate(BaseModel):
     uf_orgao_emissor: Optional[str] = None
     dataEmissao: Optional[str] = None
     data_emissao: Optional[str] = None
+
+    # Dados Bancários
+    banco: Optional[Any] = None
+    banco_numero: Optional[str] = None
+    numeroBanco: Optional[str] = None
+    numero_banco: Optional[str] = None
+    banco_nome: Optional[str] = None
+    nomeBanco: Optional[str] = None
+    nome_banco: Optional[str] = None
+    agencia: Optional[str] = None
+    conta: Optional[str] = None
+    contaDigito: Optional[str] = None
+    conta_digito: Optional[str] = None
+    dados_bancarios: Optional[Dict[str, Any]] = None
 
     # Suporte a objetos aninhados opcionais
     dados_cadastrais: Optional[Dict[str, Any]] = None

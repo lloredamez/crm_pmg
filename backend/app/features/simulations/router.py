@@ -11,6 +11,8 @@ from app.models.user import User
 from app.features.webhooks.router import _check_webhook_secret
 from app.schemas.simulation import (
     SimulationCreate,
+    SimulationQuoteCreate,
+    SimulationLeadDataUpdate,
     SimulationUpdate,
     SimulationResponse,
     SimulationPaginationResponse
@@ -105,6 +107,47 @@ async def update_simulation_callback(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+@router.post("/{id}/quote", response_model=SimulationResponse, status_code=status.HTTP_201_CREATED)
+async def request_simulation_quote(
+    id: UUID,
+    data: SimulationQuoteCreate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Dispara uma nova cotação (por parcela ou empréstimo) para o webhook externo com lead_id e produto_id."""
+    _ensure_simulation_access(current_user)
+    service = SimulationService(db)
+    try:
+        return await service.request_quotation(lead_id=id, current_user=current_user, data=data)
+    except LookupError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Erro ao processar nova cotação: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro interno ao solicitar cotação.")
+
+@router.put("/{id}/cadastral-data", response_model=SimulationResponse)
+@router.patch("/{id}/cadastral-data", response_model=SimulationResponse)
+async def update_simulation_cadastral_data(
+    id: UUID,
+    data: SimulationLeadDataUpdate,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Permite ao consultor autenticado atualizar ou cadastrar os dados cadastrais do cliente."""
+    _ensure_simulation_access(current_user)
+    service = SimulationService(db)
+    try:
+        return await service.update_cadastral_data(lead_id=id, current_user=current_user, data=data)
+    except LookupError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Erro ao salvar dados cadastrais da simulação: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro interno ao salvar dados cadastrais.")
 
 @router.patch("/{id}", response_model=SimulationResponse)
 @router.post("/{id}", response_model=SimulationResponse)

@@ -17,10 +17,12 @@ from app.models.simulation_lead_data import SimulationLeadData
 from app.models.user import User
 from app.schemas.simulation import (
     SimulationCreate,
+    SimulationQuoteCreate,
     SimulationUpdate,
     SimulationResponse,
     SimulationOfferResponse,
-    SimulationLeadDataResponse
+    SimulationLeadDataResponse,
+    SimulationLeadDataUpdate
 )
 
 logger = logging.getLogger(__name__)
@@ -129,6 +131,11 @@ class SimulationService:
                 orgao_emissor=c.orgao_emissor,
                 uf_orgao_emissor=c.uf_orgao_emissor,
                 data_emissao=c.data_emissao,
+                banco_numero=c.banco_numero,
+                banco_nome=c.banco_nome,
+                agencia=c.agencia,
+                conta=c.conta,
+                conta_digito=c.conta_digito,
                 created_at=c.created_at,
                 updated_at=c.updated_at,
             )
@@ -310,6 +317,198 @@ class SimulationService:
 
         return response
 
+    async def update_cadastral_data(
+        self,
+        lead_id: UUID,
+        current_user: User,
+        data: SimulationLeadDataUpdate
+    ) -> SimulationResponse:
+        """Atualiza ou cria os dados cadastrais (pessoal, endereço, contato, documento) de uma simulação."""
+        query = (
+            select(SimulationLead)
+            .options(
+                selectinload(SimulationLead.current_attendant),
+                selectinload(SimulationLead.unit),
+                selectinload(SimulationLead.cadastral_data),
+                selectinload(SimulationLead.offers)
+            )
+            .where(SimulationLead.id == lead_id)
+        )
+        res = await self.db.execute(query)
+        lead = res.scalar_one_or_none()
+        if not lead:
+            raise LookupError(f"Simulação não encontrada para o ID: {lead_id}")
+
+        now = datetime.now(timezone.utc)
+        cad_record = lead.cadastral_data
+        if not cad_record:
+            cad_record = SimulationLeadData(
+                simulation_lead_id=lead.id,
+                created_at=now,
+                updated_at=now
+            )
+            self.db.add(cad_record)
+
+        update_dict = data.model_dump(exclude_unset=True)
+        for field, val in update_dict.items():
+            if hasattr(cad_record, field):
+                if isinstance(val, str):
+                    val = val.strip()
+                setattr(cad_record, field, val)
+
+        cad_record.updated_at = now
+        lead.updated_at = now
+        await self.db.commit()
+
+        # Recarregar relacionamentos atualizados
+        res_reloaded = await self.db.execute(query)
+        lead_loaded = res_reloaded.scalar_one()
+
+        response = self._to_response(lead_loaded)
+
+        # Notificar via WebSocket em tempo real
+        try:
+            from app.core.socket_manager import sio
+            await sio.emit("simulation:updated", {
+                "id": str(lead_loaded.id),
+                "name": lead_loaded.name,
+                "cpf": lead_loaded.cpf,
+                "phone": lead_loaded.phone,
+                "notes": lead_loaded.notes,
+                "simulation_status": lead_loaded.simulation_status,
+                "total_offers": response.total_offers,
+                "offers": [o.model_dump(mode="json") for o in response.offers],
+                "cadastral_data": response.cadastral_data.model_dump(mode="json") if response.cadastral_data else None,
+                "current_attendant_id": str(lead_loaded.current_attendant_id) if lead_loaded.current_attendant_id else None
+            })
+        except Exception as e:
+            logger.warning(f"Falha ao emitir socket simulation:updated: {e}")
+
+        return response
+
+    async def request_quotation(
+        self,
+        lead_id: UUID,
+        current_user: User,
+        data: SimulationQuoteCreate
+    ) -> SimulationResponse:
+        query = (
+            select(SimulationLead)
+            .options(
+                selectinload(SimulationLead.current_attendant),
+                selectinload(SimulationLead.unit),
+                selectinload(SimulationLead.cadastral_data),
+                selectinload(SimulationLead.offers).selectinload(SimulationOffer.attendant)
+            )
+            .where(SimulationLead.id == lead_id)
+        )
+        result = await self.db.execute(query)
+        lead = result.scalars().first()
+        if not lead:
+            raise LookupError("Lead de simulação não encontrado.")
+
+        tipo = data.tipo_simulacao.strip().lower()
+        if tipo not in ("valor_emprestimo", "valor_parcela"):
+            raise ValueError("tipo_simulacao deve ser 'valor_emprestimo' ou 'valor_parcela'.")
+
+        valor = float(data.valor_simulado)
+        if valor <= 0:
+            raise ValueError("O valor a ser simulado deve ser maior que zero.")
+
+        now = datetime.now(timezone.utc)
+        product_id = lead.produto_id or data.produto_id
+
+        # Atualiza produto_id no lead se fornecido e ainda não preenchido
+        if not lead.produto_id and data.produto_id:
+            lead.produto_id = data.produto_id.strip()
+
+        # Cria nova oferta pendente vinculada ao atendente
+        v_liberado = valor if tipo == "valor_emprestimo" else None
+        v_parcela = valor if tipo == "valor_parcela" else None
+
+        new_offer = SimulationOffer(
+            simulation_lead_id=lead.id,
+            attendant_id=current_user.id,
+            valor_liberado=v_liberado,
+            valor_parcela=v_parcela,
+            status="pending",
+            custom_fields={
+                "tipo_simulacao": tipo,
+                "valor_simulado": valor,
+                "notes": data.notes
+            },
+            created_at=now,
+            updated_at=now
+        )
+        self.db.add(new_offer)
+        lead.updated_at = now
+        await self.db.flush()
+
+        # Disparo do Webhook externo configurado no .env
+        webhook_url = _get_simulation_webhook_url()
+        if webhook_url:
+            webhook_payload = {
+                "event": "new_quotation",
+                "lead_id": str(lead.id),
+                "offer_id": str(new_offer.id),
+                "produto_id": product_id,
+                "tipo_simulacao": tipo,
+                "valor_simulado": valor,
+                "cpf": _clean_cpf(lead.cpf),
+                "cpf_formatted": lead.cpf,
+                "phone": lead.phone,
+                "nome": lead.name,
+                "attendant_id": str(current_user.id),
+                "attendant_name": current_user.name,
+                "unit_id": str(current_user.unit_id) if current_user.unit_id else None,
+                "notes": data.notes,
+                "created_at": now.isoformat()
+            }
+            logger.info(f"Disparando webhook de nova cotação para {webhook_url} | Payload: {webhook_payload}")
+            try:
+                headers = {
+                    "Content-Type": "application/json",
+                    "User-Agent": "CRM-Leads/1.0"
+                }
+                async with httpx.AsyncClient(timeout=15.0, verify=False) as client:
+                    resp = await client.post(webhook_url, json=webhook_payload, headers=headers)
+                    logger.info(f"Resposta webhook nova cotação {lead.id} (offer {new_offer.id}): HTTP {resp.status_code}")
+                    if resp.is_success:
+                        lead.webhook_sent_at = datetime.now(timezone.utc)
+                    else:
+                        logger.warning(f"Webhook de nova cotação retornou status HTTP {resp.status_code}: {resp.text}")
+            except Exception as e:
+                logger.error(f"Falha ao enviar webhook de nova cotação para {webhook_url}: {e}", exc_info=True)
+        else:
+            logger.warning(f"SIMULATION_WEBHOOK_URL não configurada. Webhook de nova cotação NÃO disparado para lead {lead.id}.")
+
+        await self.db.commit()
+
+        # Recarregar relacionamentos
+        res_reloaded = await self.db.execute(query)
+        lead_loaded = res_reloaded.scalar_one()
+
+        response = self._to_response(lead_loaded)
+
+        # Notificar via WebSocket em tempo real
+        try:
+            from app.core.socket_manager import sio
+            await sio.emit("simulation:updated", {
+                "id": str(lead_loaded.id),
+                "name": lead_loaded.name,
+                "cpf": lead_loaded.cpf,
+                "phone": lead_loaded.phone,
+                "notes": lead_loaded.notes,
+                "simulation_status": lead_loaded.simulation_status,
+                "total_offers": response.total_offers,
+                "offers": [o.model_dump(mode="json") for o in response.offers],
+                "current_attendant_id": str(lead_loaded.current_attendant_id) if lead_loaded.current_attendant_id else None
+            })
+        except Exception as e:
+            logger.warning(f"Falha ao emitir socket simulation:updated: {e}")
+
+        return response
+
     async def list_simulations(
         self,
         current_user: User,
@@ -468,13 +667,16 @@ class SimulationService:
         end_payload = data.endereco or {}
         cont_payload = data.contato or {}
         doc_payload = data.documento or {}
+        bank_payload = data.dados_bancarios or {}
+        if isinstance(data.banco, dict):
+            bank_payload = {**bank_payload, **data.banco}
 
         def _get_cad(*keys, default=None):
             for k in keys:
                 val = getattr(data, k, None)
                 if val is not None and val != "":
                     return val
-                for d in (cad_payload, end_payload, cont_payload, doc_payload):
+                for d in (cad_payload, end_payload, cont_payload, doc_payload, bank_payload):
                     if isinstance(d, dict) and k in d and d[k] is not None and d[k] != "":
                         return d[k]
             return default
@@ -503,10 +705,21 @@ class SimulationService:
         uf_emiss = _get_cad("ufOrgaoEmissor", "uf_orgao_emissor")
         dt_emiss = _get_cad("dataEmissao", "data_emissao")
 
+        banco_num = _get_cad("banco_numero", "numeroBanco", "numero_banco", "bancoNumero")
+        if not banco_num and isinstance(data.banco, str) and data.banco.isdigit():
+            banco_num = data.banco
+        banco_nm = _get_cad("banco_nome", "nomeBanco", "nome_banco", "bancoNome")
+        if not banco_nm and isinstance(data.banco, str) and not data.banco.isdigit():
+            banco_nm = data.banco
+        agencia_val = _get_cad("agencia")
+        conta_val = _get_cad("conta")
+        conta_dig = _get_cad("contaDigito", "conta_digito")
+
         has_cadastral = any(v is not None for v in [
             dt_nasc, sexo_val, est_civil, mae_val, ipc_val, renda_val,
             cep_val, tipo_logr, logr_val, num_end, bairro_val, cidade_val, uf_val,
-            ddd_cel, num_cel, email_val, tipo_doc, num_doc, org_emiss, uf_emiss, dt_emiss
+            ddd_cel, num_cel, email_val, tipo_doc, num_doc, org_emiss, uf_emiss, dt_emiss,
+            banco_num, banco_nm, agencia_val, conta_val, conta_dig
         ])
 
         if has_cadastral:
@@ -574,6 +787,17 @@ class SimulationService:
                 cad_record.uf_orgao_emissor = str(uf_emiss).strip()
             if dt_emiss is not None:
                 cad_record.data_emissao = str(dt_emiss).strip()
+
+            if banco_num is not None:
+                cad_record.banco_numero = str(banco_num).strip()
+            if banco_nm is not None:
+                cad_record.banco_nome = str(banco_nm).strip()
+            if agencia_val is not None:
+                cad_record.agencia = str(agencia_val).strip()
+            if conta_val is not None:
+                cad_record.conta = str(conta_val).strip()
+            if conta_dig is not None:
+                cad_record.conta_digito = str(conta_dig).strip()
 
             cad_record.updated_at = now
 
@@ -686,4 +910,5 @@ class SimulationService:
             logger.warning(f"Falha ao emitir socket simulation:updated: {e}")
 
         return response
+
 
