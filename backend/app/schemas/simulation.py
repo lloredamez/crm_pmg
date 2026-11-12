@@ -119,7 +119,7 @@ class SimulationUpdate(BaseModel):
     valor_bruto: Optional[float] = Field(None, description="Valor bruto da cotação")
     valor_liberado: Optional[float] = Field(None, description="Valor líquido da cotação")
     quantidade_parcelas: Optional[int] = Field(None, description="Quantidade de parcelas da cotação")
-    parcela: Optional[int] = Field(None, description="Alias para quantidade_parcelas")
+    parcela: Optional[float] = Field(None, description="Valor da parcela desta cotação (ou alias para valor_parcela)")
     valor_parcela: Optional[float] = Field(None, description="Valor da parcela desta cotação")
     taxa_juros: Optional[float] = Field(None, description="Taxa de juros aplicada")
     status: Optional[str] = Field(None, description="Status da simulação (completed, failed, rejected, error, etc.)")

@@ -654,13 +654,16 @@ class SimulationService:
             lead.prazo_maximo = int(data.prazo_maximo)
         elif data.prazo is not None:
             lead.prazo_maximo = int(data.prazo)
-        elif lead.prazo_maximo is None and (data.quantidade_parcelas is not None or data.parcela is not None) and not data.create_new:
-            lead.prazo_maximo = int(data.quantidade_parcelas if data.quantidade_parcelas is not None else data.parcela)
+        elif lead.prazo_maximo is None and data.quantidade_parcelas is not None and not data.create_new:
+            lead.prazo_maximo = int(data.quantidade_parcelas)
 
         if data.valor_parcela_maximo is not None:
             lead.valor_parcela_maximo = float(data.valor_parcela_maximo)
-        elif lead.valor_parcela_maximo is None and data.valor_parcela is not None and not data.create_new:
-            lead.valor_parcela_maximo = float(data.valor_parcela)
+        elif lead.valor_parcela_maximo is None and not data.create_new:
+            if data.valor_parcela is not None:
+                lead.valor_parcela_maximo = float(data.valor_parcela)
+            elif data.parcela is not None:
+                lead.valor_parcela_maximo = float(data.parcela)
 
         # Processamento e atualização dos Dados Cadastrais do Cliente (SimulationLeadData)
         cad_payload = data.dados_cadastrais or {}
@@ -865,11 +868,14 @@ class SimulationService:
                 target_offer.valor_bruto = float(data.valor_bruto)
             if data.valor_liberado is not None:
                 target_offer.valor_liberado = float(data.valor_liberado)
-            qtd_p = data.quantidade_parcelas if data.quantidade_parcelas is not None else data.parcela
-            if qtd_p is not None:
-                target_offer.parcela = int(qtd_p)
-            if data.valor_parcela is not None:
-                target_offer.valor_parcela = float(data.valor_parcela)
+            if data.quantidade_parcelas is not None:
+                target_offer.parcela = int(data.quantidade_parcelas)
+            elif data.prazo is not None:
+                target_offer.parcela = int(data.prazo)
+
+            val_p = data.valor_parcela if data.valor_parcela is not None else data.parcela
+            if val_p is not None:
+                target_offer.valor_parcela = float(val_p)
             if data.taxa_juros is not None:
                 target_offer.taxa_juros = float(data.taxa_juros)
             target_offer.status = normalized_status
