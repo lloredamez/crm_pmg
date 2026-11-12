@@ -656,6 +656,12 @@ export const SimulationsManagement: React.FC = () => {
                   const isPending = (sim.simulation_status || 'pending').toLowerCase() === 'pending';
                   const isExpanded = expandedRows.has(sim.id);
                   const offersCount = sim.total_offers || sim.offers?.length || 0;
+                  const valorBrutoMax = sim.valor_bruto_maximo ?? sim.margem;
+                  const isValorBrutoZeroOrNull =
+                    valorBrutoMax === null ||
+                    valorBrutoMax === undefined ||
+                    Number(valorBrutoMax) <= 0 ||
+                    isNaN(Number(valorBrutoMax));
 
                   return (
                     <React.Fragment key={sim.id}>
@@ -770,8 +776,15 @@ export const SimulationsManagement: React.FC = () => {
 
                                 <button
                                   type="button"
+                                  disabled={isValorBrutoZeroOrNull}
+                                  title={
+                                    isValorBrutoZeroOrNull
+                                      ? 'Não é possível solicitar cotação: Valor Bruto Máximo é nulo ou zero'
+                                      : 'Solicitar nova cotação personalizada'
+                                  }
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    if (isValorBrutoZeroOrNull) return;
                                     setSelectedLeadForQuote(sim);
                                     setQuoteType('valor_emprestimo');
                                     setQuoteValueInput('');
@@ -780,7 +793,7 @@ export const SimulationsManagement: React.FC = () => {
                                     setQuoteFormSuccess(null);
                                     setIsQuoteModalOpen(true);
                                   }}
-                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200/60 rounded-xl transition-all cursor-pointer"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-semibold text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200/60 rounded-xl transition-all cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400 disabled:border-slate-200"
                                 >
                                   <Plus className="w-3.5 h-3.5" />
                                   <span>Nova Cotação</span>
