@@ -1,4 +1,4 @@
-import { Simulation, SimulationPaginationResponse, Bank } from '@/features/leads/types';
+import { Simulation, SimulationOfferHistory, SimulationPaginationResponse, Bank } from '@/features/leads/types';
 import { getApiUrl } from '@/lib/config';
 
 const getAuthHeaders = (): Record<string, string> => {
@@ -85,6 +85,41 @@ export async function requestSimulationQuote(
     body: JSON.stringify(params),
   });
   return handleResponse<Simulation>(res);
+}
+
+export async function reprocessSimulationQuote(
+  leadId: string,
+  offerId: string
+): Promise<Simulation> {
+  const API_URL = getApiUrl();
+  const res = await fetch(`${API_URL}/api/v1/simulations/${leadId}/offers/${offerId}/reprocess`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<Simulation>(res);
+}
+
+export async function typeSimulationOffer(
+  leadId: string,
+  offerId: string
+): Promise<Simulation> {
+  const API_URL = getApiUrl();
+  const res = await fetch(`${API_URL}/api/v1/simulations/${leadId}/offers/${offerId}/type`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<Simulation>(res);
+}
+
+export async function fetchSimulationOfferHistory(
+  leadId: string,
+  offerId: string
+): Promise<SimulationOfferHistory[]> {
+  const API_URL = getApiUrl();
+  const res = await fetch(`${API_URL}/api/v1/simulations/${leadId}/offers/${offerId}/history`, {
+    headers: getAuthHeaders(),
+  });
+  return handleResponse<SimulationOfferHistory[]>(res);
 }
 
 export async function updateSimulationCadastralData(

@@ -57,11 +57,23 @@ export interface Bank {
   is_active: boolean;
 }
 
+export interface SimulationOfferHistory {
+  id: string;
+  simulation_offer_id: string;
+  simulation_lead_id: string;
+  action: 'created' | 'reprocessed' | string;
+  user_id?: string | null;
+  user_name?: string | null;
+  custom_fields?: Record<string, any> | null;
+  created_at: string;
+}
+
 export interface SimulationOffer {
   id: string;
   simulation_lead_id: string;
   attendant_id?: string | null;
   attendant_name?: string | null;
+  id_condicao_financiamento?: string | null;
   valor_bruto?: number | null;
   valor_liberado?: number | null;
   parcela?: number | null;
@@ -71,6 +83,8 @@ export interface SimulationOffer {
   status?: string | null;
   custom_fields?: Record<string, any> | null;
   created_at: string;
+  updated_at?: string | null;
+  history?: SimulationOfferHistory[];
 }
 
 export interface Simulation {

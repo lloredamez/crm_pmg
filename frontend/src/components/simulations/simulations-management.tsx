@@ -8,6 +8,7 @@ import {
   Search,
   Filter,
   RotateCcw,
+  History,
   Clock,
   CheckCircle2,
   AlertCircle,
@@ -26,15 +27,19 @@ import {
   CreditCard,
   Pencil,
   Landmark,
+  Send,
 } from 'lucide-react';
 import {
   fetchSimulations,
   createSimulation,
   requestSimulationQuote,
+  reprocessSimulationQuote,
+  typeSimulationOffer,
+  fetchSimulationOfferHistory,
   updateSimulationCadastralData,
   fetchBanks,
 } from '@/features/simulations/api';
-import { Simulation, SimulationOffer, SimulationPaginationResponse, Bank } from '@/features/leads/types';
+import { Simulation, SimulationOffer, SimulationOfferHistory, SimulationPaginationResponse, Bank } from '@/features/leads/types';
 import { useSocket } from '@/features/socket/socket-provider';
 import { useAuth } from '@/features/auth/auth-provider';
 
@@ -201,6 +206,117 @@ export const SimulationsManagement: React.FC = () => {
   const [isSavingCadastral, setIsSavingCadastral] = useState(false);
   const [cadastralFormError, setCadastralFormError] = useState<string | null>(null);
   const [cadastralFormSuccess, setCadastralFormSuccess] = useState<string | null>(null);
+
+  // Reprocessamento de Cotações
+  const [reprocessingOfferId, setReprocessingOfferId] = useState<string | null>(null);
+  const [actionFeedback, setActionFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  useEffect(() => {
+    if (actionFeedback) {
+      const timer = setTimeout(() => {
+        setActionFeedback(null);
+      }, 4000);
+      return () => clearTimeout(timer);
+    }
+  }, [actionFeedback]);
+
+  const handleReprocessOffer = async (leadId: string, offerId: string) => {
+    try {
+      setReprocessingOfferId(offerId);
+      setActionFeedback(null);
+      await reprocessSimulationQuote(leadId, offerId);
+      setActionFeedback({
+        type: 'success',
+        message: 'Cotação enviada para reprocessamento no webhook com sucesso!',
+      });
+      queryClient.invalidateQueries({ queryKey: ['simulations'] });
+    } catch (err: any) {
+      setActionFeedback({
+        type: 'error',
+        message: err.message || 'Falha ao reprocessar cotação.',
+      });
+    } finally {
+      setReprocessingOfferId(null);
+    }
+  };
+
+  // Digitação de Proposta (Ação de Digitar)
+  const [typingOfferId, setTypingOfferId] = useState<string | null>(null);
+  const [nowTime, setNowTime] = useState<number>(Date.now());
+
+  // Atualização periódica do relógio para atualizar estado de expiração (5 minutos)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowTime(Date.now());
+    }, 10000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const isOfferExpiredForTyping = (offer: SimulationOffer, currentNow: number): boolean => {
+    const dateStr = offer.updated_at || offer.created_at;
+    if (!dateStr) return true;
+    const updateTime = new Date(dateStr).getTime();
+    if (isNaN(updateTime)) return true;
+    // Mais de 5 minutos (5 * 60 * 1000 = 300.000 ms)
+    return currentNow - updateTime > 5 * 60 * 1000;
+  };
+
+  const handleTypeOffer = async (leadId: string, offer: SimulationOffer) => {
+    if (isOfferExpiredForTyping(offer, Date.now())) {
+      setActionFeedback({
+        type: 'error',
+        message: 'A digitação está desabilitada: a última atualização desta oferta ocorreu há mais de 5 minutos.',
+      });
+      return;
+    }
+
+    try {
+      setTypingOfferId(offer.id);
+      setActionFeedback(null);
+      await typeSimulationOffer(leadId, offer.id);
+      setActionFeedback({
+        type: 'success',
+        message: 'Todos os dados do cliente e da proposta foram enviados ao webhook para digitação com sucesso!',
+      });
+      queryClient.invalidateQueries({ queryKey: ['simulations'] });
+    } catch (err: any) {
+      setActionFeedback({
+        type: 'error',
+        message: err.message || 'Falha ao enviar proposta para digitação.',
+      });
+    } finally {
+      setTypingOfferId(null);
+    }
+  };
+
+  // Modal de Histórico da Cotação
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [selectedOfferForHistory, setSelectedOfferForHistory] = useState<{
+    offer: SimulationOffer;
+    sim: Simulation;
+  } | null>(null);
+  const [offerHistoryData, setOfferHistoryData] = useState<SimulationOfferHistory[]>([]);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+
+  const handleOpenOfferHistory = async (sim: Simulation, offer: SimulationOffer) => {
+    setSelectedOfferForHistory({ sim, offer });
+    setIsHistoryModalOpen(true);
+
+    if (offer.history && offer.history.length > 0) {
+      setOfferHistoryData(offer.history);
+      return;
+    }
+
+    setIsLoadingHistory(true);
+    try {
+      const hist = await fetchSimulationOfferHistory(sim.id, offer.id);
+      setOfferHistoryData(hist || []);
+    } catch {
+      setOfferHistoryData([]);
+    } finally {
+      setIsLoadingHistory(false);
+    }
+  };
 
   // Consulta da lista oficial de Bancos para o Select
   const { data: banksData } = useQuery<Bank[]>({
@@ -1083,6 +1199,7 @@ export const SimulationsManagement: React.FC = () => {
                                         <th className="py-2.5 px-3.5">Valor Parcela</th>
                                         <th className="py-2.5 px-3.5">Taxa de Juros</th>
                                         <th className="py-2.5 px-3.5 text-center">Status</th>
+                                        <th className="py-2.5 px-3.5 text-center">Ações</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
@@ -1093,7 +1210,14 @@ export const SimulationsManagement: React.FC = () => {
                                         >
                                           {/* Data / Hora */}
                                           <td className="py-2.5 px-3.5 font-mono text-[11px] text-slate-500 whitespace-nowrap">
-                                            {formatDate(offer.created_at)}
+                                            <div className="font-semibold text-slate-700">
+                                              {formatDate(offer.updated_at || offer.created_at)}
+                                            </div>
+                                            {offer.updated_at && offer.updated_at !== offer.created_at && (
+                                              <div className="text-[10px] text-slate-400 font-sans mt-0.5">
+                                                Criado: {formatDate(offer.created_at)}
+                                              </div>
+                                            )}
                                           </td>
 
                                           {/* Atendente */}
@@ -1102,6 +1226,15 @@ export const SimulationsManagement: React.FC = () => {
                                               <UserCheck className="w-3.5 h-3.5 text-slate-400" />
                                               {offer.attendant_name || (offer.attendant_id === user?.id ? 'Você' : (offer.attendant_id || '-'))}
                                             </span>
+                                            {offer.history && offer.history.some((h) => h.action === 'reprocessed') && (
+                                              <div className="text-[10px] text-indigo-600 font-semibold mt-0.5 flex items-center gap-1">
+                                                <RotateCcw className="w-2.5 h-2.5" />
+                                                <span>
+                                                  Reprocessado por{' '}
+                                                  {offer.history.find((h) => h.action === 'reprocessed')?.user_name || 'Consultor'}
+                                                </span>
+                                              </div>
+                                            )}
                                           </td>
 
                                           {/* Valor Bruto */}
@@ -1138,6 +1271,79 @@ export const SimulationsManagement: React.FC = () => {
                                           {/* Status */}
                                           <td className="py-2.5 px-3.5 text-center whitespace-nowrap">
                                             {renderOfferStatusBadge(offer.status)}
+                                          </td>
+
+                                          {/* Ações */}
+                                          <td className="py-2.5 px-3.5 text-center whitespace-nowrap">
+                                            <div className="inline-flex items-center gap-1.5 justify-center">
+                                              {/* Digitar Proposta no Webhook */}
+                                              {(() => {
+                                                const isExpired = isOfferExpiredForTyping(offer, nowTime);
+                                                return (
+                                                  <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      if (!isExpired) {
+                                                        handleTypeOffer(sim.id, offer);
+                                                      }
+                                                    }}
+                                                    disabled={isExpired || typingOfferId === offer.id}
+                                                    className={`inline-flex items-center justify-center p-1.5 rounded-lg border transition-all ${
+                                                      isExpired
+                                                        ? 'text-slate-300 bg-slate-50 border-slate-200 cursor-not-allowed opacity-40'
+                                                        : 'text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 border-slate-200/80 hover:border-emerald-300 cursor-pointer group/type shadow-xs'
+                                                    }`}
+                                                    title={
+                                                      isExpired
+                                                        ? 'Digitação desabilitada: última atualização da oferta ocorreu há mais de 5 minutos'
+                                                        : 'Digitar proposta: envia todos os dados do cliente para o webhook'
+                                                    }
+                                                  >
+                                                    <Send
+                                                      className={`w-3.5 h-3.5 ${
+                                                        typingOfferId === offer.id
+                                                          ? 'animate-pulse text-emerald-600'
+                                                          : !isExpired
+                                                          ? 'group-hover/type:translate-x-0.5 group-hover/type:-translate-y-0.5 transition-transform'
+                                                          : ''
+                                                      }`}
+                                                    />
+                                                  </button>
+                                                );
+                                              })()}
+
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleReprocessOffer(sim.id, offer.id);
+                                                }}
+                                                disabled={reprocessingOfferId === offer.id}
+                                                className="inline-flex items-center justify-center p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200/80 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed group/btn"
+                                                title="Reprocessar cotação no webhook"
+                                              >
+                                                <RotateCcw
+                                                  className={`w-3.5 h-3.5 ${
+                                                    reprocessingOfferId === offer.id
+                                                      ? 'animate-spin text-indigo-600'
+                                                      : 'group-hover/btn:-rotate-180 transition-transform duration-300'
+                                                  }`}
+                                                />
+                                              </button>
+
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  handleOpenOfferHistory(sim, offer);
+                                                }}
+                                                className="inline-flex items-center justify-center p-1.5 rounded-lg text-slate-500 hover:text-amber-600 hover:bg-amber-50 border border-slate-200/80 transition-all cursor-pointer group/hist"
+                                                title="Ver histórico de quem criou e quem reprocessou"
+                                              >
+                                                <History className="w-3.5 h-3.5 transition-transform group-hover/hist:rotate-[-20deg]" />
+                                              </button>
+                                            </div>
                                           </td>
                                         </tr>
                                       ))}
@@ -2033,6 +2239,230 @@ export const SimulationsManagement: React.FC = () => {
               </div>
             </form>
           </div>
+        </div>
+      )}
+
+      {/* Modal de Histórico da Cotação */}
+      {isHistoryModalOpen && selectedOfferForHistory && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200/80 w-full max-w-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200">
+            {/* Cabeçalho do Modal */}
+            <div className="p-6 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center font-bold">
+                  <History className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">
+                    Histórico da Cotação
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {selectedOfferForHistory.sim.name || 'Cliente'} • CPF:{' '}
+                    <span className="font-mono font-semibold text-slate-700">
+                      {formatCpf(selectedOfferForHistory.sim.cpf)}
+                    </span>
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsHistoryModalOpen(false);
+                  setSelectedOfferForHistory(null);
+                  setOfferHistoryData([]);
+                }}
+                className="w-8 h-8 rounded-full bg-slate-200/60 hover:bg-slate-200 flex items-center justify-center text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Resumo da Cotação Selecionada */}
+            <div className="px-6 py-3 bg-slate-100/60 border-b border-slate-200/60 flex flex-wrap items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500">Valor Liberado:</span>
+                <span className="font-bold text-emerald-600">
+                  {formatCurrency(selectedOfferForHistory.offer.valor_liberado)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500">Parcelas:</span>
+                <span className="font-semibold text-slate-800">
+                  {selectedOfferForHistory.offer.parcela || selectedOfferForHistory.offer.quantidade_parcelas
+                    ? `${selectedOfferForHistory.offer.parcela || selectedOfferForHistory.offer.quantidade_parcelas}x de ${formatCurrency(selectedOfferForHistory.offer.valor_parcela)}`
+                    : '-'}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-slate-500">Status atual:</span>
+                {renderOfferStatusBadge(selectedOfferForHistory.offer.status)}
+              </div>
+              {selectedOfferForHistory.offer.id_condicao_financiamento && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500">Condição:</span>
+                  <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                    {selectedOfferForHistory.offer.id_condicao_financiamento}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Conteúdo / Tabela de Histórico */}
+            <div className="p-6 overflow-y-auto flex-1">
+              {isLoadingHistory ? (
+                <div className="py-12 flex flex-col items-center justify-center gap-2 text-slate-400 text-xs">
+                  <Clock className="w-6 h-6 animate-spin text-amber-500" />
+                  <span>Carregando histórico...</span>
+                </div>
+              ) : (
+                (() => {
+                  const records =
+                    offerHistoryData.length > 0
+                      ? offerHistoryData
+                      : [
+                          {
+                            id: 'initial',
+                            simulation_offer_id: selectedOfferForHistory.offer.id,
+                            simulation_lead_id: selectedOfferForHistory.sim.id,
+                            action: 'created',
+                            user_name:
+                              selectedOfferForHistory.offer.attendant_name ||
+                              (selectedOfferForHistory.offer.attendant_id === user?.id
+                                ? 'Você'
+                                : selectedOfferForHistory.sim.attendant_name || 'Consultor'),
+                            created_at: selectedOfferForHistory.offer.created_at,
+                            custom_fields: selectedOfferForHistory.offer.custom_fields,
+                          },
+                        ];
+
+                  return (
+                    <div className="overflow-x-auto border border-slate-200 rounded-2xl">
+                      <table className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 text-[10px] font-bold uppercase tracking-wider">
+                            <th className="py-2.5 px-3.5">Data / Hora</th>
+                            <th className="py-2.5 px-3.5 text-center">Ação</th>
+                            <th className="py-2.5 px-3.5">Responsável</th>
+                            <th className="py-2.5 px-3.5">Detalhes / Observações</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-slate-700 font-medium">
+                          {records.map((item, idx) => {
+                            const isCreation = item.action === 'created';
+                            const isReprocess = item.action === 'reprocessed';
+                            const isTyped = item.action === 'typed' || item.action === 'digitar';
+
+                            return (
+                              <tr key={item.id || idx} className="hover:bg-slate-50/80 transition-colors">
+                                {/* Data / Hora */}
+                                <td className="py-3 px-3.5 font-mono text-[11px] text-slate-500 whitespace-nowrap">
+                                  {formatDate(item.created_at)}
+                                </td>
+
+                                {/* Ação */}
+                                <td className="py-3 px-3.5 text-center whitespace-nowrap">
+                                  {isCreation ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                                      Criação da Cotação
+                                    </span>
+                                  ) : isReprocess ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                      <RotateCcw className="w-3 h-3 text-indigo-500" />
+                                      Reprocessamento
+                                    </span>
+                                  ) : isTyped ? (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-300">
+                                      <Send className="w-3 h-3 text-emerald-600" />
+                                      Digitação de Proposta
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                      {item.action}
+                                    </span>
+                                  )}
+                                </td>
+
+                                {/* Responsável */}
+                                <td className="py-3 px-3.5 whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800">
+                                    <User className="w-3.5 h-3.5 text-slate-400" />
+                                    {item.user_name || 'Sistema'}
+                                  </span>
+                                </td>
+
+                                {/* Detalhes */}
+                                <td className="py-3 px-3.5 text-slate-600 text-[11px]">
+                                  {item.custom_fields?.valor_simulado ? (
+                                    <div>
+                                      <span className="font-semibold text-slate-800">
+                                        Simulado: {formatCurrency(item.custom_fields.valor_simulado)}
+                                      </span>{' '}
+                                      <span className="text-slate-400">
+                                        ({item.custom_fields.tipo_simulacao === 'valor_parcela' ? 'por parcela' : 'por empréstimo'})
+                                      </span>
+                                    </div>
+                                  ) : null}
+                                  {item.custom_fields?.notes ? (
+                                    <div className="text-slate-500 italic mt-0.5">
+                                      Obs: {item.custom_fields.notes}
+                                    </div>
+                                  ) : null}
+                                  {!item.custom_fields?.valor_simulado && !item.custom_fields?.notes && (
+                                    <span className="text-slate-400">-</span>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+
+            {/* Rodapé do Modal */}
+            <div className="p-4 bg-slate-50/80 border-t border-slate-100 flex justify-end shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsHistoryModalOpen(false);
+                  setSelectedOfferForHistory(null);
+                  setOfferHistoryData([]);
+                }}
+                className="bg-slate-200/80 hover:bg-slate-200 text-slate-700 font-semibold text-xs px-5 py-2.5 rounded-xl transition-all cursor-pointer"
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Feedback Toast de Ações / Reprocessamento */}
+      {actionFeedback && (
+        <div
+          className={`fixed bottom-6 right-6 z-50 flex items-center gap-3 px-4 py-3 rounded-2xl shadow-2xl border text-xs font-semibold animate-in fade-in slide-in-from-bottom-4 duration-300 ${
+            actionFeedback.type === 'success'
+              ? 'bg-slate-900/95 text-emerald-400 border-emerald-500/30 backdrop-blur-md'
+              : 'bg-slate-900/95 text-rose-400 border-rose-500/30 backdrop-blur-md'
+          }`}
+        >
+          {actionFeedback.type === 'success' ? (
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+          ) : (
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+          )}
+          <span className="text-white">{actionFeedback.message}</span>
+          <button
+            type="button"
+            onClick={() => setActionFeedback(null)}
+            className="ml-2 text-slate-400 hover:text-white transition-colors cursor-pointer"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
         </div>
       )}
     </div>
