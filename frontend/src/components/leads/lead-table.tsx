@@ -364,31 +364,31 @@ export const LeadTable: React.FC<LeadTableProps> = ({
             </div>
           ),
         },
-        {
-          accessorKey: 'assigned_at',
-          header: ({ column }: { column: any }) => (
-            <button
-              className="flex items-center gap-1 text-slate-500 font-medium text-xs hover:text-slate-900 whitespace-nowrap"
-              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-            >
-              Data Atribuição <ArrowUpDown className="w-3 h-3 shrink-0" />
-            </button>
-          ),
-          cell: ({ row }: { row: any }) => (
-            <div className="text-xs text-slate-500 flex items-center gap-1.5 font-medium whitespace-nowrap">
-              {row.original.assigned_at ? (
-                <>
-                  <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                  <span>{formatDate(row.original.assigned_at)}</span>
-                </>
-              ) : (
-                <span className="text-slate-400">-</span>
-              )}
-            </div>
-          ),
-        },
       ]
       : []),
+    {
+      accessorKey: 'assigned_at',
+      header: ({ column }: { column: any }) => (
+        <button
+          className="flex items-center gap-1 text-slate-500 font-medium text-xs hover:text-slate-900 whitespace-nowrap"
+          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+        >
+          Data Atribuição <ArrowUpDown className="w-3 h-3 shrink-0" />
+        </button>
+      ),
+      cell: ({ row }: { row: any }) => (
+        <div className="text-xs text-slate-500 flex items-center gap-1.5 font-medium whitespace-nowrap">
+          {row.original.assigned_at ? (
+            <>
+              <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <span>{formatDate(row.original.assigned_at)}</span>
+            </>
+          ) : (
+            <span className="text-slate-400">-</span>
+          )}
+        </div>
+      ),
+    },
     {
       id: 'sla_timer',
       header: 'Timer SLA',
