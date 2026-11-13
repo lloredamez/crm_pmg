@@ -33,6 +33,7 @@ class SimulationOfferResponse(BaseModel):
     simulation_lead_id: UUID
     attendant_id: Optional[UUID] = None
     attendant_name: Optional[str] = None
+    id_condicao_financiamento: Optional[str] = None
     valor_bruto: Optional[float] = None
     valor_liberado: Optional[float] = None
     parcela: Optional[int] = None
@@ -42,6 +43,8 @@ class SimulationOfferResponse(BaseModel):
     status: Optional[str] = "pending"
     custom_fields: Optional[Dict[str, Any]] = None
     created_at: datetime
+    updated_at: Optional[datetime] = None
+    history: Optional[List[SimulationOfferHistoryResponse]] = []
 
     class Config:
         from_attributes = True
@@ -112,6 +115,10 @@ class SimulationLeadDataUpdate(BaseModel):
 class SimulationUpdate(BaseModel):
     lead_id: Optional[UUID] = Field(None, description="ID do lead de simulação")
     offer_id: Optional[UUID] = Field(None, description="ID da oferta específica a ser atualizada")
+    id_condicao_financiamento: Optional[str] = Field(None, description="ID da condição de financiamento externa")
+    IdCondicaoFinanciamento: Optional[str] = Field(None, description="Alias para id_condicao_financiamento")
+    idCondicaoFinanciamento: Optional[str] = Field(None, description="Alias para id_condicao_financiamento")
+    condicao_financiamento_id: Optional[str] = Field(None, description="Alias para id_condicao_financiamento")
     create_new: Optional[bool] = Field(False, description="Se True, cria uma nova cotação no histórico em vez de atualizar a existente")
     attendant_id: Optional[UUID] = Field(None, description="ID do atendente responsável por esta cotação")
     nome: Optional[str] = Field(None, description="Nome do cliente retornado pela simulação")

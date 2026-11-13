@@ -545,6 +545,561 @@ class SimulationService:
 
         return response
 
+    async def reprocess_quotation(
+        self,
+        lead_id: UUID,
+        offer_id: UUID,
+        current_user: User
+    ) -> SimulationResponse:
+        query = (
+            select(SimulationLead)
+            .options(
+                selectinload(SimulationLead.current_attendant),
+                selectinload(SimulationLead.unit),
+                selectinload(SimulationLead.cadastral_data),
+                selectinload(SimulationLead.offers).selectinload(SimulationOffer.attendant)
+            )
+            .where(SimulationLead.id == lead_id)
+        )
+        result = await self.db.execute(query)
+        lead = result.scalars().first()
+        if not lead:
+            raise LookupError("Lead de simulação não encontrado.")
+
+        target_offer: Optional[SimulationOffer] = None
+        if lead.offers:
+            for o in lead.offers:
+                if str(o.id) == str(offer_id):
+                    target_offer = o
+                    break
+
+        if not target_offer:
+            raise LookupError("Cotação não encontrada para esta simulação.")
+
+        custom = target_offer.custom_fields or {}
+        tipo = custom.get("tipo_simulacao")
+        if not tipo:
+            if target_offer.valor_parcela and not target_offer.valor_liberado:
+                tipo = "valor_parcela"
+            else:
+                tipo = "valor_emprestimo"
+
+        valor = custom.get("valor_simulado")
+        if valor is None:
+            valor = target_offer.valor_liberado if tipo == "valor_emprestimo" else target_offer.valor_parcela
+        if valor is None:
+            valor = target_offer.valor_bruto or 0.0
+        try:
+            valor = float(valor)
+        except (ValueError, TypeError):
+            valor = 0.0
+
+        notes = custom.get("notes") or lead.notes
+        product_id = lead.produto_id or custom.get("produto_id")
+
+        now = datetime.now(timezone.utc)
+        target_offer.status = "pending"
+        target_offer.updated_at = now
+        lead.updated_at = now
+        await self.db.flush()
+
+        # Disparo do Webhook externo configurado no .env
+        webhook_url = _get_simulation_webhook_url()
+        if webhook_url:
+            webhook_payload = {
+                "event": "new_quotation",
+                "lead_id": str(lead.id),
+                "offer_id": str(target_offer.id),
+                "produto_id": product_id,
+                "tipo_simulacao": tipo,
+                "valor_simulado": valor,
+                "valor_bruto": target_offer.valor_bruto,
+                "valor_liberado": target_offer.valor_liberado,
+                "parcela": target_offer.parcela,
+                "quantidade_parcelas": target_offer.parcela,
+                "valor_parcela": target_offer.valor_parcela,
+                "taxa_juros": target_offer.taxa_juros,
+                "cpf": _clean_cpf(lead.cpf),
+                "cpf_formatted": lead.cpf,
+                "phone": lead.phone,
+                "nome": lead.name,
+                "attendant_id": str(current_user.id),
+                "attendant_name": current_user.name,
+                "unit_id": str(current_user.unit_id) if current_user.unit_id else None,
+                "notes": notes,
+                "created_at": now.isoformat()
+            }
+            logger.info(f"Disparando webhook de reprocessamento de cotação para {webhook_url} | Payload: {webhook_payload}")
+            try:
+                headers = {
+                    "Content-Type": "application/json",
+                    "User-Agent": "CRM-Leads/1.0"
+                }
+                async with httpx.AsyncClient(timeout=15.0, verify=False) as client:
+                    resp = await client.post(webhook_url, json=webhook_payload, headers=headers)
+                    logger.info(f"Resposta webhook reprocessamento cotação {lead.id} (offer {target_offer.id}): HTTP {resp.status_code}")
+                    if resp.is_success:
+                        lead.webhook_sent_at = datetime.now(timezone.utc)
+                    else:
+                        logger.warning(f"Webhook de reprocessamento cotação retornou status HTTP {resp.status_code}: {resp.text}")
+            except Exception as e:
+                logger.error(f"Falha ao enviar webhook de reprocessamento de cotação para {webhook_url}: {e}", exc_info=True)
+        else:
+            logger.warning(f"SIMULATION_WEBHOOK_URL não configurada. Webhook de reprocessamento cotação NÃO disparado para lead {lead.id}.")
+
+        await self.db.commit()
+
+        # Recarregar relacionamentos
+        res_reloaded = await self.db.execute(query)
+        lead_loaded = res_reloaded.scalar_one()
+
+        response = self._to_response(lead_loaded)
+
+        # Notificar via WebSocket em tempo real
+        try:
+            from app.core.socket_manager import sio
+            await sio.emit("simulation:updated", {
+                "id": str(lead_loaded.id),
+                "name": lead_loaded.name,
+                "cpf": lead_loaded.cpf,
+                "phone": lead_loaded.phone,
+                "notes": lead_loaded.notes,
+                "simulation_status": lead_loaded.simulation_status,
+                "total_offers": response.total_offers,
+                "offers": [o.model_dump(mode="json") for o in response.offers],
+                "current_attendant_id": str(lead_loaded.current_attendant_id) if lead_loaded.current_attendant_id else None
+            })
+        except Exception as e:
+            logger.warning(f"Falha ao emitir socket simulation:updated: {e}")
+
+        return response
+
+    async def reprocess_quotation(
+        self,
+        lead_id: UUID,
+        offer_id: UUID,
+        current_user: User
+    ) -> SimulationResponse:
+        query = (
+            select(SimulationLead)
+            .options(
+                selectinload(SimulationLead.current_attendant),
+                selectinload(SimulationLead.unit),
+                selectinload(SimulationLead.cadastral_data),
+                selectinload(SimulationLead.offers).selectinload(SimulationOffer.attendant)
+            )
+            .where(SimulationLead.id == lead_id)
+        )
+        result = await self.db.execute(query)
+        lead = result.scalars().first()
+        if not lead:
+            raise LookupError("Lead de simulação não encontrado.")
+
+        target_offer: Optional[SimulationOffer] = None
+        if lead.offers:
+            for o in lead.offers:
+                if str(o.id) == str(offer_id):
+                    target_offer = o
+                    break
+
+        if not target_offer:
+            raise LookupError("Cotação não encontrada para esta simulação.")
+
+        custom = target_offer.custom_fields or {}
+        tipo = custom.get("tipo_simulacao")
+        if not tipo:
+            if target_offer.valor_parcela and not target_offer.valor_liberado:
+                tipo = "valor_parcela"
+            else:
+                tipo = "valor_emprestimo"
+
+        valor = custom.get("valor_simulado")
+        if valor is None:
+            valor = target_offer.valor_liberado if tipo == "valor_emprestimo" else target_offer.valor_parcela
+        if valor is None:
+            valor = target_offer.valor_bruto or 0.0
+        try:
+            valor = float(valor)
+        except (ValueError, TypeError):
+            valor = 0.0
+
+        notes = custom.get("notes") or lead.notes
+        product_id = lead.produto_id or custom.get("produto_id")
+
+        now = datetime.now(timezone.utc)
+        target_offer.status = "pending"
+        target_offer.updated_at = now
+        lead.updated_at = now
+        await self.db.flush()
+
+        # Registro no histórico de reprocessamento da cotação
+        reprocess_history = SimulationOfferHistory(
+            simulation_offer_id=target_offer.id,
+            simulation_lead_id=lead.id,
+            action="reprocessed",
+            user_id=current_user.id,
+            user_name=current_user.name,
+            custom_fields={
+                "tipo_simulacao": tipo,
+                "valor_simulado": valor,
+                "valor_bruto": target_offer.valor_bruto,
+                "valor_liberado": target_offer.valor_liberado,
+                "parcela": target_offer.parcela,
+                "quantidade_parcelas": target_offer.parcela,
+                "valor_parcela": target_offer.valor_parcela,
+                "taxa_juros": target_offer.taxa_juros,
+                "notes": notes
+            },
+            created_at=now
+        )
+        self.db.add(reprocess_history)
+
+        # Disparo do Webhook externo configurado no .env
+        webhook_url = _get_simulation_webhook_url()
+        if webhook_url:
+            webhook_payload = {
+                "event": "new_quotation",
+                "lead_id": str(lead.id),
+                "offer_id": str(target_offer.id),
+                "produto_id": product_id,
+                "tipo_simulacao": tipo,
+                "valor_simulado": valor,
+                "valor_bruto": target_offer.valor_bruto,
+                "valor_liberado": target_offer.valor_liberado,
+                "parcela": target_offer.parcela,
+                "quantidade_parcelas": target_offer.parcela,
+                "valor_parcela": target_offer.valor_parcela,
+                "taxa_juros": target_offer.taxa_juros,
+                "cpf": _clean_cpf(lead.cpf),
+                "cpf_formatted": lead.cpf,
+                "phone": lead.phone,
+                "nome": lead.name,
+                "attendant_id": str(current_user.id),
+                "attendant_name": current_user.name,
+                "unit_id": str(current_user.unit_id) if current_user.unit_id else None,
+                "notes": notes,
+                "created_at": now.isoformat()
+            }
+            logger.info(f"Disparando webhook de reprocessamento de cotação para {webhook_url} | Payload: {webhook_payload}")
+            try:
+                headers = {
+                    "Content-Type": "application/json",
+                    "User-Agent": "CRM-Leads/1.0"
+                }
+                async with httpx.AsyncClient(timeout=15.0, verify=False) as client:
+                    resp = await client.post(webhook_url, json=webhook_payload, headers=headers)
+                    logger.info(f"Resposta webhook reprocessamento cotação {lead.id} (offer {target_offer.id}): HTTP {resp.status_code}")
+                    if resp.is_success:
+                        lead.webhook_sent_at = datetime.now(timezone.utc)
+                    else:
+                        logger.warning(f"Webhook de reprocessamento cotação retornou status HTTP {resp.status_code}: {resp.text}")
+            except Exception as e:
+                logger.error(f"Falha ao enviar webhook de reprocessamento de cotação para {webhook_url}: {e}", exc_info=True)
+        else:
+            logger.warning(f"SIMULATION_WEBHOOK_URL não configurada. Webhook de reprocessamento cotação NÃO disparado para lead {lead.id}.")
+
+        await self.db.commit()
+
+        # Recarregar relacionamentos
+        res_reloaded = await self.db.execute(query)
+        lead_loaded = res_reloaded.scalar_one()
+
+        response = self._to_response(lead_loaded)
+
+        # Notificar via WebSocket em tempo real
+        try:
+            from app.core.socket_manager import sio
+            await sio.emit("simulation:updated", {
+                "id": str(lead_loaded.id),
+                "name": lead_loaded.name,
+                "cpf": lead_loaded.cpf,
+                "phone": lead_loaded.phone,
+                "notes": lead_loaded.notes,
+                "simulation_status": lead_loaded.simulation_status,
+                "total_offers": response.total_offers,
+                "offers": [o.model_dump(mode="json") for o in response.offers],
+                "current_attendant_id": str(lead_loaded.current_attendant_id) if lead_loaded.current_attendant_id else None
+            })
+        except Exception as e:
+            logger.warning(f"Falha ao emitir socket simulation:updated: {e}")
+
+        return response
+
+    async def type_proposal(
+        self,
+        lead_id: UUID,
+        offer_id: UUID,
+        current_user: User
+    ) -> SimulationResponse:
+        query = (
+            select(SimulationLead)
+            .options(
+                selectinload(SimulationLead.current_attendant),
+                selectinload(SimulationLead.unit),
+                selectinload(SimulationLead.cadastral_data),
+                selectinload(SimulationLead.offers).selectinload(SimulationOffer.attendant)
+            )
+            .where(SimulationLead.id == lead_id)
+        )
+        result = await self.db.execute(query)
+        lead = result.scalars().first()
+        if not lead:
+            raise LookupError("Lead de simulação não encontrado.")
+
+        target_offer: Optional[SimulationOffer] = None
+        if lead.offers:
+            for o in lead.offers:
+                if str(o.id) == str(offer_id):
+                    target_offer = o
+                    break
+
+        if not target_offer:
+            raise LookupError("Cotação não encontrada para esta simulação.")
+
+        now = datetime.now(timezone.utc)
+
+        # Regra de negócio: a ação de digitar fica desabilitada/bloqueada se o update da oferta tem mais de 5 minutos
+        target_time = target_offer.updated_at or target_offer.created_at
+        if target_time:
+            if target_time.tzinfo is None:
+                target_time = target_time.replace(tzinfo=timezone.utc)
+            diff_seconds = (now - target_time).total_seconds()
+            if diff_seconds > 300:  # 5 minutos (300s)
+                raise ValueError("A digitação não pode ser realizada: a última atualização desta oferta ocorreu há mais de 5 minutos.")
+
+        cad = lead.cadastral_data
+
+        # Montar payload completo com todos os dados do cliente e da proposta
+        webhook_payload = {
+            "event": "digitar_proposta",
+            "action": "digitar",
+            "lead_id": str(lead.id),
+            "offer_id": str(target_offer.id),
+            "id_condicao_financiamento": target_offer.id_condicao_financiamento,
+            "produto_id": lead.produto_id or (target_offer.custom_fields or {}).get("produto_id"),
+            "nome_produto": lead.nome_produto,
+            "proposta_prospect_id": lead.proposta_prospect_id,
+
+            # Dados do cliente no topo para acesso rápido
+            "nome": lead.name,
+            "cpf": _clean_cpf(lead.cpf),
+            "cpf_formatted": lead.cpf,
+            "phone": lead.phone,
+            "phone_clean": _clean_phone(lead.phone) if lead.phone else None,
+            "notes": lead.notes,
+            "prazo_maximo": lead.prazo_maximo,
+            "valor_bruto_maximo": lead.valor_bruto_maximo,
+            "valor_liberado_maximo": lead.valor_liberado_maximo,
+            "valor_parcela_maximo": lead.valor_parcela_maximo,
+
+            # Dados da oferta selecionada
+            "valor_bruto": target_offer.valor_bruto,
+            "valor_liberado": target_offer.valor_liberado,
+            "parcela": target_offer.parcela,
+            "quantidade_parcelas": target_offer.parcela,
+            "valor_parcela": target_offer.valor_parcela,
+            "taxa_juros": target_offer.taxa_juros,
+            "status_oferta": target_offer.status,
+
+            # Dados cadastrais pessoais e de renda
+            "data_nascimento": cad.data_nascimento if cad else None,
+            "sexo": cad.sexo if cad else None,
+            "estado_civil": cad.estado_civil if cad else None,
+            "nome_mae": cad.nome_mae if cad else None,
+            "numero_referencial_ipc": cad.numero_referencial_ipc if cad else None,
+            "valor_renda": cad.valor_renda if cad else None,
+
+            # Endereço
+            "cep": cad.cep if cad else None,
+            "tipo_logradouro": cad.tipo_logradouro if cad else None,
+            "logradouro": cad.logradouro if cad else None,
+            "numero": cad.numero if cad else None,
+            "bairro": cad.bairro if cad else None,
+            "cidade": cad.cidade if cad else None,
+            "uf": cad.uf if cad else None,
+
+            # Contato adicional
+            "ddd_celular": cad.ddd_celular if cad else None,
+            "numero_celular": cad.numero_celular if cad else None,
+            "email": cad.email if cad else None,
+
+            # Documento de identificação
+            "tipo_documento": cad.tipo_documento if cad else None,
+            "numero_documento": cad.numero_documento if cad else None,
+            "orgao_emissor": cad.orgao_emissor if cad else None,
+            "uf_orgao_emissor": cad.uf_orgao_emissor if cad else None,
+            "data_emissao": cad.data_emissao if cad else None,
+
+            # Dados bancários
+            "banco_numero": cad.banco_numero if cad else None,
+            "banco_nome": cad.banco_nome if cad else None,
+            "agencia": cad.agencia if cad else None,
+            "conta": cad.conta if cad else None,
+            "conta_digito": cad.conta_digito if cad else None,
+
+            # Atendente responsável pela digitação
+            "attendant_id": str(current_user.id),
+            "attendant_name": current_user.name,
+            "unit_id": str(current_user.unit_id) if current_user.unit_id else None,
+            "disparado_em": now.isoformat(),
+
+            # Objetos estruturados para integrações
+            "cliente": {
+                "id": str(lead.id),
+                "nome": lead.name,
+                "cpf": _clean_cpf(lead.cpf),
+                "cpf_formatted": lead.cpf,
+                "phone": lead.phone,
+                "phone_clean": _clean_phone(lead.phone) if lead.phone else None,
+                "notes": lead.notes,
+                "prazo_maximo": lead.prazo_maximo,
+                "valor_bruto_maximo": lead.valor_bruto_maximo,
+                "valor_liberado_maximo": lead.valor_liberado_maximo,
+                "valor_parcela_maximo": lead.valor_parcela_maximo,
+                "custom_fields": lead.custom_fields or {},
+                "cadastral": {
+                    "data_nascimento": cad.data_nascimento if cad else None,
+                    "sexo": cad.sexo if cad else None,
+                    "estado_civil": cad.estado_civil if cad else None,
+                    "nome_mae": cad.nome_mae if cad else None,
+                    "numero_referencial_ipc": cad.numero_referencial_ipc if cad else None,
+                    "valor_renda": cad.valor_renda if cad else None,
+                    "cep": cad.cep if cad else None,
+                    "tipo_logradouro": cad.tipo_logradouro if cad else None,
+                    "logradouro": cad.logradouro if cad else None,
+                    "numero": cad.numero if cad else None,
+                    "bairro": cad.bairro if cad else None,
+                    "cidade": cad.cidade if cad else None,
+                    "uf": cad.uf if cad else None,
+                    "ddd_celular": cad.ddd_celular if cad else None,
+                    "numero_celular": cad.numero_celular if cad else None,
+                    "email": cad.email if cad else None,
+                    "tipo_documento": cad.tipo_documento if cad else None,
+                    "numero_documento": cad.numero_documento if cad else None,
+                    "orgao_emissor": cad.orgao_emissor if cad else None,
+                    "uf_orgao_emissor": cad.uf_orgao_emissor if cad else None,
+                    "data_emissao": cad.data_emissao if cad else None,
+                    "banco_numero": cad.banco_numero if cad else None,
+                    "banco_nome": cad.banco_nome if cad else None,
+                    "agencia": cad.agencia if cad else None,
+                    "conta": cad.conta if cad else None,
+                    "conta_digito": cad.conta_digito if cad else None,
+                    "raw_data": cad.raw_data if cad else {}
+                } if cad else None
+            },
+            "oferta": {
+                "id": str(target_offer.id),
+                "id_condicao_financiamento": target_offer.id_condicao_financiamento,
+                "valor_bruto": target_offer.valor_bruto,
+                "valor_liberado": target_offer.valor_liberado,
+                "parcela": target_offer.parcela,
+                "quantidade_parcelas": target_offer.parcela,
+                "valor_parcela": target_offer.valor_parcela,
+                "taxa_juros": target_offer.taxa_juros,
+                "status": target_offer.status,
+                "custom_fields": target_offer.custom_fields or {},
+                "created_at": target_offer.created_at.isoformat() if target_offer.created_at else None,
+                "updated_at": target_offer.updated_at.isoformat() if target_offer.updated_at else None,
+            }
+        }
+
+        # Registro no histórico da cotação
+        type_history = SimulationOfferHistory(
+            simulation_offer_id=target_offer.id,
+            simulation_lead_id=lead.id,
+            action="typed",
+            user_id=current_user.id,
+            user_name=current_user.name,
+            custom_fields={
+                "id_condicao_financiamento": target_offer.id_condicao_financiamento,
+                "valor_bruto": target_offer.valor_bruto,
+                "valor_liberado": target_offer.valor_liberado,
+                "parcela": target_offer.parcela,
+                "valor_parcela": target_offer.valor_parcela,
+                "taxa_juros": target_offer.taxa_juros,
+            },
+            created_at=now
+        )
+        self.db.add(type_history)
+
+        # Disparo do Webhook externo
+        webhook_url = _get_simulation_webhook_url()
+        if webhook_url:
+            logger.info(f"Disparando webhook de digitação de proposta para {webhook_url} | Payload: {webhook_payload}")
+            try:
+                headers = {
+                    "Content-Type": "application/json",
+                    "User-Agent": "CRM-Leads/1.0"
+                }
+                async with httpx.AsyncClient(timeout=15.0, verify=False) as client:
+                    resp = await client.post(webhook_url, json=webhook_payload, headers=headers)
+                    logger.info(f"Resposta webhook digitação {lead.id} (offer {target_offer.id}): HTTP {resp.status_code}")
+                    if resp.is_success:
+                        lead.webhook_sent_at = datetime.now(timezone.utc)
+                    else:
+                        logger.warning(f"Webhook de digitação retornou status HTTP {resp.status_code}: {resp.text}")
+            except Exception as e:
+                logger.error(f"Falha ao enviar webhook de digitação para {webhook_url}: {e}", exc_info=True)
+        else:
+            logger.warning(f"SIMULATION_WEBHOOK_URL não configurada. Webhook de digitação NÃO disparado para lead {lead.id}.")
+
+        await self.db.commit()
+
+        # Recarregar relacionamentos
+        res_reloaded = await self.db.execute(query)
+        lead_loaded = res_reloaded.scalar_one()
+
+        response = self._to_response(lead_loaded)
+
+        # Notificar via WebSocket em tempo real
+        try:
+            from app.core.socket_manager import sio
+            await sio.emit("simulation:updated", {
+                "id": str(lead_loaded.id),
+                "name": lead_loaded.name,
+                "cpf": lead_loaded.cpf,
+                "phone": lead_loaded.phone,
+                "notes": lead_loaded.notes,
+                "simulation_status": lead_loaded.simulation_status,
+                "total_offers": response.total_offers,
+                "offers": [o.model_dump(mode="json") for o in response.offers],
+                "cadastral_data": response.cadastral_data.model_dump(mode="json") if response.cadastral_data else None,
+                "current_attendant_id": str(lead_loaded.current_attendant_id) if lead_loaded.current_attendant_id else None
+            })
+        except Exception as e:
+            logger.warning(f"Falha ao emitir socket simulation:updated: {e}")
+
+        return response
+
+    async def get_offer_history(
+        self,
+        lead_id: UUID,
+        offer_id: UUID
+    ) -> List[SimulationOfferHistoryResponse]:
+        query = (
+            select(SimulationOfferHistory)
+            .where(
+                SimulationOfferHistory.simulation_lead_id == lead_id,
+                SimulationOfferHistory.simulation_offer_id == offer_id
+            )
+            .order_by(desc(SimulationOfferHistory.created_at))
+        )
+        res = await self.db.execute(query)
+        items = res.scalars().all()
+        return [
+            SimulationOfferHistoryResponse(
+                id=h.id,
+                simulation_offer_id=h.simulation_offer_id,
+                simulation_lead_id=h.simulation_lead_id,
+                action=h.action,
+                user_id=h.user_id,
+                user_name=h.user_name,
+                custom_fields=h.custom_fields,
+                created_at=h.created_at,
+            )
+            for h in items
+        ]
+
     async def list_simulations(
         self,
         current_user: User,
@@ -637,20 +1192,48 @@ class SimulationService:
             )
         )
 
+        lead: Optional[SimulationLead] = None
+
         if lead_id:
-            query = query.where(SimulationLead.id == lead_id)
-        elif cpf:
-            clean_cpf = _clean_cpf(cpf)
-            query = query.where(
+            lead_query = query.where(SimulationLead.id == lead_id)
+            res = await self.db.execute(lead_query)
+            lead = res.scalars().first()
+
+            # Se não encontrou por lead_id, verifica se o UUID informado é o ID da cotação (offer_id)
+            if not lead:
+                off_query = select(SimulationOffer).where(SimulationOffer.id == lead_id)
+                off_res = await self.db.execute(off_query)
+                found_offer = off_res.scalars().first()
+                if found_offer:
+                    lead_query2 = query.where(SimulationLead.id == found_offer.simulation_lead_id)
+                    res2 = await self.db.execute(lead_query2)
+                    lead = res2.scalars().first()
+                    if not data.offer_id:
+                        data.offer_id = found_offer.id
+
+        # Se ainda não encontrou e foi informado data.offer_id no payload
+        if not lead and data.offer_id:
+            off_query = select(SimulationOffer).where(SimulationOffer.id == data.offer_id)
+            off_res = await self.db.execute(off_query)
+            found_offer = off_res.scalars().first()
+            if found_offer:
+                lead_query3 = query.where(SimulationLead.id == found_offer.simulation_lead_id)
+                res3 = await self.db.execute(lead_query3)
+                lead = res3.scalars().first()
+
+        # Fallback por CPF caso ainda não encontrado
+        target_cpf = cpf or data.cpf
+        if not lead and target_cpf:
+            clean_cpf = _clean_cpf(target_cpf)
+            cpf_query = query.where(
                 or_(SimulationLead.cpf == clean_cpf, SimulationLead.cpf == _format_cpf(clean_cpf))
             ).order_by(desc(SimulationLead.created_at))
-        else:
-            raise ValueError("É necessário informar lead_id ou cpf para atualizar a simulação.")
-
-        result = await self.db.execute(query)
-        lead = result.scalars().first()
+            cpf_res = await self.db.execute(cpf_query)
+            lead = cpf_res.scalars().first()
 
         if not lead:
+            if not lead_id and not target_cpf and not data.offer_id:
+                raise ValueError("É necessário informar lead_id, offer_id ou cpf para atualizar a simulação.")
             raise LookupError("Simulação não encontrada.")
 
         now = datetime.now(timezone.utc)
@@ -851,9 +1434,16 @@ class SimulationService:
         if data.offers and isinstance(data.offers, list):
             # Robô enviou múltiplas opções de parcelamento
             for item in data.offers:
+                cond_id_item = (
+                    item.get("id_condicao_financiamento")
+                    or item.get("IdCondicaoFinanciamento")
+                    or item.get("idCondicaoFinanciamento")
+                    or item.get("condicao_financiamento_id")
+                )
                 off = SimulationOffer(
                     simulation_lead_id=lead.id,
                     attendant_id=lead.current_attendant_id,
+                    id_condicao_financiamento=str(cond_id_item).strip() if cond_id_item is not None else None,
                     valor_bruto=float(item.get("valor_bruto")) if item.get("valor_bruto") is not None else None,
                     valor_liberado=float(item.get("valor_liberado")) if item.get("valor_liberado") is not None else None,
                     parcela=int(item.get("parcela") or item.get("quantidade_parcelas")) if (item.get("parcela") or item.get("quantidade_parcelas")) is not None else None,
@@ -874,7 +1464,7 @@ class SimulationService:
             if not data.create_new:
                 if data.offer_id and lead.offers:
                     for o in lead.offers:
-                        if o.id == data.offer_id:
+                        if str(o.id) == str(data.offer_id):
                             target_offer = o
                             break
 
@@ -898,6 +1488,15 @@ class SimulationService:
                 self.db.add(target_offer)
             elif data.attendant_id:
                 target_offer.attendant_id = data.attendant_id
+
+            cond_id = (
+                data.id_condicao_financiamento
+                or data.IdCondicaoFinanciamento
+                or data.idCondicaoFinanciamento
+                or data.condicao_financiamento_id
+            )
+            if cond_id is not None:
+                target_offer.id_condicao_financiamento = str(cond_id).strip()
 
             # Atualizar os campos da oferta
             if data.valor_bruto is not None:
