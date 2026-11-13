@@ -170,6 +170,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
         cell: ({ row }: { row: any }) => {
           const lead = row.original;
           const isRevealed = lead.is_revealed;
+          const isUnopenedAdmin = isAdminRole && !isRevealed;
 
           if (key === 'name') {
             return (
@@ -178,13 +179,17 @@ export const LeadTable: React.FC<LeadTableProps> = ({
                   className={`font-semibold text-xs ${
                     isRevealed
                       ? 'text-slate-900 hover:text-brand-600 cursor-pointer'
-                      : 'text-slate-500 cursor-not-allowed opacity-60'
+                      : isAdminRole
+                        ? 'text-slate-400 hover:text-slate-600 cursor-pointer font-medium'
+                        : 'text-slate-500 cursor-not-allowed opacity-60'
                   }`}
-                  onClick={() => isRevealed && onOpenDetailsModal?.(lead)}
+                  onClick={() => (isRevealed || isAdminRole) && onOpenDetailsModal?.(lead)}
                   title={
                     isRevealed
                       ? 'Ver dados do lead'
-                      : 'Clique no olho para revelar os dados do lead primeiro'
+                      : isAdminRole
+                        ? 'Ver dados do lead (Lead ainda não aberto pelo atendente)'
+                        : 'Clique no olho para revelar os dados do lead primeiro'
                   }
                 >
                   {lead.name || '-'}
@@ -198,6 +203,10 @@ export const LeadTable: React.FC<LeadTableProps> = ({
               <div className="text-xs font-medium whitespace-nowrap">
                 {isRevealed ? (
                   <span className="text-slate-800 font-semibold">{formatPhone(lead.phone)}</span>
+                ) : isAdminRole ? (
+                  <span className="text-slate-400 font-medium" title="Lead ainda não aberto pelo atendente">
+                    {formatPhone(lead.phone)}
+                  </span>
                 ) : (
                   <span className="text-slate-400 font-mono tracking-wider select-none">
                     (***) *****-****
@@ -213,6 +222,10 @@ export const LeadTable: React.FC<LeadTableProps> = ({
               <div className="text-xs font-medium whitespace-nowrap">
                 {isRevealed ? (
                   <span className="text-slate-800 font-semibold">{formatCpf(cpfVal)}</span>
+                ) : isAdminRole ? (
+                  <span className="text-slate-400 font-medium" title="Lead ainda não aberto pelo atendente">
+                    {formatCpf(cpfVal)}
+                  </span>
                 ) : (
                   <span className="text-slate-400 font-mono tracking-widest select-none">
                     ***.***.***-**
@@ -230,9 +243,9 @@ export const LeadTable: React.FC<LeadTableProps> = ({
               lead.campaign_name ||
               '-';
             return (
-              <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-800 whitespace-nowrap">
-                <Package className="w-3.5 h-3.5 text-brand-600 shrink-0" />
-                <span>{productName}</span>
+              <div className="flex items-center gap-1.5 text-xs font-semibold whitespace-nowrap">
+                <Package className={`w-3.5 h-3.5 shrink-0 ${isUnopenedAdmin ? 'text-slate-400' : 'text-brand-600'}`} />
+                <span className={isUnopenedAdmin ? 'text-slate-400 font-medium' : 'text-slate-800'}>{productName}</span>
               </div>
             );
           }
@@ -245,7 +258,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
 
           if (def.type === 'currency' && (typeof val === 'number' || !isNaN(Number(val)))) {
             return (
-              <span className="text-xs font-semibold text-slate-800 whitespace-nowrap">
+              <span className={`text-xs font-semibold whitespace-nowrap ${isUnopenedAdmin ? 'text-slate-400 font-medium' : 'text-slate-800'}`}>
                 {formatCurrency(Number(val))}
               </span>
             );
@@ -254,7 +267,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
           if (def.type === 'boolean') {
             const isTrue = val === true || val === 'true' || val === 1 || val === 'sim';
             return (
-              <span className="text-xs font-medium text-slate-700 whitespace-nowrap">
+              <span className={`text-xs font-medium whitespace-nowrap ${isUnopenedAdmin ? 'text-slate-400' : 'text-slate-700'}`}>
                 {isTrue ? 'Sim' : 'Não'}
               </span>
             );
@@ -262,7 +275,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
 
           if (def.type === 'date') {
             return (
-              <span className="text-xs font-medium text-slate-700 whitespace-nowrap">
+              <span className={`text-xs font-medium whitespace-nowrap ${isUnopenedAdmin ? 'text-slate-400' : 'text-slate-700'}`}>
                 {formatDate(String(val))}
               </span>
             );
@@ -270,7 +283,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
 
           if (def.type === 'select') {
             return (
-              <span className="text-xs font-medium text-slate-700 whitespace-nowrap">
+              <span className={`text-xs font-medium whitespace-nowrap ${isUnopenedAdmin ? 'text-slate-400' : 'text-slate-700'}`}>
                 {String(val)}
               </span>
             );
@@ -278,7 +291,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
 
           if (key === 'prazo') {
             return (
-              <span className="text-xs font-medium text-slate-700 whitespace-nowrap">
+              <span className={`text-xs font-medium whitespace-nowrap ${isUnopenedAdmin ? 'text-slate-400' : 'text-slate-700'}`}>
                 {val}x
               </span>
             );
@@ -286,21 +299,21 @@ export const LeadTable: React.FC<LeadTableProps> = ({
 
           if (key === 'banco' || key === 'tabela' || key === 'proposal_number') {
             return (
-              <span className="text-xs font-medium text-slate-700 whitespace-nowrap">
+              <span className={`text-xs font-medium whitespace-nowrap ${isUnopenedAdmin ? 'text-slate-400' : 'text-slate-700'}`}>
                 {String(val)}
               </span>
             );
           }
 
           return (
-            <span className="text-xs font-medium text-slate-700 max-w-56 truncate block" title={String(val)}>
+            <span className={`text-xs font-medium max-w-56 truncate block ${isUnopenedAdmin ? 'text-slate-400' : 'text-slate-700'}`} title={String(val)}>
               {String(val)}
             </span>
           );
         },
       };
     });
-  }, [effectiveChannelFields, onOpenDetailsModal]);
+  }, [effectiveChannelFields, onOpenDetailsModal, isAdminRole]);
 
   const columns: ColumnDef<Lead>[] = [
     ...(canBulkReassign
@@ -546,17 +559,19 @@ export const LeadTable: React.FC<LeadTableProps> = ({
                     ? 'text-slate-300 bg-slate-50 cursor-not-allowed opacity-40'
                     : isRevealed
                       ? 'text-emerald-600 bg-emerald-50 cursor-default'
-                      : 'text-slate-500 hover:text-brand-600 hover:bg-brand-50'
+                      : 'text-slate-400 hover:text-brand-600 hover:bg-brand-50'
                     }`}
                   title={
                     isManagerOrSupervisorRole
                       ? 'Ação de revelar dados restrita a atendentes'
                       : isRevealed
                         ? 'Dados revelados (Em Contato)'
-                        : 'Ver Telefone & CPF (Tabular como Em Contato)'
+                        : isAdminRole
+                          ? 'Lead ainda não aberto pelo atendente (clique se desejar marcar como revelado)'
+                          : 'Ver Telefone & CPF (Tabular como Em Contato)'
                   }
                 >
-                  <Eye className={`w-4 h-4 ${isManagerOrSupervisorRole ? 'text-slate-300' : isRevealed ? 'text-emerald-600' : 'text-slate-500 hover:text-brand-600'}`} />
+                  <Eye className={`w-4 h-4 ${isManagerOrSupervisorRole ? 'text-slate-300' : isRevealed ? 'text-emerald-600' : 'text-slate-400 hover:text-brand-600'}`} />
                 </button>
 
                 <button
@@ -580,16 +595,20 @@ export const LeadTable: React.FC<LeadTableProps> = ({
                 </button>
 
                 <button
-                  onClick={() => isRevealed && onOpenDetailsModal?.(lead)}
-                  disabled={!isRevealed}
+                  onClick={() => (isRevealed || isAdminRole) && onOpenDetailsModal?.(lead)}
+                  disabled={!isRevealed && !isAdminRole}
                   className={`p-1.5 rounded-lg transition-colors ${isRevealed
                     ? 'text-slate-500 hover:text-brand-600 hover:bg-brand-50'
-                    : 'text-slate-300 bg-slate-50 cursor-not-allowed opacity-50'
+                    : isAdminRole
+                      ? 'text-slate-400 hover:text-brand-600 hover:bg-brand-50'
+                      : 'text-slate-300 bg-slate-50 cursor-not-allowed opacity-50'
                     }`}
                   title={
                     isRevealed
                       ? 'Ver Dados & Editar Proposta / Observações'
-                      : 'Clique no olho para revelar os dados do lead primeiro'
+                      : isAdminRole
+                        ? 'Ver Dados & Editar Proposta / Observações (Lead não aberto pelo atendente)'
+                        : 'Clique no olho para revelar os dados do lead primeiro'
                   }
                 >
                   <FileText className="w-4 h-4" />
@@ -896,7 +915,13 @@ export const LeadTable: React.FC<LeadTableProps> = ({
           <tbody className="divide-y divide-slate-100 text-slate-700 text-xs">
             {table.getRowModel().rows.length > 0 ? (
               table.getRowModel().rows.map((row) => (
-                <tr key={row.id} className="hover:bg-slate-50/60 transition-colors">
+                <tr
+                  key={row.id}
+                  className={cn(
+                    "hover:bg-slate-50/60 transition-colors",
+                    isAdminRole && !row.original.is_revealed && "bg-slate-50/40"
+                  )}
+                >
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="py-3 px-2.5">
                       {flexRender(cell.column.columnDef.cell, cell.getContext())}
