@@ -354,6 +354,7 @@ class LeadService:
         status_filter: Optional[str] = None,
         search: Optional[str] = None,
         attendant_id: Optional[UUID] = None,
+        unit_id: Optional[UUID] = None,
         banco_filter: Optional[str] = None,
         tabela_filter: Optional[str] = None,
         disposition_filter: Optional[str] = None,
@@ -408,6 +409,9 @@ class LeadService:
             if banco_filter and banco_filter.lower() != "all":
                 b_query = b_query.where(BucketLead.banco.ilike(f"%{banco_filter}%"))
 
+            if unit_id:
+                b_query = b_query.where(BucketLead.unit_id == unit_id)
+
             if tabela_filter and tabela_filter.lower() != "all":
                 b_query = b_query.where(BucketLead.tabela.ilike(f"%{tabela_filter}%"))
 
@@ -446,6 +450,7 @@ class LeadService:
             selectinload(Lead.assignments)
         ).where(Lead.is_simulation.is_(False))
 
+        is_user_joined = False
         # Role-based filtering
         if current_user:
             if current_user.role == "manager":
@@ -454,7 +459,9 @@ class LeadService:
                     managed_unit_ids = [current_user.unit_id]
 
                 if managed_unit_ids:
-                    query = query.outerjoin(User, Lead.current_attendant_id == User.id).where(
+                    query = query.outerjoin(User, Lead.current_attendant_id == User.id)
+                    is_user_joined = True
+                    query = query.where(
                         or_(
                             Lead.unit_id.in_(managed_unit_ids),
                             User.unit_id.in_(managed_unit_ids)
@@ -462,7 +469,9 @@ class LeadService:
                     )
             elif current_user.role == "supervisor":
                 if current_user.unit_id:
-                    query = query.outerjoin(User, Lead.current_attendant_id == User.id).where(
+                    query = query.outerjoin(User, Lead.current_attendant_id == User.id)
+                    is_user_joined = True
+                    query = query.where(
                         or_(
                             Lead.unit_id == current_user.unit_id,
                             User.unit_id == current_user.unit_id
@@ -470,6 +479,17 @@ class LeadService:
                     )
             elif current_user.role == "attendant":
                 query = query.where(Lead.current_attendant_id == current_user.id)
+
+        if unit_id:
+            if not is_user_joined:
+                query = query.outerjoin(User, Lead.current_attendant_id == User.id)
+                is_user_joined = True
+            query = query.where(
+                or_(
+                    Lead.unit_id == unit_id,
+                    User.unit_id == unit_id
+                )
+            )
 
         if status_filter and status_filter.lower() != "all":
             query = query.where(Lead.status == status_filter.lower())
