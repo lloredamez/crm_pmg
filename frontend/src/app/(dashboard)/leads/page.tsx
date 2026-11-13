@@ -18,7 +18,8 @@ import { SimulationsManagement } from '@/components/simulations/simulations-mana
 import { fetchLeads, fetchUsers, updateUserStatus, reassignLead, bulkReassignLeads, revealLead, claimLead } from '@/features/leads/api';
 import { fetchDispositions } from '@/features/dispositions/api';
 import { fetchChannels } from '@/features/channels/api';
-import { Lead, User, Disposition, Channel } from '@/features/leads/types';
+import { fetchUnits } from '@/features/units/api';
+import { Lead, User, Disposition, Channel, Unit } from '@/features/leads/types';
 import { useSocket } from '@/features/socket/socket-provider';
 
 export default function LeadsDashboardPage() {
@@ -35,6 +36,7 @@ export default function LeadsDashboardPage() {
   const [tabelaFilter, setTabelaFilter] = useState('all');
   const [dispositionFilter, setDispositionFilter] = useState('all');
   const [channelFilter, setChannelFilter] = useState('');
+  const [unitFilter, setUnitFilter] = useState('all');
   const [selectedAttendantFilter, setSelectedAttendantFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
@@ -76,6 +78,30 @@ export default function LeadsDashboardPage() {
     queryFn: () => fetchChannels(false),
     enabled: !!user,
   });
+
+  // Fetch Units
+  const { data: units = [] } = useQuery<Unit[]>({
+    queryKey: ['units'],
+    queryFn: () => fetchUnits(false),
+    enabled: !!user,
+  });
+
+  const availableUnits = React.useMemo(() => {
+    if (!units || units.length === 0) return [];
+    if (user?.role === 'admin') {
+      return units.filter((u) => u.is_active !== false);
+    }
+    if (user?.role === 'manager') {
+      const managedIds = user.managed_unit_ids || (user.unit_id ? [user.unit_id] : []);
+      if (managedIds.length > 0) {
+        return units.filter((u) => managedIds.includes(u.id) && u.is_active !== false);
+      }
+    }
+    if (user?.unit_id) {
+      return units.filter((u) => u.id === user.unit_id && u.is_active !== false);
+    }
+    return units.filter((u) => u.is_active !== false);
+  }, [units, user]);
 
   // Filter channels according to the user's unit/store participation
   // "não todas as lojas participam de todos os canais"
@@ -125,7 +151,7 @@ export default function LeadsDashboardPage() {
     : undefined;
 
   const { data: leadsData, refetch: refetchLeads } = useQuery({
-    queryKey: ['leads', page, statusFilter, searchQuery, activeAttendantId, bancoFilter, tabelaFilter, dispositionFilter, effectiveChannelFilter, activeTab],
+    queryKey: ['leads', page, statusFilter, searchQuery, activeAttendantId, bancoFilter, tabelaFilter, dispositionFilter, effectiveChannelFilter, unitFilter, activeTab],
     queryFn: () =>
       fetchLeads({
         page,
@@ -133,6 +159,7 @@ export default function LeadsDashboardPage() {
         status: activeTab === 'overview' ? 'all' : statusFilter,
         search: activeTab === 'overview' ? undefined : searchQuery,
         attendant_id: activeTab === 'overview' ? undefined : activeAttendantId,
+        unit_id: activeTab === 'overview' ? undefined : (unitFilter !== 'all' ? unitFilter : undefined),
         banco: activeTab === 'overview' ? undefined : bancoFilter,
         tabela: activeTab === 'overview' ? undefined : tabelaFilter,
         disposition: activeTab === 'overview' ? undefined : dispositionFilter,
@@ -368,6 +395,12 @@ export default function LeadsDashboardPage() {
                   setPage(1);
                 }}
                 dispositions={dispositions}
+                units={availableUnits}
+                unitFilter={unitFilter}
+                onUnitFilterChange={(u) => {
+                  setUnitFilter(u);
+                  setPage(1);
+                }}
                 attendantFilter={selectedAttendantFilter}
                 onAttendantFilterChange={(attId) => {
                   setSelectedAttendantFilter(attId);

@@ -31,6 +31,7 @@ export async function fetchLeads(params: {
   status?: string;
   search?: string;
   attendant_id?: string;
+  unit_id?: string;
   banco?: string;
   tabela?: string;
   disposition?: string;
@@ -43,6 +44,7 @@ export async function fetchLeads(params: {
   if (params.status && params.status !== 'all') query.append('status', params.status);
   if (params.search) query.append('search', params.search);
   if (params.attendant_id) query.append('attendant_id', params.attendant_id);
+  if (params.unit_id && params.unit_id !== 'all') query.append('unit_id', params.unit_id);
   if (params.banco && params.banco !== 'all') query.append('banco', params.banco);
   if (params.tabela && params.tabela !== 'all') query.append('tabela', params.tabela);
   if (params.disposition && params.disposition !== 'all') query.append('disposition', params.disposition);

@@ -11,12 +11,12 @@ import {
   ColumnDef,
   SortingState,
 } from '@tanstack/react-table';
-import { Lead, User, Disposition, Channel } from '@/features/leads/types';
+import { Lead, User, Disposition, Channel, Unit } from '@/features/leads/types';
 import { formatDate, formatPhone, formatCpf, formatCurrency, cn } from '@/lib/utils';
 import { useAuth } from '@/features/auth/auth-provider';
 import { getEffectiveChannelFields } from '@/features/channels/constants';
 import { LeadTimerBadge } from './lead-timer-badge';
-import { Search, ArrowUpDown, UserCheck, Clock, FileText, Tag, Eye, EyeOff, Package, Landmark, Table, DollarSign, Calculator, Filter, RotateCcw, X, ShoppingBag, UserPlus, Share2 } from 'lucide-react';
+import { Search, ArrowUpDown, UserCheck, Clock, FileText, Tag, Eye, EyeOff, Package, Landmark, Table, DollarSign, Calculator, Filter, RotateCcw, X, ShoppingBag, UserPlus, Share2, Store } from 'lucide-react';
 
 
 interface LeadTableProps {
@@ -40,6 +40,9 @@ interface LeadTableProps {
   dispositions?: Disposition[];
   attendantFilter?: string;
   onAttendantFilterChange?: (attendantId: string) => void;
+  units?: Unit[];
+  unitFilter?: string;
+  onUnitFilterChange?: (unitId: string) => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
   onOpenLeadModal?: (lead: Lead) => void;
@@ -72,6 +75,9 @@ export const LeadTable: React.FC<LeadTableProps> = ({
   dispositions = [],
   attendantFilter = 'all',
   onAttendantFilterChange,
+  units = [],
+  unitFilter = 'all',
+  onUnitFilterChange,
   searchQuery,
   onSearchChange,
   onOpenLeadModal,
@@ -86,6 +92,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
   const role = user?.role;
   const isSupervisorRole = role === 'supervisor';
   const isManagerOrAdminRole = role === 'manager' || role === 'admin';
+  const isAdminRole = role === 'admin';
 
   const [rowSelection, setRowSelection] = useState<Record<string, boolean>>({});
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -321,29 +328,29 @@ export const LeadTable: React.FC<LeadTableProps> = ({
       : []),
     ...(isAdminRole
       ? [
-    {
-      accessorKey: 'created_at',
+        {
+          accessorKey: 'created_at',
           header: ({ column }: { column: any }) => (
-        <button
-          className="flex items-center gap-1 text-slate-500 font-medium text-xs hover:text-slate-900 whitespace-nowrap"
-          onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
-        >
-          Data Lead <ArrowUpDown className="w-3 h-3 shrink-0" />
-        </button>
-      ),
+            <button
+              className="flex items-center gap-1 text-slate-500 font-medium text-xs hover:text-slate-900 whitespace-nowrap"
+              onClick={() => column.toggleSorting(column.getIsSorted() === 'asc')}
+            >
+              Data Lead <ArrowUpDown className="w-3 h-3 shrink-0" />
+            </button>
+          ),
           cell: ({ row }: { row: any }) => (
-        <div className="text-xs text-slate-500 flex items-center gap-1.5 font-medium whitespace-nowrap">
+            <div className="text-xs text-slate-500 flex items-center gap-1.5 font-medium whitespace-nowrap">
               {row.original.created_at ? (
                 <>
-          <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                  <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                   <span>{formatDate(row.original.created_at)}</span>
                 </>
               ) : (
                 <span className="text-slate-400">-</span>
               )}
-        </div>
-      ),
-    },
+            </div>
+          ),
+        },
         {
           accessorKey: 'assigned_at',
           header: ({ column }: { column: any }) => (
@@ -648,12 +655,26 @@ export const LeadTable: React.FC<LeadTableProps> = ({
     new Set(leads.map((l) => l.tabela).filter((t): t is string => !!t && t.trim() !== ''))
   );
 
+  const availableUnits = useMemo(() => {
+    if (units && units.length > 0) return units;
+    const map = new Map<string, string>();
+    leads.forEach((l) => {
+      const uid = l.unit_id || l.unit?.id;
+      const uname = l.unit?.name || l.unit_name;
+      if (uid && uname) {
+        map.set(uid, uname);
+      }
+    });
+    return Array.from(map.entries()).map(([id, name]) => ({ id, name, code: name, is_active: true } as Unit));
+  }, [units, leads]);
+
   const hasActiveFilters =
     statusFilter !== 'all' ||
     bancoFilter !== 'all' ||
     tabelaFilter !== 'all' ||
     dispositionFilter !== 'all' ||
     attendantFilter !== 'all' ||
+    unitFilter !== 'all' ||
     !!searchQuery;
 
   const handleResetFilters = () => {
@@ -662,6 +683,7 @@ export const LeadTable: React.FC<LeadTableProps> = ({
     onTabelaFilterChange?.('all');
     onDispositionFilterChange?.('all');
     onAttendantFilterChange?.('all');
+    onUnitFilterChange?.('all');
     onSearchChange('');
   };
 
@@ -708,6 +730,25 @@ export const LeadTable: React.FC<LeadTableProps> = ({
             <Filter className="w-3.5 h-3.5 text-brand-600" />
             <span>Filtros do Cabeçalho:</span>
           </div>
+
+          {/* Loja Filter Dropdown */}
+          {(isManagerOrAdminRole || availableUnits.length > 0) && (
+            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 text-xs">
+              <Store className="w-3.5 h-3.5 text-slate-400" />
+              <select
+                value={unitFilter}
+                onChange={(e) => onUnitFilterChange?.(e.target.value)}
+                className="bg-transparent font-medium text-slate-700 focus:outline-none cursor-pointer"
+              >
+                <option value="all">Todas as Lojas</option>
+                {availableUnits.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Banco Filter Dropdown */}
           {hasBancoField && (
