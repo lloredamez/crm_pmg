@@ -17,6 +17,8 @@ class SimulationOffer(Base):
     simulation_lead_id = Column(UUID(as_uuid=True), ForeignKey("simulation_leads.id", ondelete="CASCADE"), nullable=False, index=True)
     attendant_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
 
+    id_condicao_financiamento = Column(String(255), nullable=True, index=True)
+
     valor_bruto = Column(Float, nullable=True)
     valor_liberado = Column(Float, nullable=True)
     parcela = Column(Integer, nullable=True)
@@ -32,6 +34,13 @@ class SimulationOffer(Base):
     # Relacionamentos diretos
     lead = relationship("SimulationLead", back_populates="offers")
     attendant = relationship("User", foreign_keys=[attendant_id])
+    history = relationship(
+        "SimulationOfferHistory",
+        back_populates="offer",
+        cascade="all, delete-orphan",
+        order_by="desc(SimulationOfferHistory.created_at)",
+        lazy="selectin"
+    )
 
     @property
     def quantidade_parcelas(self) -> Optional[int]:

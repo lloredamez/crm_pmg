@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.simulation_lead import SimulationLead
 from app.models.simulation_offer import SimulationOffer
+from app.models.simulation_offer_history import SimulationOfferHistory
 from app.models.simulation_lead_data import SimulationLeadData
 from app.models.user import User
 from app.schemas.simulation import (
@@ -21,6 +22,7 @@ from app.schemas.simulation import (
     SimulationUpdate,
     SimulationResponse,
     SimulationOfferResponse,
+    SimulationOfferHistoryResponse,
     SimulationLeadDataResponse,
     SimulationLeadDataUpdate
 )
@@ -86,12 +88,28 @@ class SimulationService:
             latest_offer = lead.offers[0]
             for o in lead.offers:
                 att_name = o.attendant.name if o.attendant else None
+                hist_items: List[SimulationOfferHistoryResponse] = []
+                if getattr(o, "history", None):
+                    for h in o.history:
+                        hist_items.append(
+                            SimulationOfferHistoryResponse(
+                                id=h.id,
+                                simulation_offer_id=h.simulation_offer_id,
+                                simulation_lead_id=h.simulation_lead_id,
+                                action=h.action,
+                                user_id=h.user_id,
+                                user_name=h.user_name,
+                                custom_fields=h.custom_fields,
+                                created_at=h.created_at,
+                            )
+                        )
                 offers_list.append(
                     SimulationOfferResponse(
                         id=o.id,
                         simulation_lead_id=o.simulation_lead_id,
                         attendant_id=o.attendant_id,
                         attendant_name=att_name,
+                        id_condicao_financiamento=o.id_condicao_financiamento,
                         valor_bruto=o.valor_bruto,
                         valor_liberado=o.valor_liberado,
                         parcela=o.parcela,
@@ -101,6 +119,8 @@ class SimulationService:
                         status=o.status or "pending",
                         custom_fields=o.custom_fields,
                         created_at=o.created_at,
+                        updated_at=o.updated_at,
+                        history=hist_items,
                     )
                 )
 
@@ -443,6 +463,22 @@ class SimulationService:
         self.db.add(new_offer)
         lead.updated_at = now
         await self.db.flush()
+
+        # Registro no histórico da cotação
+        creation_history = SimulationOfferHistory(
+            simulation_offer_id=new_offer.id,
+            simulation_lead_id=lead.id,
+            action="created",
+            user_id=current_user.id,
+            user_name=current_user.name,
+            custom_fields={
+                "tipo_simulacao": tipo,
+                "valor_simulado": valor,
+                "notes": data.notes
+            },
+            created_at=now
+        )
+        self.db.add(creation_history)
 
         # Disparo do Webhook externo configurado no .env
         webhook_url = _get_simulation_webhook_url()

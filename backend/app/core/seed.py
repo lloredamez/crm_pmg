@@ -62,6 +62,25 @@ async def apply_database_migrations_and_schema():
         # Garante a criação de novas tabelas
         await conn.run_sync(Base.metadata.create_all)
         
+        # Garante criação da tabela de histórico de cotações
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS simulation_offer_histories (
+                id UUID PRIMARY KEY,
+                simulation_offer_id UUID NOT NULL REFERENCES simulation_offers(id) ON DELETE CASCADE,
+                simulation_lead_id UUID NOT NULL REFERENCES simulation_leads(id) ON DELETE CASCADE,
+                action VARCHAR(50) NOT NULL DEFAULT 'created',
+                user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                user_name VARCHAR(255),
+                custom_fields JSON,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+        """))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_offer_histories_offer_id ON simulation_offer_histories (simulation_offer_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_offer_histories_lead_id ON simulation_offer_histories (simulation_lead_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_offer_histories_created_at ON simulation_offer_histories (created_at);"))
+        await conn.execute(text("ALTER TABLE simulation_offers ADD COLUMN IF NOT EXISTS id_condicao_financiamento VARCHAR(255);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_simulation_offers_id_condicao_financiamento ON simulation_offers (id_condicao_financiamento);"))
+        
         # Colunas e migrações leves de compatibilidade
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS hashed_password VARCHAR(255) DEFAULT '';"))
         await conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS cpf VARCHAR(14);"))

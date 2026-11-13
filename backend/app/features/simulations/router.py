@@ -1,7 +1,7 @@
 import math
 import logging
 from uuid import UUID
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, Depends, Query, HTTPException, Request, Header, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,7 +15,8 @@ from app.schemas.simulation import (
     SimulationLeadDataUpdate,
     SimulationUpdate,
     SimulationResponse,
-    SimulationPaginationResponse
+    SimulationPaginationResponse,
+    SimulationOfferHistoryResponse
 )
 from app.features.simulations.service import SimulationService
 
@@ -77,6 +78,8 @@ async def list_simulations(
 
 @router.patch("/callback", response_model=SimulationResponse)
 @router.post("/callback", response_model=SimulationResponse)
+@router.patch("/callback/", response_model=SimulationResponse)
+@router.post("/callback/", response_model=SimulationResponse)
 async def update_simulation_callback(
     data: SimulationUpdate,
     request: Request,
@@ -128,6 +131,65 @@ async def request_simulation_quote(
         logger.error(f"Erro ao processar nova cotação: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro interno ao solicitar cotação.")
 
+@router.post("/{id}/offers/{offer_id}/reprocess", response_model=SimulationResponse)
+async def reprocess_simulation_offer(
+    id: UUID,
+    offer_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Reprocessa uma cotação existente enviando os dados no webhook externo com o evento new_quotation."""
+    _ensure_simulation_access(current_user)
+    service = SimulationService(db)
+    try:
+        return await service.reprocess_quotation(lead_id=id, offer_id=offer_id, current_user=current_user)
+    except LookupError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Erro ao reprocessar cotação: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro interno ao reprocessar cotação.")
+
+@router.post("/{id}/offers/{offer_id}/type", response_model=SimulationResponse, summary="Envia a proposta para digitação no webhook")
+@router.post("/{id}/offers/{offer_id}/type/", response_model=SimulationResponse, include_in_schema=False)
+async def type_simulation_offer(
+    id: UUID,
+    offer_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Envia todos os dados do cliente e da proposta selecionada para o webhook de digitação (válido por até 5 minutos após atualização da oferta)."""
+    _ensure_simulation_access(current_user)
+    service = SimulationService(db)
+    try:
+        return await service.type_proposal(lead_id=id, offer_id=offer_id, current_user=current_user)
+    except LookupError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except Exception as e:
+        logger.error(f"Erro ao digitar proposta da cotação {offer_id} do lead {id}: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro interno ao digitar proposta.")
+
+@router.get("/{id}/offers/{offer_id}/history", response_model=List[SimulationOfferHistoryResponse])
+async def get_simulation_offer_history(
+    id: UUID,
+    offer_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Retorna o histórico de eventos (criação e reprocessamento) de uma cotação específica."""
+    _ensure_simulation_access(current_user)
+    service = SimulationService(db)
+    try:
+        return await service.get_offer_history(lead_id=id, offer_id=offer_id)
+    except LookupError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        logger.error(f"Erro ao obter histórico da cotação: {e}", exc_info=True)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Erro interno ao obter histórico.")
+
 @router.put("/{id}/cadastral-data", response_model=SimulationResponse)
 @router.patch("/{id}/cadastral-data", response_model=SimulationResponse)
 async def update_simulation_cadastral_data(
@@ -151,6 +213,8 @@ async def update_simulation_cadastral_data(
 
 @router.patch("/{id}", response_model=SimulationResponse)
 @router.post("/{id}", response_model=SimulationResponse)
+@router.patch("/{id}/", response_model=SimulationResponse)
+@router.post("/{id}/", response_model=SimulationResponse)
 async def update_simulation_by_id(
     id: UUID,
     data: SimulationUpdate,
