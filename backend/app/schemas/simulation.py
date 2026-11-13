@@ -15,6 +15,19 @@ class SimulationQuoteCreate(BaseModel):
     produto_id: Optional[str] = Field(None, description="ID do produto externo")
     notes: Optional[str] = Field(None, description="Observações adicionais para esta cotação")
 
+class SimulationOfferHistoryResponse(BaseModel):
+    id: UUID
+    simulation_offer_id: UUID
+    simulation_lead_id: UUID
+    action: str = Field(..., description="Ação realizada: 'created', 'reprocessed', etc.")
+    user_id: Optional[UUID] = None
+    user_name: Optional[str] = None
+    custom_fields: Optional[Dict[str, Any]] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
 class SimulationOfferResponse(BaseModel):
     id: UUID
     simulation_lead_id: UUID
