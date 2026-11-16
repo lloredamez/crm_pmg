@@ -9,7 +9,7 @@ import {
   getEffectiveChannelFields,
   isStandardField,
 } from '@/features/channels/constants';
-import { formatDate, formatPhone, formatCpf, formatCurrency } from '@/lib/utils';
+import { formatDate, formatPhone, formatCpf, formatCurrency, formatCurrencyInput, formatCurrencyValue, parseCurrencyToNumber } from '@/lib/utils';
 import { X, Lock, Edit3, Save, FileText, CheckCircle, History, Clock, User, AlertCircle, RefreshCw, Tag, MessageSquare, Landmark, Table, DollarSign, Calculator } from 'lucide-react';
 
 interface LeadDetailsModalProps {
@@ -64,8 +64,8 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
       setBanco(lead.banco || '');
       setTabela(lead.tabela || '');
       setPrazo(lead.prazo !== undefined && lead.prazo !== null ? String(lead.prazo) : '');
-      setMargem(lead.margem !== undefined && lead.margem !== null ? String(lead.margem) : '');
-      setValorLiberado(lead.valor_liberado !== undefined && lead.valor_liberado !== null ? String(lead.valor_liberado) : '');
+      setMargem(lead.margem !== undefined && lead.margem !== null ? formatCurrencyValue(lead.margem) : '');
+      setValorLiberado(lead.valor_liberado !== undefined && lead.valor_liberado !== null ? formatCurrencyValue(lead.valor_liberado) : '');
       setCustomFields(lead.custom_fields || {});
       setSavedSuccess(false);
     }
@@ -242,8 +242,15 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
     setSavedSuccess(false);
     try {
       const parsedPrazo = prazo.trim() !== '' ? parseInt(prazo, 10) : null;
-      const parsedMargem = margem.trim() !== '' ? parseFloat(margem.replace(',', '.')) : null;
-      const parsedValorLiberado = valorLiberado.trim() !== '' ? parseFloat(valorLiberado.replace(',', '.')) : null;
+      const parsedMargem = parseCurrencyToNumber(margem);
+      const parsedValorLiberado = parseCurrencyToNumber(valorLiberado);
+
+      const sanitizedCustomFields = { ...customFields };
+      editableChannelFields.forEach((field) => {
+        if (!isStandardField(field.key) && field.type === 'currency' && sanitizedCustomFields[field.key] !== undefined) {
+          sanitizedCustomFields[field.key] = parseCurrencyToNumber(sanitizedCustomFields[field.key]);
+        }
+      });
 
       await updateLeadDetails(lead.id, {
         name: name.trim() || lead.name,
@@ -258,9 +265,9 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
         banco: banco.trim() || null,
         tabela: tabela.trim() || null,
         prazo: isNaN(parsedPrazo as number) ? null : parsedPrazo,
-        margem: isNaN(parsedMargem as number) ? null : parsedMargem,
-        valor_liberado: isNaN(parsedValorLiberado as number) ? null : parsedValorLiberado,
-        custom_fields: customFields,
+        margem: parsedMargem,
+        valor_liberado: parsedValorLiberado,
+        custom_fields: sanitizedCustomFields,
       });
       setSavedSuccess(true);
       onRefresh();
@@ -480,13 +487,23 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
                                   ? 'date'
                                   : 'text'
                               }
+                              inputMode={field.type === 'currency' ? 'numeric' : undefined}
                               required={field.required}
                               placeholder={
                                 field.placeholder ||
-                                (field.type === 'currency' ? 'Ex: 0.00' : '')
+                                (field.type === 'currency' ? 'R$ 0,00' : '')
                               }
-                              value={val ?? ''}
+                              value={
+                                field.type === 'currency' && typeof val === 'number'
+                                  ? formatCurrencyValue(val)
+                                  : (val ?? '')
+                              }
                               onChange={(e) => {
+                                if (field.type === 'currency') {
+                                  const formatted = formatCurrencyInput(e.target.value);
+                                  setFieldValue(field.key, formatted);
+                                  return;
+                                }
                                 const nextVal =
                                   !isStandardField(field.key) &&
                                   field.type === 'number' &&

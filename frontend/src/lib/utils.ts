@@ -42,3 +42,63 @@ export function formatCurrency(value?: number | null): string {
   }).format(value);
 }
 
+export function formatCurrencyInput(val: string): string {
+  const digits = String(val).replace(/\D/g, "");
+  if (!digits) return "";
+  const num = parseInt(digits, 10) / 100;
+  if (num === 0) return "";
+  return num.toLocaleString("pt-BR", {
+    style: "currency",
+    currency: "BRL",
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+export function formatCurrencyValue(val: number | string | null | undefined): string {
+  if (val === null || val === undefined || val === "") return "";
+  if (typeof val === "number") {
+    return val.toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+  const str = String(val).trim();
+  if (str.startsWith("R$") || str.includes(",")) {
+    const digits = str.replace(/\D/g, "");
+    if (!digits) return "";
+    const num = parseInt(digits, 10) / 100;
+    if (num === 0) return "";
+    return num.toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+  const parsed = parseFloat(str);
+  if (!isNaN(parsed)) {
+    return parsed.toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+  }
+  return "";
+}
+
+export function parseCurrencyToNumber(val: string | number | null | undefined): number | null {
+  if (val === null || val === undefined) return null;
+  if (typeof val === "number") return isNaN(val) ? null : val;
+  const str = String(val).trim();
+  if (!str) return null;
+  const digits = str.replace(/\D/g, "");
+  if (!digits) return null;
+  const num = parseInt(digits, 10) / 100;
+  return isNaN(num) ? null : num;
+}
+
+
