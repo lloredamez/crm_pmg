@@ -5,7 +5,7 @@ import { SocketProvider } from '@/features/socket/socket-provider';
 import { AuthProvider } from '@/features/auth/auth-provider';
 
 export const metadata: Metadata = {
-  title: 'CRM - PMG',
+  title: 'Dindin - PMG',
   description: 'CRM de distribuição inteligente de leads com SLA de atendimento, login e controle por perfis',
   icons: {
     icon: [
