@@ -552,6 +552,7 @@ async def seed_initial_data():
         else:
             u_list = list(unit_map.values())
             clean_names = {
+                "admin@grupopmg.com": "PMG Admin",
                 "admin@teste.com": "PMG Admin",
                 "supervisor@teste.com": "[TESTE] Marcos",
                 "ana.silva@teste.com": "[TESTE] Ana",
@@ -562,6 +563,7 @@ async def seed_initial_data():
                 "gerente.regional@teste.com": "[TESTE] Roberto",
             }
             demo_cpfs = {
+                "admin@grupopmg.com": "111.111.111-11",
                 "admin@teste.com": "111.111.111-11",
                 "supervisor@teste.com": "333.333.333-33",
                 "ana.silva@teste.com": "444.444.444-44",
@@ -571,11 +573,15 @@ async def seed_initial_data():
                 "eduardo.lima@teste.com": "888.888.888-88",
                 "gerente.regional@teste.com": "222.222.222-22",
             }
+            existing_cpfs = {u.cpf for u in existing_users if u.cpf}
             for idx, user in enumerate(existing_users):
                 if user.email in clean_names:
                     user.name = clean_names[user.email]
                 if user.email in demo_cpfs and not user.cpf:
-                    user.cpf = demo_cpfs[user.email]
+                    target_cpf = demo_cpfs[user.email]
+                    if target_cpf not in existing_cpfs:
+                        user.cpf = target_cpf
+                        existing_cpfs.add(target_cpf)
                 if not user.hashed_password:
                     user.hashed_password = default_password
                 if user.role not in ["admin", "manager"] and not user.unit_id and u_list:
@@ -584,12 +590,18 @@ async def seed_initial_data():
 
         # Garante a existência da conta de Gerente de demonstração com múltiplas unidades
         manager_check = await session.execute(
-            select(User).options(selectinload(User.managed_units)).where(User.email == "gerente.regional@teste.com")
+            select(User).options(selectinload(User.managed_units)).where(
+                or_(
+                    User.email == "gerente.regional@teste.com",
+                    User.cpf == "222.222.222-22"
+                )
+            )
         )
-        if not manager_check.scalar_one_or_none():
-            u1 = unit_map.get("U1")
-            u2 = unit_map.get("U2")
-            managed = [u for u in [u1, u2] if u is not None]
+        manager_user = manager_check.scalars().first()
+        u1 = unit_map.get("U1")
+        u2 = unit_map.get("U2")
+        managed = [u for u in [u1, u2] if u is not None]
+        if not manager_user:
             manager_user = User(
                 name="[TESTE] Roberto",
                 email="gerente.regional@teste.com",
@@ -602,6 +614,14 @@ async def seed_initial_data():
                 managed_units=managed
             )
             session.add(manager_user)
+            await session.commit()
+        else:
+            manager_user.name = "[TESTE] Roberto"
+            manager_user.email = "gerente.regional@teste.com"
+            manager_user.cpf = "222.222.222-22"
+            manager_user.role = "manager"
+            if not manager_user.managed_units and managed:
+                manager_user.managed_units = managed
             await session.commit()
 
         # Seed de Tabulações Padrão
