@@ -10,7 +10,7 @@ import {
   isStandardField,
 } from '@/features/channels/constants';
 import { formatDate, formatPhone, formatCpf, formatCurrency, formatCurrencyInput, formatCurrencyValue, parseCurrencyToNumber } from '@/lib/utils';
-import { X, Lock, Edit3, Save, FileText, CheckCircle, History, Clock, User, AlertCircle, RefreshCw, Tag, MessageSquare, Landmark, Table, DollarSign, Calculator } from 'lucide-react';
+import { X, Lock, Edit3, Save, FileText, CheckCircle, History, Clock, User, AlertCircle, RefreshCw, Tag, MessageSquare, Landmark, Table, DollarSign, Calculator, Inbox, AlertTriangle, Eye, ArrowRightLeft } from 'lucide-react';
 
 interface LeadDetailsModalProps {
   lead: Lead | null;
@@ -293,23 +293,34 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
     return `${mins} min`;
   };
 
-  const renderStatusBadge = (status: string) => {
-    switch (status) {
+  const renderStatusBadge = (status?: string | null, eventType?: string | null) => {
+    const type = eventType || status || '';
+    switch (type) {
+      case 'lead_created':
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-sky-100 text-sky-800 border border-sky-200">Lead Criado</span>;
+      case 'sent_to_bucket':
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">Enviado ao Balde</span>;
+      case 'claimed_from_bucket':
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">Capturado do Balde</span>;
+      case 'assigned':
       case 'active':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">Em Atendimento</span>;
-      case 'expired_timeout':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200">Estouro SLA (Timeout)</span>;
-      case 'disposition_timeout':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200">Estouro SLA (Tabulação)</span>;
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200">Atribuído</span>;
+      case 'reassigned':
       case 'manually_reassigned':
       case 'bulk_manually_reassigned':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200">Reatribuído</span>;
-      case 'completed':
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">Concluído</span>;
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-100 text-orange-800 border border-orange-200">Reatribuído</span>;
+      case 'revealed':
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800 border border-purple-200">Dados Revelados</span>;
       case 'tabulated':
         return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-indigo-100 text-indigo-800 border border-indigo-200">Tabulado</span>;
+      case 'sla_breached':
+      case 'expired_timeout':
+      case 'disposition_timeout':
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-rose-100 text-rose-800 border border-rose-200">Estouro SLA</span>;
+      case 'completed':
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-100 text-blue-800 border border-blue-200">Concluído</span>;
       default:
-        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">{status}</span>;
+        return <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">{type}</span>;
     }
   };
 
@@ -587,101 +598,100 @@ export const LeadDetailsModal: React.FC<LeadDetailsModalProps> = ({
               ) : (
                 <div className="relative border-l-2 border-slate-100 ml-4 space-y-6 py-2">
                   {historyItems.map((item, idx) => {
-                    const isTabulation = item.event_type === 'tabulation';
+                    const eventType = item.event_type || (item.status === 'tabulated' ? 'tabulated' : 'assigned');
+                    const isTabulation = eventType === 'tabulated';
+                    const isBreach = eventType === 'sla_breached' || (item.status && item.status.includes('timeout'));
+                    const isBucket = eventType === 'sent_to_bucket' || eventType === 'claimed_from_bucket';
+                    const isCreated = eventType === 'lead_created';
+                    const isRevealed = eventType === 'revealed';
+
+                    const dotColorClass = isBreach
+                      ? 'border-rose-500 bg-rose-50 text-rose-500'
+                      : isTabulation
+                      ? 'border-indigo-500 bg-indigo-50 text-indigo-500'
+                      : isBucket
+                      ? 'border-amber-500 bg-amber-50 text-amber-500'
+                      : isCreated
+                      ? 'border-sky-500 bg-sky-50 text-sky-500'
+                      : isRevealed
+                      ? 'border-purple-500 bg-purple-50 text-purple-500'
+                      : 'border-emerald-500 bg-emerald-50 text-emerald-500';
+
+                    const eventDate = item.created_at || item.assigned_at;
+
                     return (
                       <div key={item.id || idx} className="relative pl-6">
                         {/* Timeline Dot */}
-                        <div className={`absolute -left-2.25 top-1.5 w-4 h-4 rounded-full border-2 bg-white flex items-center justify-center ${
-                          isTabulation
-                            ? 'border-indigo-500 bg-indigo-50'
-                            : item.status === 'active'
-                            ? 'border-emerald-500 bg-emerald-50'
-                            : item.status.includes('timeout')
-                            ? 'border-rose-500 bg-rose-50'
-                            : 'border-slate-300'
-                        }`}>
+                        <div className={`absolute -left-2.25 top-1.5 w-4 h-4 rounded-full border-2 bg-white flex items-center justify-center ${dotColorClass}`}>
                           <div className={`w-1.5 h-1.5 rounded-full ${
-                            isTabulation ? 'bg-indigo-500' : item.status === 'active' ? 'bg-emerald-500' : item.status.includes('timeout') ? 'bg-rose-500' : 'bg-slate-400'
+                            isBreach ? 'bg-rose-500' : isTabulation ? 'bg-indigo-500' : isBucket ? 'bg-amber-500' : isCreated ? 'bg-sky-500' : isRevealed ? 'bg-purple-500' : 'bg-emerald-500'
                           }`} />
                         </div>
 
                         {/* Card Event Content */}
-                        <div className="bg-slate-50/80 rounded-2xl p-4 border border-slate-100 text-xs space-y-2 hover:bg-slate-50 transition-colors">
+                        <div className={`rounded-2xl p-4 border text-xs space-y-2.5 transition-colors ${
+                          isBreach
+                            ? 'bg-rose-50/50 border-rose-100 hover:bg-rose-50/80'
+                            : isBucket
+                            ? 'bg-amber-50/40 border-amber-100/80 hover:bg-amber-50/70'
+                            : 'bg-slate-50/80 border-slate-100 hover:bg-slate-50'
+                        }`}>
                           <div className="flex items-center justify-between gap-2 flex-wrap">
                             <div className="flex items-center gap-2">
-                              <User className="w-4 h-4 text-slate-400" />
-                              <span className="font-bold text-slate-900">{item.attendant_name}</span>
-                              {item.attendant_email && (
-                                <span className="text-slate-400 font-normal">({item.attendant_email})</span>
+                              {isBreach ? (
+                                <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />
+                              ) : isBucket ? (
+                                <Inbox className="w-4 h-4 text-amber-600 shrink-0" />
+                              ) : isRevealed ? (
+                                <Eye className="w-4 h-4 text-purple-600 shrink-0" />
+                              ) : isCreated ? (
+                                <FileText className="w-4 h-4 text-sky-600 shrink-0" />
+                              ) : isTabulation ? (
+                                <Tag className="w-4 h-4 text-indigo-600 shrink-0" />
+                              ) : (
+                                <User className="w-4 h-4 text-slate-400 shrink-0" />
                               )}
+                              <span className="font-bold text-slate-900">
+                                {item.title || (isTabulation ? `Tabulação: ${item.disposition_name}` : `Atendimento - ${item.attendant_name || 'Sistema'}`)}
+                              </span>
                             </div>
-                            <div>{renderStatusBadge(isTabulation ? 'tabulated' : item.status)}</div>
+                            <div>{renderStatusBadge(item.status, eventType)}</div>
                           </div>
 
-                          {isTabulation ? (
-                            /* Tabulation Event Body */
-                            <div className="space-y-2 pt-1 border-t border-slate-200/60">
-                              <div className="flex items-center justify-between text-slate-500 text-[11px]">
-                                <div className="flex items-center gap-1.5">
-                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                  <span>Data da Tabulação: <strong className="text-slate-700">{formatDate(item.assigned_at)}</strong></span>
-                                </div>
+                          {/* Data e Responsável */}
+                          <div className="flex items-center justify-between gap-2 text-slate-500 text-[11px] pt-1 border-t border-slate-200/60 flex-wrap">
+                            <div className="flex items-center gap-1.5">
+                              <Clock className="w-3.5 h-3.5 text-slate-400" />
+                              <span>Horário: <strong className="text-slate-700">{eventDate ? formatDate(eventDate) : '-'}</strong></span>
+                            </div>
+                            {item.attendant_name && (
+                              <div className="flex items-center gap-1.5">
+                                <User className="w-3.5 h-3.5 text-slate-400" />
+                                <span>Operador: <strong className="text-slate-700">{item.attendant_name}</strong></span>
                               </div>
+                            )}
+                          </div>
 
-                              <div className="bg-white/90 rounded-xl p-2.5 space-y-1.5 border border-slate-200/80">
-                                {item.disposition_name && (
-                                  <div className="flex items-center gap-1.5 text-slate-700 font-semibold text-xs">
-                                    <Tag className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                                    <span>Tabulação: <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">{item.disposition_name}</span></span>
-                                  </div>
-                                )}
-                                {item.disposition_notes && (
-                                  <div className="flex items-start gap-1.5 text-slate-600 text-xs pt-0.5">
-                                    <MessageSquare className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
-                                    <div>
-                                      <span className="font-semibold text-slate-700 block">Observação:</span>
-                                      <p className="text-slate-600 whitespace-pre-wrap mt-0.5 font-normal">{item.disposition_notes}</p>
-                                    </div>
-                                  </div>
-                                )}
+                          {/* Detalhes específicos do evento */}
+                          {(item.description || item.disposition_notes) && (
+                            <div className="bg-white/90 rounded-xl p-2.5 space-y-1.5 border border-slate-200/80">
+                              <div className="flex items-start gap-1.5 text-slate-600 text-xs">
+                                <MessageSquare className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
+                                <div>
+                                  <span className="font-semibold text-slate-700 block">Detalhes / Observações:</span>
+                                  <p className="text-slate-600 whitespace-pre-wrap mt-0.5 font-normal">
+                                    {item.description || item.disposition_notes}
+                                  </p>
+                                </div>
                               </div>
                             </div>
-                          ) : (
-                            /* Assignment Event Body */
-                            <>
-                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-500 pt-1 border-t border-slate-200/60">
-                                <div className="flex items-center gap-1.5">
-                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                  <span>Início: <strong className="text-slate-700">{formatDate(item.assigned_at)}</strong></span>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  <Clock className="w-3.5 h-3.5 text-slate-400" />
-                                  <span>Fim: <strong className="text-slate-700">{item.unassigned_at ? formatDate(item.unassigned_at) : 'Em andamento'}</strong></span>
-                                </div>
-                              </div>
+                          )}
 
-                              {item.duration_seconds !== undefined && item.duration_seconds !== null && (
-                                <div className="text-slate-400 text-[11px] font-medium pt-0.5">
-                                  Duração no atendimento: <span className="text-slate-700 font-semibold">{formatDuration(item.duration_seconds)}</span>
-                                </div>
-                              )}
-
-                              {item.disposition_name && (
-                                <div className="flex items-center gap-1.5 text-slate-700 font-semibold text-xs mt-1.5 pt-1.5 border-t border-slate-200/60">
-                                  <Tag className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                  <span>Tabulação no atendimento: <span className="text-slate-700 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200">{item.disposition_name}</span></span>
-                                </div>
-                              )}
-                              {item.disposition_notes && (
-                                <div className="flex items-start gap-1.5 text-slate-600 text-xs pt-1">
-                                  <MessageSquare className="w-3.5 h-3.5 text-slate-400 mt-0.5 shrink-0" />
-                                  <div>
-                                    <span className="font-semibold text-slate-700 block">Observação:</span>
-                                    <p className="text-slate-600 whitespace-pre-wrap mt-0.5 font-normal">{item.disposition_notes}</p>
-                                  </div>
-                                </div>
-                              )}
-                            </>
+                          {/* Duração no atendimento (legado/assignments) */}
+                          {item.duration_seconds !== undefined && item.duration_seconds !== null && item.duration_seconds > 0 && (
+                            <div className="text-slate-400 text-[11px] font-medium pt-0.5">
+                              Duração no atendimento: <span className="text-slate-700 font-semibold">{formatDuration(item.duration_seconds)}</span>
+                            </div>
                           )}
                         </div>
                       </div>

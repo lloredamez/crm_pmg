@@ -234,12 +234,16 @@ export interface Message {
 export interface LeadHistoryItem {
   id: string;
   lead_id: string;
-  event_type?: 'assignment' | 'tabulation';
+  event_type?: string;
+  title?: string;
+  description?: string | null;
   attendant_id?: string | null;
-  attendant_name: string;
-  attendant_email: string;
-  status: string;
-  assigned_at: string;
+  attendant_name?: string | null;
+  attendant_email?: string | null;
+  status?: string | null;
+  created_at?: string;
+  event_metadata?: Record<string, any> | null;
+  assigned_at?: string;
   unassigned_at?: string | null;
   duration_seconds?: number | null;
   disposition_name?: string | null;
