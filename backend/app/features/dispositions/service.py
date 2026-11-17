@@ -12,6 +12,7 @@ from app.models.channel import Channel
 from app.models.channel_disposition_sla import ChannelDispositionSla
 from app.models.lead_tabulation import LeadTabulation
 from app.schemas.disposition import DispositionCreate, DispositionUpdate, LeadTabulateRequest, ChannelDispositionSlaCreate
+from app.features.leads.events import record_lead_event
 
 
 
@@ -254,6 +255,22 @@ class DispositionService:
             created_at=now
         )
         self.db.add(tabulation_entry)
+
+        # Registrar evento unificado de timeline
+        await record_lead_event(
+            db=self.db,
+            lead_id=lead.id,
+            event_type="tabulated",
+            title=f"Tabulação: {disposition.name}",
+            description=tabulate_in.notes,
+            attendant_id=lead.current_attendant_id,
+            event_metadata={
+                "disposition_id": str(disposition.id),
+                "disposition_name": disposition.name,
+                "category": disposition.category,
+            },
+            created_at=now
+        )
 
         # Atualizar atribuição ativa para referência rápida
         if lead.current_attendant_id:

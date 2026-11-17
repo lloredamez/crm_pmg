@@ -353,6 +353,93 @@ async def apply_database_migrations_and_schema():
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sla_breaches_unit_id ON sla_breaches (unit_id);"))
         await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_sla_breaches_breached_at_desc ON sla_breaches (breached_at DESC);"))
 
+        # Tabela unificada de linha do tempo e auditoria (Lead Timeline Events)
+        await conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS lead_events (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                lead_id UUID NOT NULL,
+                event_type VARCHAR(50) NOT NULL,
+                attendant_id UUID REFERENCES users(id) ON DELETE SET NULL,
+                attendant_name VARCHAR(255),
+                title VARCHAR(255) NOT NULL,
+                description TEXT,
+                event_metadata JSON DEFAULT '{}'::json,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            );
+        """))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_lead_events_lead_id ON lead_events (lead_id);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_lead_events_created_at ON lead_events (created_at ASC);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_lead_events_event_type ON lead_events (event_type);"))
+        await conn.execute(text("CREATE INDEX IF NOT EXISTS ix_lead_events_attendant_id ON lead_events (attendant_id);"))
+
+        # Backfill idempotente de eventos legados
+        # 1. Criação dos leads atuais
+        await conn.execute(text("""
+            INSERT INTO lead_events (id, lead_id, event_type, title, description, created_at)
+            SELECT gen_random_uuid(), l.id, 'lead_created', 
+                   CONCAT('Lead recebido via canal ', COALESCE(l.channel_code, 'Geral')),
+                   l.notes, l.created_at
+            FROM leads l
+            WHERE NOT EXISTS (
+                SELECT 1 FROM lead_events le WHERE le.lead_id = l.id AND le.event_type = 'lead_created'
+            );
+        """))
+        # 2. Criação dos leads no balde
+        await conn.execute(text("""
+            INSERT INTO lead_events (id, lead_id, event_type, title, description, created_at)
+            SELECT gen_random_uuid(), bl.id, 'lead_created', 
+                   CONCAT('Lead recebido via canal ', COALESCE(bl.channel_code, 'Geral')),
+                   bl.notes, bl.created_at
+            FROM bucket_leads bl
+            WHERE NOT EXISTS (
+                SELECT 1 FROM lead_events le WHERE le.lead_id = bl.id AND le.event_type = 'lead_created'
+            );
+        """))
+        # 3. Tabulações existentes
+        await conn.execute(text("""
+            INSERT INTO lead_events (id, lead_id, event_type, attendant_id, attendant_name, title, description, created_at)
+            SELECT gen_random_uuid(), lt.lead_id, 'tabulated', lt.attendant_id, u.name,
+                   CONCAT('Tabulação: ', lt.disposition_name), lt.disposition_notes, lt.created_at
+            FROM lead_tabulations lt
+            LEFT JOIN users u ON u.id = lt.attendant_id
+            WHERE NOT EXISTS (
+                SELECT 1 FROM lead_events le WHERE le.lead_id = lt.lead_id AND le.event_type = 'tabulated' AND le.created_at = lt.created_at
+            );
+        """))
+        # 4. Estouros de SLA existentes
+        await conn.execute(text("""
+            INSERT INTO lead_events (id, lead_id, event_type, attendant_id, attendant_name, title, description, created_at)
+            SELECT gen_random_uuid(), sb.lead_id, 'sla_breached', sb.attendant_id, u.name,
+                   CASE 
+                       WHEN sb.breach_type = 'first_contact_timeout' THEN 'Estouro de SLA de Primeiro Contato'
+                       ELSE 'Estouro de SLA de Tabulação'
+                   END,
+                   CONCAT('Lead expirou SLA e foi movido para o Balde. Ação: ', sb.action_taken),
+                   sb.breached_at
+            FROM sla_breaches sb
+            LEFT JOIN users u ON u.id = sb.attendant_id
+            WHERE NOT EXISTS (
+                SELECT 1 FROM lead_events le WHERE le.lead_id = sb.lead_id AND le.event_type = 'sla_breached' AND le.created_at = sb.breached_at
+            );
+        """))
+        # 5. Atribuições existentes
+        await conn.execute(text("""
+            INSERT INTO lead_events (id, lead_id, event_type, attendant_id, attendant_name, title, description, created_at)
+            SELECT gen_random_uuid(), la.lead_id, 'assigned', la.attendant_id, u.name,
+                   CONCAT('Atribuído ao atendente ', COALESCE(u.name, 'Atendente')),
+                   CASE 
+                       WHEN la.status = 'expired_timeout' THEN 'Atribuição expirada por timeout'
+                       WHEN la.status = 'manually_reassigned' THEN 'Atribuição reatribuída manualmente'
+                       ELSE 'Atribuição inicial de atendimento'
+                   END,
+                   la.assigned_at
+            FROM lead_assignments la
+            LEFT JOIN users u ON u.id = la.attendant_id
+            WHERE NOT EXISTS (
+                SELECT 1 FROM lead_events le WHERE le.lead_id = la.lead_id AND le.event_type = 'assigned' AND le.created_at = la.assigned_at
+            );
+        """))
+
 
 async def seed_initial_data():
     """Inicializa tabelas e insere dados padrão demonstrativos se não existirem."""
@@ -389,8 +476,8 @@ async def seed_initial_data():
             logger.info("Nenhum usuário encontrado. Criando contas por unidade (senha: senha123)...")
             demo_users = [
                 User(
-                    name="Carlos Admin",
-                    email="admin@crmleads.com",
+                    name="PMG Admin",
+                    email="admin@grupopmg.com",
                     cpf="111.111.111-11",
                     hashed_password=default_password,
                     role="admin",
@@ -399,18 +486,18 @@ async def seed_initial_data():
                     unit_id=None
                 ),
                 User(
-                    name="Marcos Vinícius",
-                    email="supervisor@crmleads.com",
+                    name="[TESTE] Marcos",
+                    email="supervisor@teste.com",
                     cpf="333.333.333-33",
                     hashed_password=default_password,
                     role="supervisor",
-                    status="online",
+                    status="offline",
                     max_simultaneous_leads=15,
                     unit_id=unit_map.get("U1").id if unit_map.get("U1") else None
                 ),
                 User(
-                    name="Ana Silva",
-                    email="ana.silva@crmleads.com",
+                    name="[TESTE] Ana",
+                    email="ana.silva@teste.com",
                     cpf="444.444.444-44",
                     hashed_password=default_password,
                     role="attendant",
@@ -419,8 +506,8 @@ async def seed_initial_data():
                     unit_id=unit_map.get("U1").id if unit_map.get("U1") else None
                 ),
                 User(
-                    name="Bruno Costa",
-                    email="bruno.costa@crmleads.com",
+                    name="[TESTE] Bruno",
+                    email="bruno.costa@teste.com",
                     cpf="555.555.555-55",
                     hashed_password=default_password,
                     role="attendant",
@@ -429,8 +516,8 @@ async def seed_initial_data():
                     unit_id=unit_map.get("U2").id if unit_map.get("U2") else None
                 ),
                 User(
-                    name="Carlos Oliveira",
-                    email="carlos.oliveira@crmleads.com",
+                    name="[TESTE] Carlos",
+                    email="carlos.oliveira@teste.com",
                     cpf="666.666.666-66",
                     hashed_password=default_password,
                     role="attendant",
@@ -439,8 +526,8 @@ async def seed_initial_data():
                     unit_id=unit_map.get("U3").id if unit_map.get("U3") else None
                 ),
                 User(
-                    name="Daniela Santos",
-                    email="daniela.santos@crmleads.com",
+                    name="[TESTE] Daniela",
+                    email="daniela.santos@teste.com",
                     cpf="777.777.777-77",
                     hashed_password=default_password,
                     role="attendant",
@@ -449,8 +536,8 @@ async def seed_initial_data():
                     unit_id=unit_map.get("U1").id if unit_map.get("U1") else None
                 ),
                 User(
-                    name="Eduardo Lima",
-                    email="eduardo.lima@crmleads.com",
+                    name="[TESTE] Eduardo",
+                    email="eduardo.lima@teste.com",
                     cpf="888.888.888-88",
                     hashed_password=default_password,
                     role="attendant",
@@ -465,24 +552,24 @@ async def seed_initial_data():
         else:
             u_list = list(unit_map.values())
             clean_names = {
-                "admin@crmleads.com": "Carlos Admin",
-                "supervisor@crmleads.com": "Marcos Vinícius",
-                "ana.silva@crmleads.com": "Ana Silva",
-                "bruno.costa@crmleads.com": "Bruno Costa",
-                "carlos.oliveira@crmleads.com": "Carlos Oliveira",
-                "daniela.santos@crmleads.com": "Daniela Santos",
-                "eduardo.lima@crmleads.com": "Eduardo Lima",
-                "gerente.regional@crmleads.com": "Roberto Mendes",
+                "admin@teste.com": "PMG Admin",
+                "supervisor@teste.com": "[TESTE] Marcos",
+                "ana.silva@teste.com": "[TESTE] Ana",
+                "bruno.costa@teste.com": "[TESTE] Bruno",
+                "carlos.oliveira@teste.com": "[TESTE] Carlos",
+                "daniela.santos@teste.com": "[TESTE] Daniela",
+                "eduardo.lima@teste.com": "[TESTE] Eduardo",
+                "gerente.regional@teste.com": "[TESTE] Roberto",
             }
             demo_cpfs = {
-                "admin@crmleads.com": "111.111.111-11",
-                "supervisor@crmleads.com": "333.333.333-33",
-                "ana.silva@crmleads.com": "444.444.444-44",
-                "bruno.costa@crmleads.com": "555.555.555-55",
-                "carlos.oliveira@crmleads.com": "666.666.666-66",
-                "daniela.santos@crmleads.com": "777.777.777-77",
-                "eduardo.lima@crmleads.com": "888.888.888-88",
-                "gerente.regional@crmleads.com": "222.222.222-22",
+                "admin@teste.com": "111.111.111-11",
+                "supervisor@teste.com": "333.333.333-33",
+                "ana.silva@teste.com": "444.444.444-44",
+                "bruno.costa@teste.com": "555.555.555-55",
+                "carlos.oliveira@teste.com": "666.666.666-66",
+                "daniela.santos@teste.com": "777.777.777-77",
+                "eduardo.lima@teste.com": "888.888.888-88",
+                "gerente.regional@teste.com": "222.222.222-22",
             }
             for idx, user in enumerate(existing_users):
                 if user.email in clean_names:
@@ -497,15 +584,15 @@ async def seed_initial_data():
 
         # Garante a existência da conta de Gerente de demonstração com múltiplas unidades
         manager_check = await session.execute(
-            select(User).options(selectinload(User.managed_units)).where(User.email == "gerente.regional@crmleads.com")
+            select(User).options(selectinload(User.managed_units)).where(User.email == "gerente.regional@teste.com")
         )
         if not manager_check.scalar_one_or_none():
             u1 = unit_map.get("U1")
             u2 = unit_map.get("U2")
             managed = [u for u in [u1, u2] if u is not None]
             manager_user = User(
-                name="Roberto Mendes",
-                email="gerente.regional@crmleads.com",
+                name="[TESTE] Roberto",
+                email="gerente.regional@teste.com",
                 cpf="222.222.222-22",
                 hashed_password=default_password,
                 role="manager",
@@ -523,7 +610,7 @@ async def seed_initial_data():
         if not existing_dispositions:
             logger.info("Nenhuma tabulação encontrada. Criando tabulações padrão...")
             default_dispositions = [
-                Disposition(name="Sem Tabulação (Primeiro Contato)", category="Sem Tabulação", has_timeout=True, timeout_minutes=15),
+                Disposition(name="Primeiro Contato", category="Sem Tabulação", has_timeout=True, timeout_minutes=15),
                 Disposition(name="Vendido", category="Venda", has_timeout=False, timeout_minutes=None),
                 Disposition(name="Em Contato", category="Negociação", has_timeout=True, timeout_minutes=120, is_default_on_reveal=True),
                 Disposition(name="Formalização", category="Negociação", has_timeout=True, timeout_minutes=240),

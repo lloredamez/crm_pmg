@@ -11,9 +11,11 @@ from app.models.user import User
 from app.models.lead_assignment import LeadAssignment
 from app.models.sla_breach import SlaBreach
 from app.models.lead_tabulation import LeadTabulation
+from app.models.lead_event import LeadEvent
 from app.models.channel import Channel
 from app.models.disposition import Disposition
 from app.schemas.lead import LeadCreate, LeadUpdateStatus
+from app.features.leads.events import record_lead_event
 
 
 from app.core.socket_manager import emit_lead_assigned, emit_lead_reassigned
@@ -99,6 +101,28 @@ class LeadService:
                 assigned_at=now
             )
             self.db.add(assignment)
+
+            # Registrar eventos de linha do tempo
+            await record_lead_event(
+                db=self.db,
+                lead_id=lead.id,
+                event_type="lead_created",
+                title=f"Lead recebido via canal {lead.channel_code or 'Geral'}",
+                description=lead.notes,
+                event_metadata={"channel_code": lead.channel_code, "campaign": lead.campaign_name},
+                created_at=lead.created_at
+            )
+            await record_lead_event(
+                db=self.db,
+                lead_id=lead.id,
+                event_type="assigned",
+                title=f"Atribuído ao atendente {assigned_user.name}",
+                description="Distribuição automática de lead",
+                attendant_id=assigned_user.id,
+                attendant_name=assigned_user.name,
+                created_at=now
+            )
+
             await self.db.commit()
 
             try:
@@ -154,6 +178,26 @@ class LeadService:
                 unit_id=primary_unit_id,
             )
             self.db.add(bucket_lead)
+
+            # Registrar eventos de linha do tempo
+            await record_lead_event(
+                db=self.db,
+                lead_id=bucket_lead.id,
+                event_type="lead_created",
+                title=f"Lead recebido via canal {bucket_lead.channel_code or 'Geral'}",
+                description=bucket_lead.notes,
+                event_metadata={"channel_code": bucket_lead.channel_code, "campaign": bucket_lead.campaign_name},
+                created_at=bucket_lead.created_at
+            )
+            await record_lead_event(
+                db=self.db,
+                lead_id=bucket_lead.id,
+                event_type="sent_to_bucket",
+                title="Direcionado ao Balde de Espera",
+                description="Nenhum atendente online ou disponível no momento da entrada",
+                created_at=bucket_lead.created_at
+            )
+
             await self.db.commit()
 
             try:
@@ -726,6 +770,18 @@ class LeadService:
                 )
                 self.db.add(tabulation_entry)
 
+                await record_lead_event(
+                    db=self.db,
+                    lead_id=lead.id,
+                    event_type="tabulated",
+                    title=f"Tabulação: {disp.name}",
+                    description="Tabulação automática ao revelar lead",
+                    attendant_id=lead.current_attendant_id,
+                    attendant_name=lead.current_attendant.name if lead.current_attendant else None,
+                    event_metadata={"disposition_id": str(disp.id), "disposition_name": disp.name},
+                    created_at=now
+                )
+
                 if lead.current_attendant_id:
                     await self.db.execute(
                         update(LeadAssignment)
@@ -739,6 +795,18 @@ class LeadService:
                             disposition_notes="Tabulação inicial (ao revelar lead)"
                         )
                     )
+
+        # Registrar evento de revelação do lead
+        await record_lead_event(
+            db=self.db,
+            lead_id=lead.id,
+            event_type="revealed",
+            title="Dados de contato revelados",
+            description=f"Atendente visualizou o telefone e dados sensíveis do lead",
+            attendant_id=lead.current_attendant_id,
+            attendant_name=lead.current_attendant.name if lead.current_attendant else None,
+            created_at=now
+        )
 
         if lead.status == "new":
             lead.status = "assigned"
@@ -811,6 +879,20 @@ class LeadService:
             assigned_at=now
         )
         self.db.add(new_assignment)
+
+        # Registrar evento de reatribuição na timeline
+        await record_lead_event(
+            db=self.db,
+            lead_id=lead.id,
+            event_type="reassigned",
+            title=f"Reatribuído para {target_user.name}",
+            description=f"Motivo da reatribuição: {reason}",
+            attendant_id=new_attendant_id,
+            attendant_name=target_user.name,
+            event_metadata={"reason": reason, "previous_attendant_id": str(old_attendant_id) if old_attendant_id else None},
+            created_at=now
+        )
+
         await self.db.commit()
 
         # Fetch attendant for notification
@@ -949,6 +1031,18 @@ class LeadService:
                 )
                 self.db.add(tabulation_entry)
 
+            # Registrar evento de captura do balde na timeline
+            await record_lead_event(
+                db=self.db,
+                lead_id=lead.id,
+                event_type="claimed_from_bucket",
+                title=f"Capturado do Balde por {current_user.name}",
+                description="Lead retirado da fila do balde e assumido para atendimento",
+                attendant_id=current_user.id,
+                attendant_name=current_user.name,
+                created_at=now
+            )
+
             await self.db.commit()
 
             try:
@@ -1064,6 +1158,18 @@ class LeadService:
             )
             self.db.add(tabulation_entry)
 
+        # Registrar evento de alocação da esteira
+        await record_lead_event(
+            db=self.db,
+            lead_id=lead.id,
+            event_type="assigned",
+            title=f"Assumido da esteira por {current_user.name}",
+            description="Atendente capturou o lead da esteira para atendimento",
+            attendant_id=current_user.id,
+            attendant_name=current_user.name,
+            created_at=now
+        )
+
         await self.db.commit()
 
         # Dispara notificação via Socket
@@ -1126,7 +1232,41 @@ class LeadService:
         return items, total
 
     async def get_lead_history(self, lead_id: UUID) -> List[dict]:
-        # 1. Fetch assignments
+        # 1. Tentar buscar da tabela unificada de eventos (LeadEvent)
+        events_query = (
+            select(LeadEvent)
+            .options(selectinload(LeadEvent.attendant))
+            .where(LeadEvent.lead_id == lead_id)
+            .order_by(LeadEvent.created_at.asc())
+        )
+        events_res = await self.db.execute(events_query)
+        events = events_res.scalars().all()
+
+        if events:
+            result_list = []
+            for ev in events:
+                result_list.append({
+                    "id": ev.id,
+                    "lead_id": ev.lead_id,
+                    "event_type": ev.event_type,
+                    "title": ev.title,
+                    "description": ev.description,
+                    "attendant_id": ev.attendant_id,
+                    "attendant_name": ev.attendant_name or (ev.attendant.name if ev.attendant else "Sistema"),
+                    "attendant_email": ev.attendant.email if ev.attendant else "",
+                    "status": ev.event_type,
+                    "created_at": ev.created_at,
+                    "event_metadata": ev.event_metadata or {},
+                    # Compatibilidade retroativa para UI
+                    "assigned_at": ev.created_at,
+                    "unassigned_at": None,
+                    "duration_seconds": None,
+                    "disposition_name": (ev.event_metadata.get("disposition_name") if ev.event_metadata else None) or (ev.title if ev.event_type == "tabulated" else None),
+                    "disposition_notes": ev.description if ev.event_type == "tabulated" else None,
+                })
+            return result_list
+
+        # 2. Fallback legado se ainda não houver eventos na nova tabela
         assign_query = (
             select(LeadAssignment)
             .options(selectinload(LeadAssignment.attendant))
@@ -1136,7 +1276,6 @@ class LeadService:
         assign_res = await self.db.execute(assign_query)
         assignments = assign_res.scalars().all()
 
-        # 2. Fetch tabulations
         tab_query = (
             select(LeadTabulation)
             .options(selectinload(LeadTabulation.attendant))
@@ -1146,14 +1285,11 @@ class LeadService:
         tab_res = await self.db.execute(tab_query)
         tabulations = tab_res.scalars().all()
 
-        events = []
+        events_list = []
         now = datetime.now(timezone.utc)
-
-        # Set of attendant IDs who have performed at least one tabulation for this lead
         tabulated_attendant_ids = {t.attendant_id for t in tabulations if t.attendant_id}
 
         for assign in assignments:
-            # Se a atribuição for a ativa e o atendente já realizou tabulações, omitir o card redundante de 'Em Atendimento/Em andamento'
             if assign.status == "active" and assign.attendant_id in tabulated_attendant_ids:
                 continue
 
@@ -1162,14 +1298,17 @@ class LeadService:
             if assign.assigned_at and end_time:
                 duration = int((end_time - assign.assigned_at).total_seconds())
 
-            events.append({
+            events_list.append({
                 "id": assign.id,
                 "lead_id": assign.lead_id,
                 "event_type": "assignment",
+                "title": f"Atribuído a {assign.attendant.name if assign.attendant else 'Atendente'}",
+                "description": assign.disposition_notes,
                 "attendant_id": assign.attendant_id,
                 "attendant_name": assign.attendant.name if assign.attendant else "Desconhecido",
                 "attendant_email": assign.attendant.email if assign.attendant else "",
                 "status": assign.status,
+                "created_at": assign.assigned_at,
                 "assigned_at": assign.assigned_at,
                 "unassigned_at": assign.unassigned_at,
                 "duration_seconds": duration,
@@ -1179,14 +1318,17 @@ class LeadService:
             })
 
         for tab in tabulations:
-            events.append({
+            events_list.append({
                 "id": tab.id,
                 "lead_id": tab.lead_id,
                 "event_type": "tabulation",
+                "title": f"Tabulação: {tab.disposition_name}",
+                "description": tab.disposition_notes,
                 "attendant_id": tab.attendant_id,
                 "attendant_name": tab.attendant.name if tab.attendant else "Desconhecido",
                 "attendant_email": tab.attendant.email if tab.attendant else "",
                 "status": "tabulated",
+                "created_at": tab.created_at,
                 "assigned_at": tab.created_at,
                 "unassigned_at": None,
                 "duration_seconds": None,
@@ -1195,11 +1337,11 @@ class LeadService:
                 "_timestamp": tab.created_at or now
             })
 
-        events.sort(key=lambda x: x["_timestamp"])
-        for e in events:
+        events_list.sort(key=lambda x: x["_timestamp"])
+        for e in events_list:
             e.pop("_timestamp", None)
 
-        return events
+        return events_list
 
     async def get_attendant_performance(
         self,

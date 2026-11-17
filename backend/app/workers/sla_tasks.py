@@ -12,6 +12,7 @@ from app.models.lead import Lead
 from app.models.lead_assignment import LeadAssignment
 from app.models.sla_breach import SlaBreach
 from app.models.user import User
+from app.features.leads.events import record_lead_event
 
 logger = logging.getLogger(__name__)
 
@@ -199,6 +200,23 @@ async def _process_expired_leads_in_session(session: AsyncSession):
             breached_at=now,
         )
         session.add(sla_breach)
+
+        # Registrar evento de estouro de SLA na timeline
+        sla_title = "Estouro de SLA de Primeiro Contato" if is_first_contact else "Estouro de SLA de Tabulação"
+        await record_lead_event(
+            db=session,
+            lead_id=lead.id,
+            event_type="sla_breached",
+            title=sla_title,
+            description="Tempo limite de atendimento excedido. Lead devolvido para o Balde de Espera.",
+            attendant_id=old_attendant_id,
+            event_metadata={
+                "breach_type": breach_type,
+                "target_sla_minutes": breach_sla,
+                "action_taken": "sent_to_balde"
+            },
+            created_at=now
+        )
 
         notifications_to_emit.append(
             (
