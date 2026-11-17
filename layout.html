@@ -1,0 +1,1086 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dindin PMG — CRM Redesenhado</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                    colors: {
+                        brand: {
+                            50: '#fff7ed',
+                            100: '#ffedd5',
+                            200: '#fed7aa',
+                            500: '#f97316',
+                            600: '#ea580c',
+                            700: '#c2410c',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        /* Estilização sutil para scrollbars internas e transições */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f8fafc;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+
+        .tab-active {
+            background-color: #ffffff;
+            color: #0f172a;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+        }
+    </style>
+</head>
+
+<body class="bg-slate-50 text-slate-800 antialiased selection:bg-brand-100 selection:text-brand-700">
+
+    <!-- ==================== HEADER SUPERIOR COMPACTO ==================== -->
+    <header class="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-200/80">
+        <div class="max-w-[1440px] mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-4">
+            <!-- Logo -->
+            <div class="flex items-center gap-2.5 shrink-0">
+                <div
+                    class="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-amber-600 flex items-center justify-center text-white font-bold text-sm shadow-sm">
+                    D
+                </div>
+                <span class="font-bold text-slate-900 tracking-tight text-base">Dindin PMG</span>
+            </div>
+
+            <!-- Navegação Central em Pílula -->
+            <nav
+                class="hidden md:flex items-center bg-slate-100/90 p-1 rounded-full border border-slate-200/60 text-xs font-medium text-slate-600">
+                <button onclick="showToast('Navegando para Dashboard Geral')"
+                    class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full hover:text-slate-900 transition">
+                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                    Dashboard
+                </button>
+                <button
+                    class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white text-slate-900 font-semibold shadow-sm border border-slate-200/60 transition">
+                    <svg class="w-3.5 h-3.5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Leads / Clientes
+                    <span
+                        class="bg-brand-100 text-brand-700 text-[10px] font-bold px-1.5 py-0.5 rounded-full">UY3</span>
+                    <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                </button>
+                <button onclick="showToast('Abrindo Simulações')"
+                    class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full hover:text-slate-900 transition">
+                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                    </svg>
+                    Simulações
+                </button>
+                <button onclick="showToast('Abrindo Gestão de Usuários')"
+                    class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full hover:text-slate-900 transition">
+                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
+                    </svg>
+                    Gestão de Usuários
+                </button>
+                <button onclick="showToast('Abrindo Configurações')"
+                    class="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full hover:text-slate-900 transition">
+                    <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                    Configurações
+                </button>
+            </nav>
+
+            <!-- Ações à Direita -->
+            <div class="flex items-center gap-2.5">
+                <!-- Toggle de Dicas de Redesign -->
+                <button id="btn-ui-tips" onclick="toggleDesignNotes()"
+                    class="hidden sm:inline-flex items-center gap-1.5 text-xs font-medium text-brand-700 bg-brand-50 hover:bg-brand-100 border border-brand-200/80 px-2.5 py-1.5 rounded-lg transition">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                    </svg>
+                    <span>O que melhorou?</span>
+                </button>
+
+                <!-- Botão Som / Alertas -->
+                <button id="btn-sound" onclick="toggleSound()" title="Alertas sonoros ativados"
+                    class="w-8 h-8 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200/80 flex items-center justify-center hover:bg-emerald-100 transition">
+                    <svg id="icon-sound-on" class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                    </svg>
+                    <svg id="icon-sound-off" class="w-4 h-4 hidden text-slate-400" fill="none" stroke="currentColor"
+                        viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15zM17 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2" />
+                    </svg>
+                </button>
+
+                <!-- Avatar -->
+                <div class="relative cursor-pointer" onclick="showToast('Perfil: Administrador (Online)')">
+                    <div
+                        class="w-8 h-8 rounded-full bg-slate-900 text-white font-semibold text-xs flex items-center justify-center shadow-sm">
+                        P
+                    </div>
+                    <span
+                        class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></span>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ==================== BANNER EXPLICATIVO (COLAPSÁVEL) ==================== -->
+    <div id="design-notes-banner"
+        class="hidden bg-gradient-to-r from-slate-900 to-slate-800 text-white border-b border-slate-700">
+        <div class="max-w-[1440px] mx-auto px-4 sm:px-6 py-3.5">
+            <div class="flex items-start justify-between gap-4">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-xs w-full">
+                    <div class="bg-white/5 p-2.5 rounded-lg border border-white/10">
+                        <span class="text-brand-400 font-semibold block mb-0.5">1. Fim da Rolagem Horizontal</span>
+                        <span class="text-slate-300">Agrupamos colunas correlatas (Nome + CPF, Data + SLA, Tabulação
+                            Atual + Anterior) em células de 2 linhas.</span>
+                    </div>
+                    <div class="bg-white/5 p-2.5 rounded-lg border border-white/10">
+                        <span class="text-brand-400 font-semibold block mb-0.5">2. KPIs Compactos (-35% altura)</span>
+                        <span class="text-slate-300">Métrica principal e valor financeiro alinhados lado a lado,
+                            liberando espaço vertical imediato para a lista.</span>
+                    </div>
+                    <div class="bg-white/5 p-2.5 rounded-lg border border-white/10">
+                        <span class="text-brand-400 font-semibold block mb-0.5">3. Barra Unificada de Controle</span>
+                        <span class="text-slate-300">Abas de status, busca rápida e botão de filtros avançados na mesma
+                            linha, evitando poluição visual.</span>
+                    </div>
+                    <div class="bg-white/5 p-2.5 rounded-lg border border-white/10">
+                        <span class="text-brand-400 font-semibold block mb-0.5">4. Ações Limpas sem Repetição</span>
+                        <span class="text-slate-300">Substituímos os 10 selects largos "Reatribuir..." por ícones
+                            compactos com tooltip e menu sob demanda.</span>
+                    </div>
+                </div>
+                <button onclick="toggleDesignNotes()" class="text-slate-400 hover:text-white p-1">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==================== CONTEÚDO PRINCIPAL ==================== -->
+    <main class="max-w-[1440px] mx-auto px-4 sm:px-6 py-4 space-y-4">
+
+        <!-- 1. CARDS DE KPI COMPACTOS -->
+        <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+            <!-- KPI 1 -->
+            <div
+                class="bg-white rounded-xl border border-slate-200/80 px-4 py-3 shadow-2xs hover:border-slate-300 transition flex items-center justify-between">
+                <div>
+                    <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Total Leads</p>
+                    <div class="flex items-baseline gap-2.5 mt-1">
+                        <span class="text-xl font-bold text-slate-900">764</span>
+                        <span class="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md">R$
+                            21.317,00</span>
+                    </div>
+                </div>
+                <div class="w-9 h-9 rounded-lg bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- KPI 2 -->
+            <div
+                class="bg-white rounded-xl border border-slate-200/80 px-4 py-3 shadow-2xs hover:border-slate-300 transition flex items-center justify-between">
+                <div>
+                    <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Atendimentos Ativos SLA
+                    </p>
+                    <div class="flex items-baseline gap-2.5 mt-1">
+                        <span class="text-xl font-bold text-slate-900">0</span>
+                        <span class="text-xs font-medium text-slate-400 bg-slate-50 px-2 py-0.5 rounded-md">R$
+                            0,00</span>
+                    </div>
+                </div>
+                <div class="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- KPI 3 -->
+            <div
+                class="bg-white rounded-xl border border-slate-200/80 px-4 py-3 shadow-2xs hover:border-slate-300 transition flex items-center justify-between">
+                <div>
+                    <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Leads Convertidos</p>
+                    <div class="flex items-baseline gap-2.5 mt-1">
+                        <span class="text-xl font-bold text-slate-900">0</span>
+                        <span class="text-xs font-medium text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md">R$
+                            0,00</span>
+                    </div>
+                </div>
+                <div
+                    class="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+            </div>
+
+            <!-- KPI 4 -->
+            <div
+                class="bg-white rounded-xl border border-slate-200/80 px-4 py-3 shadow-2xs hover:border-slate-300 transition flex items-center justify-between">
+                <div>
+                    <p class="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Leads Perdidos</p>
+                    <div class="flex items-baseline gap-2.5 mt-1">
+                        <span class="text-xl font-bold text-slate-900">10</span>
+                        <span class="text-xs font-medium text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md">R$
+                            21.317,00</span>
+                    </div>
+                </div>
+                <div class="w-9 h-9 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                </div>
+            </div>
+        </section>
+
+        <!-- 2. CONTAINER PRINCIPAL DA TABELA (CONTROLES UNIFICADOS + LISTA SEM SCROLL HORIZONTAL) -->
+        <section class="bg-white rounded-xl border border-slate-200/80 shadow-xs overflow-hidden">
+
+            <!-- Barra de Controle Unificada -->
+            <div
+                class="p-3 sm:px-4 border-b border-slate-200/80 flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white">
+
+                <!-- Abas Segmentadas à Esquerda -->
+                <div
+                    class="flex items-center gap-1 bg-slate-100 p-1 rounded-lg overflow-x-auto text-xs font-medium text-slate-600 shrink-0">
+                    <button onclick="setTab('todos', this)"
+                        class="tab-btn tab-active px-3 py-1.5 rounded-md transition flex items-center gap-1.5 whitespace-nowrap">
+                        Todos
+                        <span
+                            class="text-[10px] font-semibold bg-slate-200/80 text-slate-700 px-1.5 py-0.2 rounded-full">764</span>
+                    </button>
+                    <button onclick="setTab('balde', this)"
+                        class="tab-btn px-3 py-1.5 rounded-md hover:text-slate-900 transition flex items-center gap-1.5 whitespace-nowrap">
+                        <svg class="w-3.5 h-3.5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
+                        </svg>
+                        Balde de Leads
+                    </button>
+                    <button onclick="setTab('atendimento', this)"
+                        class="tab-btn px-3 py-1.5 rounded-md hover:text-slate-900 transition whitespace-nowrap">
+                        Em Atendimento
+                    </button>
+                    <button onclick="setTab('vendas', this)"
+                        class="tab-btn px-3 py-1.5 rounded-md hover:text-slate-900 transition whitespace-nowrap">
+                        Vendas
+                    </button>
+                    <button onclick="setTab('perdas', this)"
+                        class="tab-btn px-3 py-1.5 rounded-md hover:text-slate-900 transition flex items-center gap-1.5 whitespace-nowrap">
+                        Perdas
+                        <span
+                            class="text-[10px] font-semibold bg-rose-100 text-rose-700 px-1.5 py-0.2 rounded-full">10</span>
+                    </button>
+                </div>
+
+                <!-- Busca Rápida + Toggle Filtros Avançados à Direita -->
+                <div class="flex items-center gap-2 w-full lg:w-auto">
+                    <div class="relative flex-1 lg:w-72">
+                        <svg class="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                        <input id="search-input" type="text" oninput="filterLeads()"
+                            placeholder="Buscar nome, CPF ou telefone..."
+                            class="w-full pl-9 pr-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:bg-white focus:border-brand-500 focus:ring-2 focus:ring-brand-500/15 transition">
+                    </div>
+
+                    <button id="btn-toggle-filters" onclick="toggleFiltersDrawer()"
+                        class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition shrink-0">
+                        <svg class="w-3.5 h-3.5 text-brand-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                        </svg>
+                        <span>Filtros</span>
+                        <span id="active-filter-count"
+                            class="hidden bg-brand-500 text-white text-[10px] font-bold w-4 h-4 rounded-full items-center justify-center">0</span>
+                        <svg id="filter-chevron" class="w-3.5 h-3.5 text-slate-400 transition-transform" fill="none"
+                            stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Gaveta de Filtros Avançados (Expansível) -->
+            <div id="filters-drawer" class="hidden bg-slate-50/80 px-4 py-3 border-b border-slate-200/80">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-2.5 items-center">
+                    <select id="filter-loja" onchange="filterLeads()"
+                        class="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:border-brand-500">
+                        <option value="">Todas as Lojas</option>
+                        <option value="Didicred">Didicred</option>
+                        <option value="Matriz PMG">Matriz PMG</option>
+                    </select>
+
+                    <select id="filter-banco" onchange="filterLeads()"
+                        class="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:border-brand-500">
+                        <option value="">Todos os Bancos</option>
+                        <option value="BMG">Banco BMG</option>
+                        <option value="Pan">Banco Pan</option>
+                        <option value="C6">C6 Consig</option>
+                    </select>
+
+                    <select id="filter-tabulacao" onchange="filterLeads()"
+                        class="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:border-brand-500">
+                        <option value="">Todas as Tabulações</option>
+                        <option value="Sem Oferta">Sem Oferta</option>
+                        <option value="Sem Contato">Sem Contato</option>
+                    </select>
+
+                    <select id="filter-atendente" onchange="filterLeads()"
+                        class="text-xs bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-700 focus:outline-none focus:border-brand-500">
+                        <option value="">Todos os Atendentes</option>
+                        <option value="MARIA EDUARDA PAIVA CARVALHO">Maria Eduarda Paiva</option>
+                        <option value="DANIELE DA SILVA REIS">Daniele da Silva Reis</option>
+                    </select>
+
+                    <div class="flex items-center justify-end gap-2">
+                        <button onclick="resetFilters()"
+                            class="text-xs font-medium text-slate-500 hover:text-slate-800 px-2.5 py-1.5 rounded-lg hover:bg-slate-200/60 transition">
+                            Limpar filtros
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Barra de Ações em Lote (Aparece apenas quando há checkboxes marcados) -->
+            <div id="bulk-actions-bar"
+                class="hidden bg-brand-50 border-b border-brand-200/80 px-4 py-2 flex items-center justify-between text-xs">
+                <div class="flex items-center gap-2 font-medium text-brand-900">
+                    <span id="selected-count" class="bg-brand-600 text-white font-bold px-2 py-0.5 rounded-md">0</span>
+                    <span>leads selecionados</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button onclick="showToast('Abrindo modal de reatribuição em lote...')"
+                        class="bg-white border border-brand-200 text-brand-700 hover:bg-brand-100 font-medium px-3 py-1 rounded-md transition">
+                        Reatribuir Atendente
+                    </button>
+                    <button onclick="clearSelection()" class="text-brand-700 hover:underline px-2 py-1">
+                        Cancelar
+                    </button>
+                </div>
+            </div>
+
+            <!-- TABELA OTIMIZADA (6 COLUNAS COMPACTAS = ZERO SCROLL HORIZONTAL) -->
+            <div class="w-full overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr
+                            class="border-b border-slate-200/80 bg-slate-50/70 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                            <th class="py-2.5 pl-4 pr-2 w-9">
+                                <input id="select-all" type="checkbox" onchange="toggleSelectAll(this)"
+                                    class="rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer">
+                            </th>
+                            <th class="py-2.5 px-3">Lead & Documento</th>
+                            <th class="py-2.5 px-3">Entrada / SLA</th>
+                            <th class="py-2.5 px-3 text-right">Valor Liberado</th>
+                            <th class="py-2.5 px-3">Atendente & Loja</th>
+                            <th class="py-2.5 px-3">Status Tabulação</th>
+                            <th class="py-2.5 pl-3 pr-4 text-right">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="leads-tbody" class="divide-y divide-slate-100 text-xs">
+                        <!-- Linhas renderizadas via JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Rodapé de Paginação Compacta -->
+            <div
+                class="px-4 py-2.5 border-t border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs text-slate-500">
+                <div>
+                    Mostrando <span id="showing-count" class="font-semibold text-slate-800">10</span> de <span
+                        class="font-semibold text-slate-800">764</span> leads
+                </div>
+                <div class="flex items-center gap-1">
+                    <button
+                        class="px-2.5 py-1 rounded border border-slate-200 bg-white text-slate-400 cursor-not-allowed">Anterior</button>
+                    <button class="px-2.5 py-1 rounded bg-slate-900 text-white font-medium">1</button>
+                    <button onclick="showToast('Carregando página 2...')"
+                        class="px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700">2</button>
+                    <button onclick="showToast('Carregando página 3...')"
+                        class="px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700">3</button>
+                    <span class="px-1">...</span>
+                    <button onclick="showToast('Carregando próxima página...')"
+                        class="px-2.5 py-1 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700">Próxima</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- ==================== DRAWER LATERAL DE DETALHES DO LEAD ==================== -->
+    <div id="lead-drawer-backdrop" onclick="closeLeadDrawer()"
+        class="fixed inset-0 bg-slate-900/30 backdrop-blur-[1px] z-40 hidden transition-opacity"></div>
+    <aside id="lead-drawer"
+        class="fixed top-0 right-0 h-full w-full max-w-md bg-white shadow-2xl border-l border-slate-200 z-50 transform translate-x-full transition-transform duration-200 flex flex-col">
+        <div class="px-5 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/70">
+            <div>
+                <span
+                    class="text-[10px] font-bold uppercase tracking-wider text-brand-600 bg-brand-50 px-2 py-0.5 rounded">Ficha
+                    Rápida do Lead</span>
+                <h2 id="drawer-name" class="text-sm font-bold text-slate-900 mt-1">NOME DO CLIENTE</h2>
+            </div>
+            <button onclick="closeLeadDrawer()"
+                class="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </div>
+
+        <div class="p-5 overflow-y-auto flex-1 space-y-5 text-xs">
+            <!-- Resumo Financeiro -->
+            <div class="grid grid-cols-2 gap-3">
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                    <span class="text-slate-400 block text-[11px]">Valor Liberado</span>
+                    <span id="drawer-valor" class="text-base font-bold text-slate-900 mt-0.5 block">R$ 0,00</span>
+                </div>
+                <div class="bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                    <span class="text-slate-400 block text-[11px]">Status SLA</span>
+                    <span id="drawer-sla"
+                        class="inline-flex items-center gap-1 font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full mt-1">Concluído</span>
+                </div>
+            </div>
+
+            <!-- Dados Cadastrais -->
+            <div class="space-y-2.5">
+                <h3 class="font-semibold text-slate-800 border-b border-slate-100 pb-1">Dados de Identificação</h3>
+                <div class="flex justify-between py-1">
+                    <span class="text-slate-500">CPF:</span>
+                    <span id="drawer-cpf" class="font-mono font-medium text-slate-800">000.000.000-00</span>
+                </div>
+                <div class="flex justify-between py-1">
+                    <span class="text-slate-500">Telefone:</span>
+                    <span id="drawer-phone" class="font-medium text-slate-800">Não informado</span>
+                </div>
+                <div class="flex justify-between py-1">
+                    <span class="text-slate-500">Loja / Unidade:</span>
+                    <span id="drawer-loja" class="font-medium text-slate-800">Didicred</span>
+                </div>
+                <div class="flex justify-between py-1">
+                    <span class="text-slate-500">Entrada / Atribuição:</span>
+                    <span id="drawer-dates" class="font-medium text-slate-800">05 de nov., 16:40</span>
+                </div>
+            </div>
+
+            <!-- Reatribuição Rápida -->
+            <div class="space-y-2">
+                <label class="font-semibold text-slate-800 block">Atendente Responsável</label>
+                <select id="drawer-agent-select" onchange="updateAgentFromDrawer(this.value)"
+                    class="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs font-medium text-slate-800 focus:outline-none focus:border-brand-500">
+                    <option value="MARIA EDUARDA PAIVA CARVALHO">MARIA EDUARDA PAIVA CARVALHO</option>
+                    <option value="DANIELE DA SILVA REIS">DANIELE DA SILVA REIS</option>
+                </select>
+            </div>
+
+            <!-- Nova Tabulação Rápida -->
+            <div class="space-y-2">
+                <label class="font-semibold text-slate-800 block">Atualizar Tabulação</label>
+                <div class="grid grid-cols-2 gap-2">
+                    <button onclick="updateTabulacaoFromDrawer('Sem Oferta')"
+                        class="py-2 px-3 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 font-medium hover:bg-amber-100 transition text-center">
+                        Sem Oferta
+                    </button>
+                    <button onclick="updateTabulacaoFromDrawer('Sem Contato')"
+                        class="py-2 px-3 rounded-lg border border-rose-200 bg-rose-50 text-rose-800 font-medium hover:bg-rose-100 transition text-center">
+                        Sem Contato
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-4 border-t border-slate-200 bg-slate-50 flex justify-end gap-2">
+            <button onclick="closeLeadDrawer()"
+                class="px-4 py-2 rounded-lg bg-slate-900 text-white text-xs font-medium hover:bg-slate-800 transition">
+                Concluir
+            </button>
+        </div>
+    </aside>
+
+    <!-- ==================== TOAST NOTIFICAÇÃO ==================== -->
+    <div id="toast"
+        class="fixed bottom-4 right-4 z-50 transform translate-y-16 opacity-0 transition-all duration-200 bg-slate-900 text-white text-xs font-medium px-4 py-2.5 rounded-lg shadow-lg flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-brand-400"></span>
+        <span id="toast-msg">Ação realizada</span>
+    </div>
+
+    <!-- ==================== JAVASCRIPT ==================== -->
+    <script>
+        // Dados reais extraídos das imagens do usuário
+        const leadsData = [
+            {
+                id: 1,
+                dataLead: "05 nov, 16:40",
+                dataAtribuicao: "05 nov, 16:40",
+                sla: "Concluído",
+                nome: "ANTONIO MARCOS DOS SANTOS SILVA",
+                cpf: "063.870.615-71",
+                telefone: "",
+                valor: null,
+                valorFormatado: "—",
+                atendente: "MARIA EDUARDA PAIVA CARVALHO",
+                atendenteCurto: "Maria Eduarda Paiva",
+                loja: "Didicred",
+                banco: "BMG",
+                tabulacaoAtual: "Sem Oferta",
+                ultimaTabulacao: "Sem Oferta",
+                categoria: "perdas"
+            },
+            {
+                id: 2,
+                dataLead: "05 nov, 15:56",
+                dataAtribuicao: "05 nov, 15:56",
+                sla: "Concluído",
+                nome: "ROKSSANA MURIEL AZEVEDO BALBINOTT",
+                cpf: "044.198.340-56",
+                telefone: "",
+                valor: 7792.00,
+                valorFormatado: "R$ 7.792,00",
+                atendente: "DANIELE DA SILVA REIS",
+                atendenteCurto: "Daniele da Silva Reis",
+                loja: "Didicred",
+                banco: "Pan",
+                tabulacaoAtual: "Sem Contato",
+                ultimaTabulacao: "Sem Contato",
+                categoria: "perdas"
+            },
+            {
+                id: 3,
+                dataLead: "05 nov, 15:56",
+                dataAtribuicao: "05 nov, 15:56",
+                sla: "Concluído",
+                nome: "JHAINY CALIXTRO DE SOUZA",
+                cpf: "064.357.849-81",
+                telefone: "",
+                valor: 6027.00,
+                valorFormatado: "R$ 6.027,00",
+                atendente: "DANIELE DA SILVA REIS",
+                atendenteCurto: "Daniele da Silva Reis",
+                loja: "Didicred",
+                banco: "BMG",
+                tabulacaoAtual: "Sem Contato",
+                ultimaTabulacao: "Sem Contato",
+                categoria: "perdas"
+            },
+            {
+                id: 4,
+                dataLead: "05 nov, 15:56",
+                dataAtribuicao: "05 nov, 15:56",
+                sla: "Concluído",
+                nome: "ISABELA DE FATIMA BENEDITO COSTA",
+                cpf: "178.888.546-56",
+                telefone: "",
+                valor: 3197.00,
+                valorFormatado: "R$ 3.197,00",
+                atendente: "DANIELE DA SILVA REIS",
+                atendenteCurto: "Daniele da Silva Reis",
+                loja: "Didicred",
+                banco: "C6",
+                tabulacaoAtual: "Sem Contato",
+                ultimaTabulacao: "Sem Contato",
+                categoria: "perdas"
+            },
+            {
+                id: 5,
+                dataLead: "05 nov, 15:56",
+                dataAtribuicao: "05 nov, 15:56",
+                sla: "Concluído",
+                nome: "KLEONICE INACIO DA SILVA",
+                cpf: "065.852.334-17",
+                telefone: "",
+                valor: 1770.00,
+                valorFormatado: "R$ 1.770,00",
+                atendente: "DANIELE DA SILVA REIS",
+                atendenteCurto: "Daniele da Silva Reis",
+                loja: "Didicred",
+                banco: "Pan",
+                tabulacaoAtual: "Sem Contato",
+                ultimaTabulacao: "Sem Contato",
+                categoria: "perdas"
+            },
+            {
+                id: 6,
+                dataLead: "05 nov, 15:55",
+                dataAtribuicao: "05 nov, 15:55",
+                sla: "Concluído",
+                nome: "FELIPE PAULO COSTA",
+                cpf: "123.994.964-26",
+                telefone: "",
+                valor: 1338.00,
+                valorFormatado: "R$ 1.338,00",
+                atendente: "DANIELE DA SILVA REIS",
+                atendenteCurto: "Daniele da Silva Reis",
+                loja: "Didicred",
+                banco: "BMG",
+                tabulacaoAtual: "Sem Contato",
+                ultimaTabulacao: "Sem Contato",
+                categoria: "perdas"
+            },
+            {
+                id: 7,
+                dataLead: "05 nov, 15:55",
+                dataAtribuicao: "05 nov, 15:55",
+                sla: "Concluído",
+                nome: "CLEUDIMAR FELIX BARROS",
+                cpf: "015.347.383-55",
+                telefone: "",
+                valor: 1193.00,
+                valorFormatado: "R$ 1.193,00",
+                atendente: "DANIELE DA SILVA REIS",
+                atendenteCurto: "Daniele da Silva Reis",
+                loja: "Didicred",
+                banco: "C6",
+                tabulacaoAtual: "Sem Contato",
+                ultimaTabulacao: "Sem Contato",
+                categoria: "perdas"
+            },
+            {
+                id: 8,
+                dataLead: "05 nov, 14:26",
+                dataAtribuicao: "05 nov, 14:26",
+                sla: "Concluído",
+                nome: "DANIEL FREITAS JESUINO",
+                cpf: "071.290.089-62",
+                telefone: "",
+                valor: null,
+                valorFormatado: "—",
+                atendente: "MARIA EDUARDA PAIVA CARVALHO",
+                atendenteCurto: "Maria Eduarda Paiva",
+                loja: "Didicred",
+                banco: "BMG",
+                tabulacaoAtual: "Sem Contato",
+                ultimaTabulacao: "Sem Contato",
+                categoria: "perdas"
+            },
+            {
+                id: 9,
+                dataLead: "05 nov, 14:26",
+                dataAtribuicao: "05 nov, 14:26",
+                sla: "Concluído",
+                nome: "CHRISTIANO FALCAO DE SOUSA",
+                cpf: "604.950.783-01",
+                telefone: "",
+                valor: null,
+                valorFormatado: "—",
+                atendente: "MARIA EDUARDA PAIVA CARVALHO",
+                atendenteCurto: "Maria Eduarda Paiva",
+                loja: "Didicred",
+                banco: "Pan",
+                tabulacaoAtual: "Sem Contato",
+                ultimaTabulacao: "Sem Contato",
+                categoria: "perdas"
+            },
+            {
+                id: 10,
+                dataLead: "05 nov, 14:26",
+                dataAtribuicao: "05 nov, 14:26",
+                sla: "Concluído",
+                nome: "KELSSIA KADRINY COELHO SILVEIRA",
+                cpf: "042.584.972-40",
+                telefone: "",
+                valor: null,
+                valorFormatado: "—",
+                atendente: "MARIA EDUARDA PAIVA CARVALHO",
+                atendenteCurto: "Maria Eduarda Paiva",
+                loja: "Didicred",
+                banco: "C6",
+                tabulacaoAtual: "Sem Contato",
+                ultimaTabulacao: "Sem Contato",
+                categoria: "perdas"
+            }
+        ];
+
+        let currentTab = 'todos';
+        let selectedIds = new Set();
+        let activeLeadId = null;
+        let openDropdownId = null;
+
+        // Renderiza a tabela compacta sem scroll horizontal
+        function renderTable(data) {
+            const tbody = document.getElementById('leads-tbody');
+            const showingCount = document.getElementById('showing-count');
+            showingCount.textContent = data.length;
+
+            if (data.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="7" class="py-10 text-center text-slate-400">
+                            Nenhum lead encontrado para os filtros aplicados.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = data.map(lead => {
+                const isSelected = selectedIds.has(lead.id);
+                const isSemOferta = lead.tabulacaoAtual === 'Sem Oferta';
+                const badgeStyle = isSemOferta
+                    ? 'bg-amber-50 text-amber-700 border-amber-200/80'
+                    : 'bg-rose-50 text-rose-700 border-rose-200/80';
+
+                return `
+                    <tr class="hover:bg-slate-50/90 transition group ${isSelected ? 'bg-brand-50/40' : ''}">
+                        <!-- Checkbox -->
+                        <td class="py-2.5 pl-4 pr-2 align-middle">
+                            <input type="checkbox" ${isSelected ? 'checked' : ''} onchange="toggleRowSelect(${lead.id})" class="rounded border-slate-300 text-brand-600 focus:ring-brand-500 cursor-pointer">
+                        </td>
+
+                        <!-- Coluna 1: Nome + CPF/Fone agrupados -->
+                        <td class="py-2.5 px-3 align-middle">
+                            <button onclick="openLeadDrawer(${lead.id})" class="font-semibold text-slate-900 hover:text-brand-600 text-left leading-snug transition block">
+                                ${lead.nome}
+                            </button>
+                            <div class="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5 font-mono">
+                                <span>CPF: ${lead.cpf}</span>
+                                <span class="text-slate-300">•</span>
+                                <span class="font-sans">${lead.telefone || 'Sem fone'}</span>
+                            </div>
+                        </td>
+
+                        <!-- Coluna 2: Datas + SLA -->
+                        <td class="py-2.5 px-3 align-middle whitespace-nowrap">
+                            <div class="flex items-center gap-1.5">
+                                <span class="text-slate-700 font-medium">${lead.dataLead}</span>
+                                <span class="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.2 rounded-full bg-slate-100 text-slate-600 border border-slate-200/70">
+                                    <svg class="w-2.5 h-2.5 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M5 13l4 4L19 7"/></svg>
+                                    ${lead.sla}
+                                </span>
+                            </div>
+                            <div class="text-[11px] text-slate-400 mt-0.5">
+                                Atrib: ${lead.dataAtribuicao}
+                            </div>
+                        </td>
+
+                        <!-- Coluna 3: Valor Liberado -->
+                        <td class="py-2.5 px-3 align-middle text-right whitespace-nowrap">
+                            <span class="${lead.valor ? 'font-bold text-slate-900' : 'text-slate-400'}">
+                                ${lead.valorFormatado}
+                            </span>
+                        </td>
+
+                        <!-- Coluna 4: Atendente & Loja -->
+                        <td class="py-2.5 px-3 align-middle">
+                            <div class="flex items-center gap-1.5">
+                                <span class="w-2 h-2 rounded-full bg-emerald-500 shrink-0" title="Online"></span>
+                                <span class="font-medium text-slate-800 truncate max-w-[170px]" title="${lead.atendente}">
+                                    ${lead.atendenteCurto}
+                                </span>
+                            </div>
+                            <div class="text-[11px] text-slate-400 mt-0.5 pl-3.5">
+                                ${lead.loja}
+                            </div>
+                        </td>
+
+                        <!-- Coluna 5: Tabulação Atual + Anterior -->
+                        <td class="py-2.5 px-3 align-middle whitespace-nowrap">
+                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${badgeStyle}">
+                                <svg class="w-3 h-3 opacity-75" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                                ${lead.tabulacaoAtual}
+                            </span>
+                            <div class="text-[10px] text-slate-400 mt-0.5 pl-1">
+                                Ant: ${lead.ultimaTabulacao}
+                            </div>
+                        </td>
+
+                        <!-- Coluna 6: Ações Compactas -->
+                        <td class="py-2.5 pl-3 pr-4 align-middle text-right whitespace-nowrap relative">
+                            <div class="inline-flex items-center gap-1">
+                                <button onclick="openLeadDrawer(${lead.id})" title="Visualizar Detalhes" class="p-1.5 rounded-lg text-emerald-600 bg-emerald-50/80 hover:bg-emerald-100 transition">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                </button>
+                                <button onclick="openLeadDrawer(${lead.id})" title="Tabular Lead" class="p-1.5 rounded-lg text-slate-500 hover:text-brand-600 hover:bg-brand-50 transition">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"/></svg>
+                                </button>
+                                <button onclick="showToast('Histórico de ${lead.nome.split(' ')[0]} aberto')" title="Histórico & Notas" class="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition">
+                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                                </button>
+
+                                <!-- Menu Compacto Reatribuir -->
+                                <div class="relative inline-block text-left">
+                                    <button onclick="toggleReassignMenu(event, ${lead.id})" class="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-slate-600 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-lg transition">
+                                        <span>Reatribuir</span>
+                                        <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                    </button>
+                                    <div id="reassign-menu-${lead.id}" class="hidden absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-1 z-20 text-left">
+                                        <div class="px-3 py-1 text-[10px] font-semibold text-slate-400 uppercase">Transferir para:</div>
+                                        <button onclick="reassignLead(${lead.id}, 'MARIA EDUARDA PAIVA CARVALHO', 'Maria Eduarda Paiva')" class="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-brand-50 hover:text-brand-700 flex items-center gap-2">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Maria Eduarda Paiva
+                                        </button>
+                                        <button onclick="reassignLead(${lead.id}, 'DANIELE DA SILVA REIS', 'Daniele da Silva Reis')" class="w-full text-left px-3 py-1.5 text-xs text-slate-700 hover:bg-brand-50 hover:text-brand-700 flex items-center gap-2">
+                                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Daniele da Silva Reis
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // Filtragem combinada (Busca + Abas + Dropdowns)
+        function filterLeads() {
+            const query = document.getElementById('search-input').value.toLowerCase().trim();
+            const loja = document.getElementById('filter-loja').value;
+            const banco = document.getElementById('filter-banco').value;
+            const tabulacao = document.getElementById('filter-tabulacao').value;
+            const atendente = document.getElementById('filter-atendente').value;
+
+            // Atualiza contador de filtros ativos
+            const activeCount = [loja, banco, tabulacao, atendente].filter(Boolean).length;
+            const badge = document.getElementById('active-filter-count');
+            if (activeCount > 0) {
+                badge.textContent = activeCount;
+                badge.classList.remove('hidden');
+                badge.classList.add('inline-flex');
+            } else {
+                badge.classList.add('hidden');
+                badge.classList.remove('inline-flex');
+            }
+
+            const filtered = leadsData.filter(lead => {
+                const matchesSearch = !query ||
+                    lead.nome.toLowerCase().includes(query) ||
+                    lead.cpf.includes(query) ||
+                    lead.atendente.toLowerCase().includes(query);
+
+                const matchesTab = currentTab === 'todos' ||
+                    (currentTab === 'perdas' && lead.categoria === 'perdas') ||
+                    (currentTab === 'balde' && false) ||
+                    (currentTab === 'atendimento' && false) ||
+                    (currentTab === 'vendas' && false);
+
+                const matchesLoja = !loja || lead.loja === loja;
+                const matchesBanco = !banco || lead.banco === banco;
+                const matchesTabulacao = !tabulacao || lead.tabulacaoAtual === tabulacao;
+                const matchesAtendente = !atendente || lead.atendente === atendente;
+
+                return matchesSearch && matchesTab && matchesLoja && matchesBanco && matchesTabulacao && matchesAtendente;
+            });
+
+            renderTable(filtered);
+        }
+
+        // Alterna abas
+        function setTab(tab, btn) {
+            currentTab = tab;
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('tab-active'));
+            btn.classList.add('tab-active');
+            filterLeads();
+        }
+
+        // Expande/Recolhe gaveta de filtros
+        function toggleFiltersDrawer() {
+            const drawer = document.getElementById('filters-drawer');
+            const chevron = document.getElementById('filter-chevron');
+            drawer.classList.toggle('hidden');
+            chevron.classList.toggle('rotate-180');
+        }
+
+        function resetFilters() {
+            document.getElementById('filter-loja').value = '';
+            document.getElementById('filter-banco').value = '';
+            document.getElementById('filter-tabulacao').value = '';
+            document.getElementById('filter-atendente').value = '';
+            document.getElementById('search-input').value = '';
+            filterLeads();
+            showToast('Filtros limpos');
+        }
+
+        // Seleção de linhas e ações em lote
+        function toggleRowSelect(id) {
+            if (selectedIds.has(id)) {
+                selectedIds.delete(id);
+            } else {
+                selectedIds.add(id);
+            }
+            updateBulkBar();
+            filterLeads();
+        }
+
+        function toggleSelectAll(checkbox) {
+            if (checkbox.checked) {
+                leadsData.forEach(l => selectedIds.add(l.id));
+            } else {
+                selectedIds.clear();
+            }
+            updateBulkBar();
+            filterLeads();
+        }
+
+        function clearSelection() {
+            selectedIds.clear();
+            document.getElementById('select-all').checked = false;
+            updateBulkBar();
+            filterLeads();
+        }
+
+        function updateBulkBar() {
+            const bar = document.getElementById('bulk-actions-bar');
+            const count = document.getElementById('selected-count');
+            if (selectedIds.size > 0) {
+                count.textContent = selectedIds.size;
+                bar.classList.remove('hidden');
+            } else {
+                bar.classList.add('hidden');
+            }
+        }
+
+        // Menu dropdown compacto de reatribuição na linha
+        function toggleReassignMenu(event, id) {
+            event.stopPropagation();
+            if (openDropdownId && openDropdownId !== id) {
+                document.getElementById(`reassign-menu-${openDropdownId}`)?.classList.add('hidden');
+            }
+            const menu = document.getElementById(`reassign-menu-${id}`);
+            menu.classList.toggle('hidden');
+            openDropdownId = menu.classList.contains('hidden') ? null : id;
+        }
+
+        function reassignLead(id, fullName, shortName) {
+            const lead = leadsData.find(l => l.id === id);
+            if (lead) {
+                lead.atendente = fullName;
+                lead.atendenteCurto = shortName;
+                filterLeads();
+                showToast(`Lead reatribuído para ${shortName}`);
+            }
+            if (openDropdownId) {
+                document.getElementById(`reassign-menu-${openDropdownId}`)?.classList.add('hidden');
+                openDropdownId = null;
+            }
+        }
+
+        document.addEventListener('click', () => {
+            if (openDropdownId) {
+                document.getElementById(`reassign-menu-${openDropdownId}`)?.classList.add('hidden');
+                openDropdownId = null;
+            }
+        });
+
+        // Drawer lateral de Detalhes do Lead
+        function openLeadDrawer(id) {
+            const lead = leadsData.find(l => l.id === id);
+            if (!lead) return;
+            activeLeadId = id;
+
+            document.getElementById('drawer-name').textContent = lead.nome;
+            document.getElementById('drawer-valor').textContent = lead.valorFormatado;
+            document.getElementById('drawer-cpf').textContent = lead.cpf;
+            document.getElementById('drawer-phone').textContent = lead.telefone || 'Não informado';
+            document.getElementById('drawer-loja').textContent = lead.loja;
+            document.getElementById('drawer-dates').textContent = lead.dataLead;
+            document.getElementById('drawer-agent-select').value = lead.atendente;
+
+            document.getElementById('lead-drawer-backdrop').classList.remove('hidden');
+            document.getElementById('lead-drawer').classList.remove('translate-x-full');
+        }
+
+        function closeLeadDrawer() {
+            document.getElementById('lead-drawer-backdrop').classList.add('hidden');
+            document.getElementById('lead-drawer').classList.add('translate-x-full');
+            activeLeadId = null;
+        }
+
+        function updateAgentFromDrawer(val) {
+            if (!activeLeadId) return;
+            const shortName = val.includes('MARIA') ? 'Maria Eduarda Paiva' : 'Daniele da Silva Reis';
+            reassignLead(activeLeadId, val, shortName);
+        }
+
+        function updateTabulacaoFromDrawer(novaTab) {
+            if (!activeLeadId) return;
+            const lead = leadsData.find(l => l.id === activeLeadId);
+            if (lead) {
+                lead.ultimaTabulacao = lead.tabulacaoAtual;
+                lead.tabulacaoAtual = novaTab;
+                filterLeads();
+                showToast(`Tabulação atualizada para "${novaTab}"`);
+            }
+        }
+
+        // Toggle Banner de explicação de UI
+        function toggleDesignNotes() {
+            document.getElementById('design-notes-banner').classList.toggle('hidden');
+        }
+
+        // Toggle Som
+        let soundEnabled = true;
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            document.getElementById('icon-sound-on').classList.toggle('hidden', !soundEnabled);
+            document.getElementById('icon-sound-off').classList.toggle('hidden', soundEnabled);
+            showToast(soundEnabled ? 'Alertas sonoros ativados' : 'Alertas sonoros silenciados');
+        }
+
+        // Toast feedback
+        let toastTimeout;
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').textContent = msg;
+            toast.classList.remove('translate-y-16', 'opacity-0');
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toast.classList.add('translate-y-16', 'opacity-0');
+            }, 2600);
+        }
+
+        // Inicialização
+        window.addEventListener('DOMContentLoaded', () => {
+            renderTable(leadsData);
+        });
+    </script>
+</body>
+
+</html>

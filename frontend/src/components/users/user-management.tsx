@@ -578,7 +578,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                 <input
                   type="email"
                   required
-                  placeholder="pedro@crmleads.com"
+                  placeholder="pedro@teste.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
@@ -762,7 +762,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({ users, onRefresh
                 <input
                   type="email"
                   required
-                  placeholder="pedro@crmleads.com"
+                  placeholder="pedro@teste.com"
                   value={editEmail}
                   onChange={(e) => setEditEmail(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2 text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
