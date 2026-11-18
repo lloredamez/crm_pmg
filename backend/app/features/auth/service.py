@@ -39,9 +39,16 @@ class AuthService:
             return None
 
         from datetime import datetime, timezone
+        user.status = "online"
         user.last_action_at = datetime.now(timezone.utc)
         await self.db.commit()
         await self.db.refresh(user)
+
+        try:
+            from app.core.socket_manager import emit_user_status_updated
+            await emit_user_status_updated(user.id, "online", user.name)
+        except Exception:
+            pass
         
         access_token = create_access_token(subject=str(user.id))
         return Token(

@@ -30,18 +30,6 @@ async def disconnect(sid: str):
         user_to_sids[user_id].discard(sid)
         if not user_to_sids[user_id]:
             del user_to_sids[user_id]
-            try:
-                from uuid import UUID
-                from app.core.database import AsyncSessionLocal
-                from app.features.users.service import UserService
-                from app.schemas.user import UserUpdateStatus
-
-                async with AsyncSessionLocal() as db:
-                    service = UserService(db)
-                    await service.update_status(UUID(user_id), UserUpdateStatus(status="offline"))
-                logger.info(f"User {user_id} automatically set to offline on socket disconnect")
-            except Exception as e:
-                logger.error(f"Error setting user {user_id} offline on disconnect: {e}")
 
 @sio.event
 async def join_attendant(sid: str, data: Dict[str, Any]):
