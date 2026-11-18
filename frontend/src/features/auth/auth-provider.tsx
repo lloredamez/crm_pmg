@@ -53,30 +53,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
-  useEffect(() => {
-    const handleUnload = () => {
-      if (user?.id && token) {
-        const apiUrl = getApiUrl();
-        fetch(`${apiUrl}/api/v1/users/${user.id}/status`, {
-          method: 'PATCH',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ status: 'offline' }),
-          keepalive: true,
-        }).catch(() => {});
-      }
-    };
-
-    window.addEventListener('beforeunload', handleUnload);
-    window.addEventListener('pagehide', handleUnload);
-    return () => {
-      window.removeEventListener('beforeunload', handleUnload);
-      window.removeEventListener('pagehide', handleUnload);
-    };
-  }, [user, token]);
-
   const fetchMe = async (authToken: string) => {
     const apiUrl = getApiUrl();
     try {
@@ -125,7 +101,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       const data = await res.json();
       const newToken = data.access_token;
-      const userData = data.user;
+      const userData = { ...data.user, status: 'online' };
 
       sessionStorage.setItem('access_token', newToken);
       sessionStorage.setItem('user', JSON.stringify(userData));
