@@ -15,6 +15,7 @@ import { TabulateLeadModal } from '@/components/leads/tabulate-lead-modal';
 import { UserManagement } from '@/components/users/user-management';
 import { SettingsPage } from '@/components/settings/settings-page';
 import { SimulationsManagement } from '@/components/simulations/simulations-management';
+import { LogsModule } from '@/components/logs/logs-module';
 import { fetchLeads, fetchUsers, updateUserStatus, reassignLead, bulkReassignLeads, revealLead, claimLead } from '@/features/leads/api';
 import { fetchDispositions } from '@/features/dispositions/api';
 import { fetchChannels } from '@/features/channels/api';
@@ -331,6 +332,12 @@ export default function LeadsDashboardPage() {
           <UserManagement users={users} onRefresh={refetchUsers} />
         ) : activeTab === 'simulations' && (user?.can_access_simulations || isAdmin) ? (
           <SimulationsManagement />
+        ) : activeTab === 'logs' && isAdmin ? (
+          <LogsModule
+            channels={availableChannels}
+            users={users}
+            initialChannelCode={effectiveChannelFilter}
+          />
         ) : (
           <>
             {/* KPI Summary Cards */}

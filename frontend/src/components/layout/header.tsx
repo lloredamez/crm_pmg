@@ -5,7 +5,7 @@ import Image from 'next/image';
 import pmgLogo from '@/app/pmg.svg';
 import { useSocket } from '@/features/socket/socket-provider';
 import { useAuth } from '@/features/auth/auth-provider';
-import { Zap, Users, UserCog, LogOut, Check, Settings, ChevronDown, Share2, Calculator, Volume2, VolumeX } from 'lucide-react';
+import { Zap, Users, UserCog, LogOut, Check, Settings, ChevronDown, Share2, Calculator, Volume2, VolumeX, ScrollText } from 'lucide-react';
 import { Channel } from '@/features/leads/types';
 import { cn } from '@/lib/utils';
 
@@ -29,7 +29,7 @@ export const Header: React.FC<HeaderProps> = ({
   onSelectChannel,
 }) => {
   const { isConnected, isSoundEnabled, toggleSound } = useSocket();
-  const { user, logout, isAdmin, isManager } = useAuth();
+  const { user, logout, isAdmin, isManager, isSupervisor } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isChannelHovered, setIsChannelHovered] = useState(false);
   const hoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -70,6 +70,10 @@ export const Header: React.FC<HeaderProps> = ({
 
   if (isAdmin || isManager) {
     navItems.push({ id: 'users', label: 'Gestão de Usuários', icon: UserCog });
+  }
+
+  if (isAdmin) {
+    navItems.push({ id: 'logs', label: 'Logs', icon: ScrollText });
   }
 
   if (isAdmin) {
