@@ -142,7 +142,7 @@ async def update_lead_status(
     db: AsyncSession = Depends(get_db)
 ):
     service = LeadService(db)
-    lead = await service.update_status(lead_id, status_in.status)
+    lead = await service.update_status(lead_id, status_in.status, current_user=current_user)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead não encontrado")
     return lead
@@ -155,7 +155,7 @@ async def update_lead_details(
     db: AsyncSession = Depends(get_db)
 ):
     service = LeadService(db)
-    lead = await service.update_details(lead_id, details_in)
+    lead = await service.update_details(lead_id, details_in, current_user=current_user)
     if not lead:
         raise HTTPException(status_code=404, detail="Lead não encontrado")
     return lead
@@ -182,7 +182,12 @@ async def reassign_lead(
     db: AsyncSession = Depends(get_db)
 ):
     service = LeadService(db)
-    lead = await service.reassign_lead(lead_id, reassign_in.attendant_id, reason="manually_reassigned")
+    lead = await service.reassign_lead(
+        lead_id,
+        reassign_in.attendant_id,
+        reason="manually_reassigned",
+        assigned_by=current_user,
+    )
     if not lead:
         raise HTTPException(status_code=404, detail="Lead não encontrado")
     return lead
@@ -196,7 +201,12 @@ async def bulk_reassign_leads(
     service = LeadService(db)
     reassigned_count = 0
     for lead_id in bulk_in.lead_ids:
-        lead = await service.reassign_lead(lead_id, bulk_in.attendant_id, reason="bulk_manually_reassigned")
+        lead = await service.reassign_lead(
+            lead_id,
+            bulk_in.attendant_id,
+            reason="bulk_manually_reassigned",
+            assigned_by=current_user,
+        )
         if lead:
             reassigned_count += 1
     return {"message": f"{reassigned_count} leads reatribuídos com sucesso"}

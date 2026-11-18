@@ -595,25 +595,42 @@ class LeadService:
             l.unassigned_sla_minutes = unassigned_sla
         return leads, total
 
-    async def update_status(self, lead_id: UUID, new_status: str) -> Optional[Lead]:
+    async def update_status(self, lead_id: UUID, new_status: str, current_user: Optional[User] = None) -> Optional[Lead]:
         lead = await self.get_lead_by_id(lead_id)
         if not lead:
             return None
-        
+
+        old_status = lead.status
+        now = datetime.now(timezone.utc)
         lead.status = new_status
-        lead.last_interaction_at = datetime.now(timezone.utc)
+        lead.last_interaction_at = now
         if not lead.disposition_id:
             lead.disposition_timeout_at = None
+
+        if old_status != new_status:
+            await record_lead_event(
+                db=self.db,
+                lead_id=lead.id,
+                event_type="status_updated",
+                title=f"Status alterado: {old_status} → {new_status}",
+                description=f"Status do lead alterado de '{old_status}' para '{new_status}'.",
+                attendant_id=current_user.id if current_user else lead.current_attendant_id,
+                attendant_name=current_user.name if current_user else None,
+                event_metadata={"old_status": old_status, "new_status": new_status},
+                created_at=now,
+            )
+
         await self.db.commit()
 
         return await self.get_lead_by_id(lead_id)
 
-    async def update_details(self, lead_id: UUID, details) -> Optional[Lead]:
+    async def update_details(self, lead_id: UUID, details, current_user: Optional[User] = None) -> Optional[Lead]:
         lead = await self.get_lead_by_id(lead_id)
         if not lead:
             return None
 
         readonly_keys: set[str] = set()
+        custom_labels: dict[str, str] = {}
         if getattr(lead, "channel_code", None):
             chan_res = await self.db.execute(
                 select(Channel).where(func.lower(Channel.code) == func.lower(lead.channel_code.strip()))
@@ -621,27 +638,37 @@ class LeadService:
             chan = chan_res.scalar_one_or_none()
             if chan and isinstance(chan.allowed_fields, list):
                 for item in chan.allowed_fields:
-                    if isinstance(item, dict) and item.get("isReadOnly") is True and item.get("key"):
-                        readonly_keys.add(str(item["key"]))
+                    if isinstance(item, dict) and item.get("key"):
+                        k_str = str(item["key"])
+                        if item.get("label"):
+                            custom_labels[k_str] = str(item["label"])
+                        if item.get("isReadOnly") is True:
+                            readonly_keys.add(k_str)
 
         fields_set = getattr(details, "model_fields_set", set())
 
-        standard_updatable = [
-            "name",
-            "phone",
-            "cpf",
-            "verified_cpf",
-            "email",
-            "product_name",
-            "campaign_name",
-            "proposal_number",
-            "notes",
-            "prazo",
-            "margem",
-            "valor_liberado",
-            "banco",
-            "tabela",
-        ]
+        standard_labels = {
+            "name": "Nome",
+            "phone": "Telefone",
+            "cpf": "CPF",
+            "verified_cpf": "CPF Verificado",
+            "email": "E-mail",
+            "product_name": "Produto",
+            "campaign_name": "Campanha",
+            "proposal_number": "Nº Proposta",
+            "notes": "Observações",
+            "prazo": "Prazo",
+            "margem": "Margem",
+            "valor_liberado": "Valor Liberado",
+            "banco": "Banco",
+            "tabela": "Tabela",
+        }
+
+        standard_updatable = list(standard_labels.keys())
+        changes = []
+
+        def _norm(v):
+            return None if v == "" else v
 
         for field_name in standard_updatable:
             if field_name in readonly_keys:
@@ -650,18 +677,50 @@ class LeadService:
                 val = getattr(details, field_name, None)
                 if field_name == "name" and not val:
                     continue
+                old_val = getattr(lead, field_name, None)
+                if _norm(old_val) != _norm(val):
+                    changes.append({
+                        "field": field_name,
+                        "label": standard_labels[field_name],
+                        "old": old_val,
+                        "new": val,
+                    })
                 setattr(lead, field_name, val)
 
         if hasattr(details, "custom_fields") and details.custom_fields is not None:
             current = dict(lead.custom_fields or {})
             for k, v in details.custom_fields.items():
                 if k not in readonly_keys:
+                    old_cf = current.get(k)
+                    if _norm(old_cf) != _norm(v):
+                        changes.append({
+                            "field": f"custom_fields.{k}",
+                            "label": custom_labels.get(k, k),
+                            "old": old_cf,
+                            "new": v,
+                        })
                     current[k] = v
             lead.custom_fields = current
 
-        lead.last_interaction_at = datetime.now(timezone.utc)
+        now = datetime.now(timezone.utc)
+        lead.last_interaction_at = now
         if not lead.disposition_id:
             lead.disposition_timeout_at = None
+
+        if changes:
+            changed_names = ", ".join(c["label"] for c in changes)
+            await record_lead_event(
+                db=self.db,
+                lead_id=lead.id,
+                event_type="details_updated",
+                title="Alteração na ficha do lead",
+                description=f"Campos atualizados: {changed_names}",
+                attendant_id=current_user.id if current_user else lead.current_attendant_id,
+                attendant_name=current_user.name if current_user else None,
+                event_metadata={"changes": changes},
+                created_at=now,
+            )
+
         await self.db.commit()
         return await self.get_lead_by_id(lead_id)
 
@@ -832,7 +891,13 @@ class LeadService:
 
         return await self.get_lead_by_id(lead_id)
 
-    async def reassign_lead(self, lead_id: UUID, new_attendant_id: UUID, reason: str = "manually_reassigned") -> Optional[Lead]:
+    async def reassign_lead(
+        self,
+        lead_id: UUID,
+        new_attendant_id: UUID,
+        reason: str = "manually_reassigned",
+        assigned_by: Optional[User] = None,
+    ) -> Optional[Lead]:
         lead = await self.get_lead_by_id(lead_id)
         if not lead:
             return None
@@ -881,15 +946,25 @@ class LeadService:
         self.db.add(new_assignment)
 
         # Registrar evento de reatribuição na timeline
+        desc_parts = []
+        if assigned_by:
+            desc_parts.append(f"Atribuído por {assigned_by.name}")
+        desc_parts.append(f"Motivo: {reason}")
+
         await record_lead_event(
             db=self.db,
             lead_id=lead.id,
             event_type="reassigned",
             title=f"Reatribuído para {target_user.name}",
-            description=f"Motivo da reatribuição: {reason}",
+            description=" • ".join(desc_parts),
             attendant_id=new_attendant_id,
             attendant_name=target_user.name,
-            event_metadata={"reason": reason, "previous_attendant_id": str(old_attendant_id) if old_attendant_id else None},
+            event_metadata={
+                "reason": reason,
+                "previous_attendant_id": str(old_attendant_id) if old_attendant_id else None,
+                "reassigned_by_id": str(assigned_by.id) if assigned_by else None,
+                "reassigned_by_name": assigned_by.name if assigned_by else None,
+            },
             created_at=now
         )
 

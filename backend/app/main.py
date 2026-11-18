@@ -20,6 +20,7 @@ from app.features.messages.router import router as messages_router
 from app.features.simulations.router import router as simulations_router
 from app.features.calendar.router import router as calendar_router
 from app.features.banks.router import router as banks_router
+from app.features.logs.router import router as logs_router
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -78,6 +79,7 @@ app.include_router(messages_router, prefix=settings.API_V1_STR)
 app.include_router(simulations_router, prefix=settings.API_V1_STR)
 app.include_router(calendar_router, prefix=settings.API_V1_STR)
 app.include_router(banks_router, prefix=settings.API_V1_STR)
+app.include_router(logs_router, prefix=settings.API_V1_STR)
 
 @app.get("/health")
 async def health_check():

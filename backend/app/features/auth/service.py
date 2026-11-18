@@ -39,8 +39,19 @@ class AuthService:
             return None
 
         from datetime import datetime, timezone
+        from app.features.users.events import record_user_status_change
+        previous_status = user.status
+        now = datetime.now(timezone.utc)
         user.status = "online"
-        user.last_action_at = datetime.now(timezone.utc)
+        user.last_action_at = now
+        await record_user_status_change(
+            db=self.db,
+            user_id=user.id,
+            previous_status=previous_status,
+            new_status="online",
+            source="login",
+            changed_at=now,
+        )
         await self.db.commit()
         await self.db.refresh(user)
 
