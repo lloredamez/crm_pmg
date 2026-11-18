@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import Image from 'next/image';
+import pmgLogo from '@/app/pmg.svg';
 import { useSocket } from '@/features/socket/socket-provider';
 import { useAuth } from '@/features/auth/auth-provider';
 import { Zap, Users, UserCog, LogOut, Check, Settings, ChevronDown, Share2, Calculator, Volume2, VolumeX } from 'lucide-react';
@@ -111,11 +113,15 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="bg-white/80 backdrop-blur-md sticky top-0 z-40 border-b border-slate-100 px-3 sm:px-4 py-3.5">
       <div className="w-full max-w-full mx-auto flex items-center justify-between gap-4">
         {/* Logo & Brand Badge */}
-        <div className="flex items-center gap-3">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-slate-900 tracking-tight text-lg">Dindin PMG</span>
-            </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <div className="flex items-center gap-2.5">
+            <Image
+              src={pmgLogo}
+              alt="Logo PMG"
+              className="h-8 w-auto object-contain"
+              priority
+            />
+            <span className="font-bold text-slate-900 tracking-tight text-lg">Dindin</span>
           </div>
         </div>
 
