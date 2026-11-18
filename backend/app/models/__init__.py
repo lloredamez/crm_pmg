@@ -18,8 +18,9 @@ from app.models.bank import Bank
 from app.models.category import Category
 from app.models.calendar import CalendarConfig, Holiday
 from app.models.lead_event import LeadEvent
+from app.models.user_status_log import UserStatusLog
 
-__all__ = ["Unit", "User", "Lead", "BucketLead", "SimulationLead", "SimulationOffer", "SimulationOfferHistory", "SimulationLeadData", "Bank", "LeadAssignment", "Message", "Channel", "unit_channels", "Disposition", "SlaBreach", "ChannelDispositionSla", "LeadTabulation", "Category", "CalendarConfig", "Holiday", "LeadEvent"]
+__all__ = ["Unit", "User", "Lead", "BucketLead", "SimulationLead", "SimulationOffer", "SimulationOfferHistory", "SimulationLeadData", "Bank", "LeadAssignment", "Message", "Channel", "unit_channels", "Disposition", "SlaBreach", "ChannelDispositionSla", "LeadTabulation", "Category", "CalendarConfig", "Holiday", "LeadEvent", "UserStatusLog"]
 
 
 
