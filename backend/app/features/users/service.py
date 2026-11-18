@@ -60,8 +60,11 @@ class UserService:
             user.role = user_in.role
         if user_in.is_active is not None:
             user.is_active = user_in.is_active
-            if not user_in.is_active:
+            if not user_in.is_active and user.status != "offline":
+                from app.features.users.events import record_user_status_change
+                prev = user.status
                 user.status = "offline"
+                await record_user_status_change(self.db, user.id, prev, "offline", source="deactivated")
         if user_in.can_access_simulations is not None:
             user.can_access_simulations = user_in.can_access_simulations
         if user_in.max_simultaneous_leads is not None:
@@ -88,8 +91,11 @@ class UserService:
             return None
 
         user.is_active = not user.is_active
-        if not user.is_active:
+        if not user.is_active and user.status != "offline":
+            from app.features.users.events import record_user_status_change
+            prev = user.status
             user.status = "offline"
+            await record_user_status_change(self.db, user.id, prev, "offline", source="deactivated")
 
         await self.db.commit()
         await self.db.refresh(user)
@@ -149,8 +155,19 @@ class UserService:
         user = await self.get_user_by_id(user_id)
         if not user:
             return None
+        from app.features.users.events import record_user_status_change
+        now = datetime.now(timezone.utc)
+        prev_status = user.status
         user.status = status_in.status
-        user.last_action_at = datetime.now(timezone.utc)
+        user.last_action_at = now
+        await record_user_status_change(
+            db=self.db,
+            user_id=user.id,
+            previous_status=prev_status,
+            new_status=status_in.status,
+            source="manual",
+            changed_at=now,
+        )
 
         await self.db.commit()
         await self.db.refresh(user)

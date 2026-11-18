@@ -56,7 +56,15 @@ async def check_and_disconnect_inactive_users(session: AsyncSession):
         .values(last_action_at=now)
     )
 
-    # 2. Query atômica direto no PostgreSQL que altera para offline e retorna apenas (id, name) dos afetados
+    # 2. Busca status atual dos usuários prestes a expirar para registrar no log de atividade
+    from app.features.users.events import record_user_status_change
+    prev_res = await session.execute(
+        select(User.id, User.status)
+        .where(User.status != "offline", User.last_action_at <= cutoff)
+    )
+    prev_status_map = {row[0]: row[1] for row in prev_res.all()}
+
+    # 3. Query atômica direto no PostgreSQL que altera para offline e retorna apenas (id, name) dos afetados
     res = await session.execute(
         update(User)
         .where(User.status != "offline", User.last_action_at <= cutoff)
@@ -65,6 +73,15 @@ async def check_and_disconnect_inactive_users(session: AsyncSession):
     )
     disconnected_rows = res.all()
     if disconnected_rows:
+        for user_id, _ in disconnected_rows:
+            await record_user_status_change(
+                db=session,
+                user_id=user_id,
+                previous_status=prev_status_map.get(user_id, "online"),
+                new_status="offline",
+                source="inactivity_timeout",
+                changed_at=now,
+            )
         await session.commit()
 
     for user_id, user_name in disconnected_rows:
