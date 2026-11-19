@@ -36,7 +36,7 @@ celerybeat-schedule*
 
 # Logs & Temp files
 *.log
-logs/
+/logs/
 *.tmp
 *.temp
 
