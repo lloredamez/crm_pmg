@@ -15,13 +15,21 @@ import {
   Filter,
   ChevronLeft,
   ChevronRight,
+  FileSpreadsheet,
 } from 'lucide-react';
 import { Channel, User } from '@/features/leads/types';
 import {
   fetchActivityLogs,
   fetchTransferLogs,
   fetchLeadChangeLogs,
+  LogsQueryParams,
 } from '@/features/logs/api';
+import {
+  ActivityLogItem,
+  LeadChangeLogItem,
+  TransferLogItem,
+} from '@/features/logs/types';
+import { ExcelSheet, exportToExcel } from '@/lib/excel-export';
 import { cn } from '@/lib/utils';
 
 interface LogsModuleProps {
@@ -68,25 +76,78 @@ function formatDateTime(iso?: string | null): string {
   });
 }
 
+const STATUS_INFO_MAP: Record<string, { label: string; cls: string; dot: string }> = {
+  online: {
+    label: 'Online',
+    cls: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    dot: 'bg-emerald-500',
+  },
+  busy: {
+    label: 'Ocupado',
+    cls: 'bg-amber-50 text-amber-700 border-amber-200',
+    dot: 'bg-amber-500',
+  },
+  offline: {
+    label: 'Indisponível / Offline',
+    cls: 'bg-slate-100 text-slate-600 border-slate-200',
+    dot: 'bg-slate-400',
+  },
+};
+
+const SOURCE_LABELS: Record<string, string> = {
+  login: 'Login',
+  manual: 'Alteração Manual',
+  inactivity_timeout: 'Inatividade (Auto)',
+  deactivated: 'Usuário Desativado',
+  created: 'Cadastro',
+};
+
+const TRANSFER_EVENT_MAP: Record<string, { label: string; cls: string }> = {
+  assigned: {
+    label: 'Atribuição do Sistema',
+    cls: 'bg-blue-50 text-blue-700 border-blue-200',
+  },
+  claimed_from_bucket: {
+    label: 'Pegou do Balde',
+    cls: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  },
+  reassigned: {
+    label: 'Atribuído por Alguém',
+    cls: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+  },
+  sla_breached: {
+    label: 'Estourou (SLA)',
+    cls: 'bg-rose-50 text-rose-700 border-rose-200',
+  },
+};
+
+function getStatusLabel(status?: string | null): string {
+  return STATUS_INFO_MAP[status || '']?.label || status || '-';
+}
+
+function getSourceLabel(source: string): string {
+  return SOURCE_LABELS[source] || source;
+}
+
+function getTransferEventLabel(eventType: string): string {
+  return TRANSFER_EVENT_MAP[eventType]?.label || eventType;
+}
+
+function getBreachTypeLabel(breachType?: string | null): string {
+  if (!breachType) return '-';
+  return breachType === 'first_contact_timeout'
+    ? 'Estouro de 1º Contato'
+    : 'Estouro de Tabulação';
+}
+
+function getLeadChangeTypeLabel(eventType: string): string {
+  if (eventType === 'tabulated') return 'Tabulação';
+  if (eventType === 'details_updated') return 'Alteração na Ficha';
+  return 'Status';
+}
+
 function StatusBadge({ status }: { status?: string | null }) {
-  const map: Record<string, { label: string; cls: string; dot: string }> = {
-    online: {
-      label: 'Online',
-      cls: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-      dot: 'bg-emerald-500',
-    },
-    busy: {
-      label: 'Ocupado',
-      cls: 'bg-amber-50 text-amber-700 border-amber-200',
-      dot: 'bg-amber-500',
-    },
-    offline: {
-      label: 'Indisponível / Offline',
-      cls: 'bg-slate-100 text-slate-600 border-slate-200',
-      dot: 'bg-slate-400',
-    },
-  };
-  const info = map[status || ''] || {
+  const info = STATUS_INFO_MAP[status || ''] || {
     label: status || '-',
     cls: 'bg-slate-50 text-slate-500 border-slate-200',
     dot: 'bg-slate-300',
@@ -105,40 +166,15 @@ function StatusBadge({ status }: { status?: string | null }) {
 }
 
 function SourceLabel({ source }: { source: string }) {
-  const labels: Record<string, string> = {
-    login: 'Login',
-    manual: 'Alteração Manual',
-    inactivity_timeout: 'Inatividade (Auto)',
-    deactivated: 'Usuário Desativado',
-    created: 'Cadastro',
-  };
   return (
     <span className="text-xs text-slate-600 font-medium">
-      {labels[source] || source}
+      {getSourceLabel(source)}
     </span>
   );
 }
 
 function TransferEventBadge({ eventType }: { eventType: string }) {
-  const map: Record<string, { label: string; cls: string }> = {
-    assigned: {
-      label: 'Atribuição do Sistema',
-      cls: 'bg-blue-50 text-blue-700 border-blue-200',
-    },
-    claimed_from_bucket: {
-      label: 'Pegou do Balde',
-      cls: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-    },
-    reassigned: {
-      label: 'Atribuído por Alguém',
-      cls: 'bg-indigo-50 text-indigo-700 border-indigo-200',
-    },
-    sla_breached: {
-      label: 'Estourou (SLA)',
-      cls: 'bg-rose-50 text-rose-700 border-rose-200',
-    },
-  };
-  const info = map[eventType] || {
+  const info = TRANSFER_EVENT_MAP[eventType] || {
     label: eventType,
     cls: 'bg-slate-100 text-slate-600 border-slate-200',
   };
@@ -171,6 +207,8 @@ export const LogsModule: React.FC<LogsModuleProps> = ({
   const [transferType, setTransferType] = useState<string>('all');
   const [leadChangeType, setLeadChangeType] = useState<string>('all');
   const [pageOffset, setPageOffset] = useState<number>(0);
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const pageLimit = 50;
 
   const commonParams = {
@@ -220,6 +258,215 @@ export const LogsModule: React.FC<LogsModuleProps> = ({
     (activeSection === 'transfers' && transfersQuery.isFetching) ||
     (activeSection === 'lead-changes' && leadChangesQuery.isFetching);
 
+  const handleExportExcel = async () => {
+    setIsExporting(true);
+    setExportError(null);
+
+    const EXPORT_PAGE_SIZE = 200;
+    const EXPORT_MAX_RECORDS = 10000;
+
+    const baseParams: LogsQueryParams = {
+      channel_code: selectedChannel,
+      start_date: startDate,
+      end_date: endDate,
+      attendant_id: attendantId,
+      search,
+    };
+
+    const dateRangeSuffix =
+      startDate && endDate
+        ? `${startDate}_a_${endDate}`
+        : startDate || endDate || getTodayLocalISO();
+    const channelSuffix = selectedChannel !== 'all' ? `_${selectedChannel}` : '';
+
+    try {
+      if (activeSection === 'activity') {
+        const first = await fetchActivityLogs({
+          ...baseParams,
+          limit: EXPORT_PAGE_SIZE,
+          offset: 0,
+        });
+        const allEvents: ActivityLogItem[] = [...first.events];
+        const targetTotal = Math.min(first.total_events, EXPORT_MAX_RECORDS);
+
+        while (allEvents.length < targetTotal) {
+          const next = await fetchActivityLogs({
+            ...baseParams,
+            limit: EXPORT_PAGE_SIZE,
+            offset: allEvents.length,
+          });
+          if (!next.events.length) break;
+          allEvents.push(...next.events);
+        }
+
+        const sheets: ExcelSheet[] = [
+          {
+            name: 'Resumo Consultores',
+            headers: [
+              'Consultor',
+              'Unidade',
+              'Status Atual',
+              'Online na Jornada',
+              'Online Total',
+              'Alterações',
+            ],
+            rows: first.consultants.map((c) => [
+              c.user_name,
+              c.unit_name || '-',
+              getStatusLabel(c.current_status),
+              formatDuration(c.online_work_seconds),
+              formatDuration(c.online_total_seconds),
+              c.transitions_count,
+            ]),
+          },
+          {
+            name: 'Histórico de Status',
+            headers: [
+              'Data / Hora',
+              'Consultor',
+              'Unidade',
+              'Status Anterior',
+              'Novo Status',
+              'Origem',
+            ],
+            rows: allEvents.map((ev) => [
+              formatDateTime(ev.changed_at),
+              ev.user_name,
+              ev.unit_name || '-',
+              getStatusLabel(ev.previous_status),
+              getStatusLabel(ev.new_status),
+              getSourceLabel(ev.source),
+            ]),
+          },
+        ];
+
+        exportToExcel(`logs-atividade${channelSuffix}_${dateRangeSuffix}.xlsx`, sheets);
+      } else if (activeSection === 'transfers') {
+        const allItems: TransferLogItem[] = [];
+        let offset = 0;
+        let targetTotal = Infinity;
+
+        while (allItems.length < targetTotal) {
+          const page = await fetchTransferLogs({
+            ...baseParams,
+            event_type: transferType,
+            limit: EXPORT_PAGE_SIZE,
+            offset,
+          });
+          targetTotal = Math.min(page.total, EXPORT_MAX_RECORDS);
+          if (!page.items.length) break;
+          allItems.push(...page.items);
+          offset += page.items.length;
+        }
+
+        const sheets: ExcelSheet[] = [
+          {
+            name: 'Transferências & SLA',
+            headers: [
+              'Hora do Log',
+              'Lead',
+              'Telefone',
+              'Canal',
+              'Unidade',
+              'Origem / Tipo',
+              'Atendente',
+              'Atribuído por',
+              'Tipo de Estouro',
+              'Título',
+              'Detalhes',
+            ],
+            rows: allItems.map((item) => [
+              formatDateTime(item.created_at),
+              item.lead_name,
+              item.lead_phone || '-',
+              item.channel_code || '-',
+              item.unit_name || '-',
+              getTransferEventLabel(item.event_type),
+              item.attendant_name || '-',
+              item.reassigned_by_name || '-',
+              getBreachTypeLabel(item.breach_type),
+              item.title,
+              item.description || '-',
+            ]),
+          },
+        ];
+
+        exportToExcel(`logs-transferencias${channelSuffix}_${dateRangeSuffix}.xlsx`, sheets);
+      } else {
+        const allItems: LeadChangeLogItem[] = [];
+        let offset = 0;
+        let targetTotal = Infinity;
+
+        while (allItems.length < targetTotal) {
+          const page = await fetchLeadChangeLogs({
+            ...baseParams,
+            event_type: leadChangeType,
+            limit: EXPORT_PAGE_SIZE,
+            offset,
+          });
+          targetTotal = Math.min(page.total, EXPORT_MAX_RECORDS);
+          if (!page.items.length) break;
+          allItems.push(...page.items);
+          offset += page.items.length;
+        }
+
+        const sheets: ExcelSheet[] = [
+          {
+            name: 'Tabulações & Ficha',
+            headers: [
+              'Data / Hora',
+              'Lead',
+              'Canal',
+              'Unidade',
+              'Responsável',
+              'Tipo',
+              'Título',
+              'Detalhes / Campos Alterados',
+            ],
+            rows: allItems.map((item) => {
+              const changes = item.event_metadata?.changes || [];
+              const details =
+                item.event_type === 'details_updated' && changes.length > 0
+                  ? changes
+                      .map((ch) => {
+                        const oldVal =
+                          ch.old !== null && ch.old !== undefined && ch.old !== ''
+                            ? String(ch.old)
+                            : 'vazio';
+                        const newVal =
+                          ch.new !== null && ch.new !== undefined && ch.new !== ''
+                            ? String(ch.new)
+                            : 'vazio';
+                        return `${ch.label}: ${oldVal} -> ${newVal}`;
+                      })
+                      .join('; ')
+                  : item.description || '-';
+
+              return [
+                formatDateTime(item.created_at),
+                item.lead_name,
+                item.channel_code || '-',
+                item.unit_name || '-',
+                item.attendant_name || '-',
+                getLeadChangeTypeLabel(item.event_type),
+                item.title,
+                details,
+              ];
+            }),
+          },
+        ];
+
+        exportToExcel(`logs-alteracoes-lead${channelSuffix}_${dateRangeSuffix}.xlsx`, sheets);
+      }
+    } catch (err) {
+      setExportError(
+        err instanceof Error ? err.message : 'Não foi possível exportar os logs para Excel.'
+      );
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   const sections = [
     {
       id: 'activity' as LogSection,
@@ -262,15 +509,38 @@ export const LogsModule: React.FC<LogsModuleProps> = ({
             </p>
           </div>
 
-          <button
-            onClick={handleRefresh}
-            disabled={isFetching}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 transition-colors self-start lg:self-auto cursor-pointer"
-          >
-            <RefreshCw className={cn('w-3.5 h-3.5', isFetching && 'animate-spin')} />
-            Atualizar Logs
-          </button>
+          <div className="flex flex-wrap items-center gap-2.5 self-start lg:self-auto">
+            <button
+              onClick={handleExportExcel}
+              disabled={isExporting || isFetching}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50 transition-colors cursor-pointer"
+            >
+              <FileSpreadsheet className={cn('w-3.5 h-3.5', isExporting && 'animate-pulse')} />
+              {isExporting ? 'Exportando...' : 'Exportar Excel'}
+            </button>
+
+            <button
+              onClick={handleRefresh}
+              disabled={isFetching || isExporting}
+              className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-50 transition-colors cursor-pointer"
+            >
+              <RefreshCw className={cn('w-3.5 h-3.5', isFetching && 'animate-spin')} />
+              Atualizar Logs
+            </button>
+          </div>
         </div>
+
+        {exportError && (
+          <div className="mb-4 bg-rose-50 border border-rose-200 text-rose-700 text-xs rounded-xl px-4 py-2.5 flex items-center justify-between gap-2">
+            <span>Erro ao exportar Excel: {exportError}</span>
+            <button
+              onClick={() => setExportError(null)}
+              className="text-rose-600 hover:text-rose-800 font-semibold cursor-pointer"
+            >
+              Fechar
+            </button>
+          </div>
+        )}
 
         {/* 3 Session Tabs */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-5">
